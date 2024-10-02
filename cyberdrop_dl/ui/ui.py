@@ -41,6 +41,7 @@ def program_ui(manager: Manager):
     while True:
         console.clear()
         console.print(f"[bold]Cyberdrop Downloader (V{str(__version__)})[/bold]")
+        console.print(f"[bold]ABBA[/bold]")
         console.print(f"[bold]Current Config:[/bold] {manager.config_manager.loaded_config}")
 
         action = main_prompt(manager)
