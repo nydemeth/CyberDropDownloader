@@ -28,6 +28,9 @@ authentication_settings: Dict = {
         "xbunker_username": "",
         "xbunker_password": "",
     },
+    "XXXBunker": {
+        "PHPSESSID": "",
+    },
     "GoFile": {
         "gofile_api_key": "",
     },
@@ -74,6 +77,7 @@ settings: Dict = {
         "unsupported_urls_filename": "Unsupported_URLs.txt",
         "download_error_urls_filename": "Download_Error_URLs.csv",
         "scrape_error_urls_filename": "Scrape_Error_URLs.csv",
+        "rotate_logs": False
     },
     "File_Size_Limits": {
         "maximum_image_size": 0,
@@ -99,8 +103,11 @@ settings: Dict = {
         "skip_check_for_partial_files": False,
         "skip_check_for_empty_folders": False,
         "delete_partial_files": False,
-        "send_unsupported_to_jdownloader": False,
         "update_last_forum_post": True,
+        "send_unsupported_to_jdownloader": False,
+        "jdownloader_download_dir": None,
+        "jdownloader_autostart" : False,
+        "jdownloader_whitelist" : []
     },
     "Sorting": {
         "sort_downloads": False,
