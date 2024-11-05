@@ -31,6 +31,7 @@ class ScrapeMapper:
                         "cyberdrop": self.cyberdrop, "cyberfile": self.cyberfile, "e-hentai": self.ehentai,
                         "erome": self.erome, "fapello": self.fapello, "f95zone": self.f95zone, "gofile": self.gofile,
                         "hotpic": self.hotpic, "ibb.co": self.imgbb, "imageban": self.imageban, "imgbox": self.imgbox,
+                        "simpcity": self.simpcity,
 
                         "imgur": self.imgur, "jpg.church": self.chevereto, "kemono": self.kemono,
                         "leakedmodels": self.leakedmodels, "mediafire": self.mediafire, "nekohouse": self.nekohouse, "nudostar.com": self.nudostar,
