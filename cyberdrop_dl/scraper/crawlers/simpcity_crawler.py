@@ -12,6 +12,8 @@ from cyberdrop_dl.utils.dataclasses.url_objects import ScrapeItem, FORUM, FORUM_
 from cyberdrop_dl.utils.utilities import get_filename_and_ext, error_handling_wrapper, log
 from cyberdrop_dl.clients.errors import ScrapeItemMaxChildrenReached
 
+from http.cookies import SimpleCookie
+
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
     from bs4 import BeautifulSoup
@@ -62,6 +64,10 @@ class SimpCityCrawler(Crawler):
             username = self.manager.config_manager.authentication_data['Forums']['simpcity_username']
             password = self.manager.config_manager.authentication_data['Forums']['simpcity_password']
             wait_time = 5
+
+            simple_cookie = SimpleCookie()
+            simple_cookie.load(self.manager.config_manager.authentication_data['Forums']['simpcity_cookies'])
+            self.client.client_manager.cookies.update_cookies(simple_cookie, response_url=self.primary_base_domain)
 
             if session_cookie or (username and password):
                 self.login_attempts += 1
