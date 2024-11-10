@@ -21,6 +21,7 @@ authentication_settings: Dict = {
         "simpcity_xf_user_cookie": "",
         "simpcity_username": "",
         "simpcity_password": "",
+        "simpcity_cookies": "",
         "socialmediagirls_xf_user_cookie": "",
         "socialmediagirls_username": "",
         "socialmediagirls_password": "",
