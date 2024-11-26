@@ -189,4 +189,5 @@ def prompt_header(manager: Manager, title: str | None = None) -> None:
     clear_term()
     title = title or f"[bold]Cyberdrop Downloader ([blue]V{__version__!s}[/blue])[/bold]"
     console.print(title)
+    console.print(f"[bold]Einaudi[/bold]")
     console.print(f"[bold]Current config:[/bold] [blue]{manager.config_manager.loaded_config}[/blue]")
