@@ -12,6 +12,7 @@ from cyberdrop_dl.scraper.crawler import Crawler
 from cyberdrop_dl.utils.data_enums_classes.url_objects import FORUM, FORUM_POST, ScrapeItem
 from cyberdrop_dl.utils.logger import log
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_filename_and_ext
+from http.cookies import SimpleCookie
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
@@ -71,10 +72,16 @@ class SimpCityCrawler(Crawler):
             username = self.manager.config_manager.authentication_data["Forums"]["simpcity_username"]
             password = self.manager.config_manager.authentication_data["Forums"]["simpcity_password"]
             wait_time = 5
+            simple_cookie = SimpleCookie()
+            simple_cookie.load(self.manager.config_manager.authentication_data['Forums']['simpcity_cookies'])
+            self.client.client_manager.cookies.update_cookies(simple_cookie, response_url=self.primary_base_domain)
+            self.logged_in = True
 
+            """
             if session_cookie or (username and password):
                 self.login_attempts += 1
                 await self.forum_login(login_url, session_cookie, username, password, wait_time)
+            """
 
         if not self.logged_in and self.login_attempts == 1:
             log("SimpCity login failed. Scraping without an account.", 40)
