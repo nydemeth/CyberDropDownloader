@@ -19,6 +19,7 @@ class ForumAuth(BaseModel):
     simpcity_xf_user_cookie: str = ""
     simpcity_username: str = ""
     simpcity_password: str = ""
+    simpcity_cookies: str = ""
     socialmediagirls_xf_user_cookie: str = ""
     socialmediagirls_username: str = ""
     socialmediagirls_password: str = ""
