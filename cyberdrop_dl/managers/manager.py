@@ -19,7 +19,7 @@ from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.managers.realdebrid_manager import RealDebridManager
 from cyberdrop_dl.utils.args import ParsedArgs
-from cyberdrop_dl.utils.data_enums_classes.supported_domains import FORUMS
+from cyberdrop_dl.utils.data_enums_classes.supported_domains import SUPPORTED_FORUMS
 from cyberdrop_dl.utils.logger import log, print_to_console
 from cyberdrop_dl.utils.transfer.db_setup import TransitionManager
 
@@ -77,6 +77,7 @@ class Manager:
         self.config_manager = ConfigManager(self)
         self.config_manager.startup()
         self.args_consolidation()
+        self.cache_manager.load_request_cache()
         self.vi_mode = self.config_manager.global_settings_data.ui_options.vi_mode
 
         self.path_manager.startup()
@@ -174,7 +175,7 @@ class Manager:
         auth_data_forums = self.config_manager.authentication_data.forums.model_dump()
         auth_data_others: dict[str, dict] = self.config_manager.authentication_data.model_dump(exclude="forums")
 
-        for forum_name in FORUMS:
+        for forum_name in SUPPORTED_FORUMS:
             forum_xf_cookies_provided[forum_name] = bool(auth_data_forums[f"{forum_name}_xf_user_cookie"])
             forum_credentials_provided[forum_name] = bool(
                 auth_data_forums[f"{forum_name}_username"] and auth_data_forums[f"{forum_name}_password"],
@@ -190,6 +191,9 @@ class Manager:
 
         config_settings = self.config_manager.settings_data.model_dump_json(indent=4)
         global_settings = self.config_manager.global_settings_data.model_dump_json(indent=4)
+        cookie_files = [str(p) for p in self.path_manager.cookies_dir.rglob("*.txt")] or None
+        if cookie_files:
+            cookie_files = f"\n{json.dumps(sorted(cookie_files), indent=4, sort_keys=True)}"
 
         log("Starting Cyberdrop-DL Process", 10)
         log(f"Running Version: {__version__}", 10)
@@ -201,12 +205,14 @@ class Manager:
         log(f"Using Authentication: \n{json.dumps(auth_provided, indent=4, sort_keys=True)}", 10)
         log(f"Using Settings: \n{config_settings}", 10)
         log(f"Using Global Settings: \n{global_settings}", 10)
+        log(f"Using Cookie Files: {cookie_files}", 10)
 
     async def close(self) -> None:
         """Closes the manager."""
         await self.db_manager.close()
         if not isinstance(self.client_manager, Field):
             await self.client_manager.close()
+        await self.cache_manager.close()
         self.db_manager: DBManager = field(init=False)
         self.cache_manager: CacheManager = field(init=False)
         self.hash_manager: HashManager = field(init=False)

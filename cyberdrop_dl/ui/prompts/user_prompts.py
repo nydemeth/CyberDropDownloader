@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+from enum import IntEnum
 from typing import TYPE_CHECKING
 
 from InquirerPy import get_style
 from InquirerPy.base.control import Choice
+from InquirerPy.enum import (
+    INQUIRERPY_EMPTY_CIRCLE_SEQUENCE,
+    INQUIRERPY_FILL_CIRCLE_SEQUENCE,
+)
 from rich.console import Console
 
 from cyberdrop_dl import __version__
@@ -11,11 +17,13 @@ from cyberdrop_dl.ui.prompts import basic_prompts
 from cyberdrop_dl.ui.prompts.defaults import ALL_CHOICE, DONE_CHOICE, EXIT_CHOICE
 from cyberdrop_dl.utils.constants import BROWSERS, RESERVED_CONFIG_NAMES
 from cyberdrop_dl.utils.cookie_management import get_cookies_from_browsers
-from cyberdrop_dl.utils.data_enums_classes.supported_domains import FORUMS, WEBSITES
+from cyberdrop_dl.utils.data_enums_classes.supported_domains import SUPPORTED_FORUMS, SUPPORTED_WEBSITES
 from cyberdrop_dl.utils.utilities import clear_term
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from yarl import URL
 
     from cyberdrop_dl.managers.manager import Manager
 
@@ -89,8 +97,8 @@ def create_new_config(manager: Manager, *, title: str = "Create a new config fil
 def select_config(configs: list) -> str:
     """Asks the user to select an existing config name."""
     return basic_prompts.ask_choice_fuzzy(
-        message="Select a config file:",
         choices=configs,
+        message="Select a config file:",
         validate_empty=True,
         long_instruction="ARROW KEYS: Navigate | TYPE: Filter | TAB: select, ENTER: Finish Selection",
         invalid_message="Need to select a config.",
@@ -124,6 +132,11 @@ def auto_cookie_extraction(manager: Manager):
     manager.config_manager.write_updated_settings_config()
 
 
+class DomainType(IntEnum):
+    WEBSITE = 0
+    FORUM = 1
+
+
 def domains_prompt(*, domain_message: str = "Select site(s):") -> list[str]:
     """Asks the user to select website(s) for cookie actions and cache actions."""
     OPTIONS = [["forum", "file-host"]]
@@ -133,19 +146,38 @@ def domains_prompt(*, domain_message: str = "Select site(s):") -> list[str]:
     if domain_type == DONE_CHOICE.value:
         return []
 
-    all_domains = list(FORUMS.values()) if domain_type == 1 else list(WEBSITES.values())
+    all_domains = list(SUPPORTED_FORUMS.values() if domain_type == DomainType.FORUM else SUPPORTED_WEBSITES.values())
     domain_choices = [Choice(site) for site in all_domains] + [ALL_CHOICE]
 
-    domains = basic_prompts.ask_checkbox(domain_choices, message=domain_message)
+    domains = basic_prompts.ask_choice_fuzzy(
+        choices=domain_choices,
+        message=domain_message,
+        validate_empty=True,
+        multiselect=True,
+        marker_pl=f" {INQUIRERPY_EMPTY_CIRCLE_SEQUENCE} ",
+        marker=f" {INQUIRERPY_FILL_CIRCLE_SEQUENCE} ",
+        style=get_style(
+            {
+                "marker": "#98c379",
+                "questionmark": "#e5c07b",
+                "pointer": "#61afef",
+                "long_instruction": "#abb2bf",
+                "fuzzy_prompt": "#c678dd",
+                "fuzzy_info": "#abb2bf",
+                "fuzzy_border": "#4b5263",
+                "fuzzy_match": "#c678dd",
+            }
+        ),
+    )
     if ALL_CHOICE.value in domains:
         domains = all_domains
-    return domains
+    return domains, all_domains
 
 
 def extract_cookies(manager: Manager, *, dry_run: bool = False) -> None:
     """Asks the user to select browser(s) and domains(s) to import cookies from."""
 
-    domains = domains_prompt(domain_message="Select site(s) to import cookies from:")
+    domains, all_domains = domains_prompt(domain_message="Select site(s) to import cookies from:")
     browsers = browser_prompt()
 
     if ALL_CHOICE.value in browsers:
@@ -153,7 +185,9 @@ def extract_cookies(manager: Manager, *, dry_run: bool = False) -> None:
 
     if dry_run:
         manager.config_manager.settings_data.browser_cookies.browsers = browsers
-        manager.config_manager.settings_data.browser_cookies.sites = domains
+        current_sites = set(manager.config_manager.settings_data.browser_cookies.sites)
+        new_sites = (current_sites - set(all_domains)) | set(domains)
+        manager.config_manager.settings_data.browser_cookies.sites = sorted(new_sites)
         return
 
     get_cookies_from_browsers(manager, browsers=browsers, domains=domains)
@@ -164,6 +198,30 @@ def extract_cookies(manager: Manager, *, dry_run: bool = False) -> None:
 def browser_prompt() -> str:
     choices = [Choice(browser, browser.capitalize()) for browser in BROWSERS]
     return basic_prompts.ask_checkbox(choices, message="Select the browser(s) for extraction:")
+
+
+""" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CACHE PROMPTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
+
+
+async def _get_urls(manager: Manager) -> set[URL]:
+    urls = set()
+    async for url in manager.cache_manager.request_cache.get_urls():
+        urls.add(url)
+    return urls
+
+
+def filter_cache_urls(manager: Manager, domains: list) -> set[URL]:
+    urls_to_remove = set()
+    cached_urls = asyncio.run(_get_urls(manager))
+    cached_urls_copy = cached_urls.copy()
+    for domain in domains:
+        cached_urls = cached_urls_copy.copy()
+        cached_urls_copy = cached_urls.copy()
+        for url in cached_urls:
+            if url.host == domain:
+                urls_to_remove.add(url)
+                cached_urls_copy.remove(url)
+    return urls_to_remove
 
 
 """ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ V4 IMPORT PROMPTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""

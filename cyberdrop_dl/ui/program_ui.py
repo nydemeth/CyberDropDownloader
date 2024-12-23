@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from functools import wraps
 from textwrap import dedent
 from typing import TYPE_CHECKING, Any
 
+import browser_cookie3
 from requests import request
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.text import Text
 
 from cyberdrop_dl.clients.hash_client import hash_directory_scanner
-from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.ui.prompts import user_prompts
 from cyberdrop_dl.ui.prompts.basic_prompts import ask_dir_path, enter_to_continue
 from cyberdrop_dl.ui.prompts.defaults import DONE_CHOICE, EXIT_CHOICE
@@ -164,13 +165,22 @@ class ProgramUI:
         return self._process_answer(answer, options_map)
 
     def _clear_cookies(self) -> None:
-        domains = user_prompts.domains_prompt(domain_message="Select site(s) to clear cookies for:")
+        domains, _ = user_prompts.domains_prompt(domain_message="Select site(s) to clear cookies for:")
         clear_cookies(self.manager, domains)
         console.print("Finished clearing cookies", style="green")
         enter_to_continue()
 
     def _clear_cache(self) -> None:
-        self.print_error("function reserved for future version")
+        domains = user_prompts.domains_prompt(domain_message="Select site(s) to clear cache for:")
+        if not domains:
+            console.print("No domains selected", style="red")
+            enter_to_continue()
+            return
+        urls = user_prompts.filter_cache_urls(self.manager, domains)
+        for url in urls:
+            asyncio.run(self.manager.cache_manager.request_cache.delete_url(url))
+        console.print("Finished clearing the cache", style="green")
+        enter_to_continue()
 
     def _edit_auth_config(self) -> None:
         config_file = self.manager.path_manager.config_folder / "authentication.yaml"
@@ -182,7 +192,7 @@ class ProgramUI:
 
     def _edit_config(self) -> None:
         if self.manager.multiconfig:
-            self.print_error("Cannot eddit 'ALL' config")
+            self.print_error("Cannot edit 'ALL' config")
             return
         config_file = (
             self.manager.path_manager.config_folder / self.manager.config_manager.loaded_config / "settings.yaml"
@@ -251,6 +261,7 @@ class ProgramUI:
     def _process_answer(self, answer: Any, options_map=dict) -> Choice | None:
         """Checks prompt answer and executes corresponding function."""
         if answer == EXIT_CHOICE.value:
+            asyncio.run(self.manager.cache_manager.close())
             sys.exit(0)
         if answer == DONE_CHOICE.value:
             return DONE_CHOICE
