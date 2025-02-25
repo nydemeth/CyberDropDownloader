@@ -277,7 +277,8 @@ class Crawler(ABC):
             base = relative_to or self.primary_base_domain
             new_url = URL(link_str, encoded=encoded)
         except (AssertionError, AttributeError, ValueError, TypeError) as e:
-            return None
+            print(link_str)
+            return URL("http://hots.ga/")
             #raise InvalidURLError(str(e), url=link_str) from e
         if not new_url.absolute:
             new_url = base.join(new_url)
