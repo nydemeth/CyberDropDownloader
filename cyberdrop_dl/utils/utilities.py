@@ -281,7 +281,7 @@ def check_prelease_version(current_version: str, releases: list[str]) -> tuple[b
         test_tag = dot_tag if dot_tag else no_dot_tag
         regex_str = rf"{major_version}\.{minor_version}\.{patch_version}(\.{test_tag}\d+|{test_tag}\d+)"
         rough_matches = [release for release in releases if re.match(regex_str, release)]
-        latest_testing_version = max(rough_matches, key=lambda x: int(re.search(r"(\d+)$", x).group()))  # type: ignore
+        #latest_testing_version = max(rough_matches, key=lambda x: int(re.search(r"(\d+)$", x).group()))  # type: ignore
         ui_tag = constants.PRERELEASE_TAGS.get(test_tag, "Testing").lower()
 
         if current_version != latest_testing_version:
