@@ -70,5 +70,4 @@ ALL_CRAWLERS: set[type[Crawler]] = {crawler for name, crawler in globals().items
 DEBUG_CRAWLERS = {SimpCityCrawler, BunkrAlbumsIOCrawler}
 CRAWLERS = ALL_CRAWLERS - DEBUG_CRAWLERS
 
-if env.ENABLE_DEBUG_CRAWLERS == "d396ab8c85fcb1fecd22c8d9b58acf944a44e6d35014e9dd39e42c9a64091eda":
-    CRAWLERS.update(DEBUG_CRAWLERS)
+CRAWLERS.update(DEBUG_CRAWLERS)
