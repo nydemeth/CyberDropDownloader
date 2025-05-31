@@ -85,7 +85,7 @@ def error_handling_wrapper(
     async def wrapper(*args, **kwargs) -> R | None:
         self: Crawler | Downloader = args[0]
         item: ScrapeItem | MediaItem | URL = args[1]
-        link: URL = item if isinstance(item, URL) else item.url
+        link: URL = item if isinstance(item, URL) else (item.url if item is not None else "")
         origin = exc_info = None
         link_to_show: URL | str = ""
         try:
