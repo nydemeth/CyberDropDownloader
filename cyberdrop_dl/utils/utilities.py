@@ -88,14 +88,14 @@ def error_handling_wrapper(
     async def wrapper(*args, **kwargs) -> R | None:
         self: Crawler | Downloader = args[0]
         item: ScrapeItem | MediaItem | URL = args[1]
-        link: URL = item if isinstance(item, URL) else item.url
+        link: URL = item if isinstance(item, URL) else (item.url if item is not None else "")
         origin = exc_info = None
         link_to_show: URL | str = ""
         try:
             return await func(*args, **kwargs)
         except CDLBaseError as e:
-            error_log_msg = ErrorLogMessage(e.ui_failure, str(e))
-            origin = e.origin
+            error_log_msg = ErrorLogMessage(getattr(e, 'ui_failure', 'Unknown failure occurred'), str(e))
+            origin = getattr(e, 'origin', "")
             e_url: URL | str | None = getattr(e, "url", None)
             link_to_show = e_url or link_to_show
         except NotImplementedError:
