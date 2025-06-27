@@ -418,7 +418,7 @@ class XenforoCrawler(Crawler, is_abc=True):
 
     def is_valid_post_link(self, link_obj: Tag) -> bool:
         is_image = link_obj.select_one("img")
-        link_str: str = css.get_attr(link_obj, self.selectors.posts.links.element)
+        link_str: str = css.get_attr(link_obj, self.selectors.posts.links.attribute)
         return not (is_image or self.is_attachment(link_str))
 
     def is_confirmation_link(self, link: URL) -> bool:
