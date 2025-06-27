@@ -7,7 +7,7 @@ from multidict import MultiDict
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.managers.real_debrid.api import RATE_LIMIT
-from cyberdrop_dl.types import AbsoluteHttpURL
+from cyberdrop_dl.types import SupportedPaths, AbsoluteHttpURL
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ class RealDebridCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
     DOMAIN: ClassVar[str] = "real-debrid"
     FOLDER_DOMAIN: ClassVar[str] = "RealDebrid"
-    SUPPORTED_PATHS: ClassVar[tuple[str, ...]] = ("/d/",)
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Aldum": "/d/..."}
 
     def __post_init__(self) -> None:
         self.headers = {}
