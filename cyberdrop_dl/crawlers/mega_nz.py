@@ -148,7 +148,6 @@ class MegaNzCrawler(Crawler):
             await self.proccess_file(new_scrape_item, file)
             scrape_item.add_children()
 
-    @error_handling_wrapper
     async def login(self, user: str, password: str) -> None:
         if not user or not password:
             return
