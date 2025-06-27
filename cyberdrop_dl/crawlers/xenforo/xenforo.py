@@ -418,7 +418,9 @@ class XenforoCrawler(Crawler, is_abc=True):
 
     def is_valid_post_link(self, link_obj: Tag) -> bool:
         is_image = link_obj.select_one("img")
-        link_str: str = css.get_attr(link_obj, self.selectors.posts.links.attribute)
+        link_str = css.get_attr_or_none(link_obj, self.selectors.posts.links.attribute)
+        if not link_str:
+            return False
         try:
             absolute_link = self.get_absolute_link(link_str)
             if not absolute_link:
