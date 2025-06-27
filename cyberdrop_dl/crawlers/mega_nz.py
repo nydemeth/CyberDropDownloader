@@ -13,9 +13,10 @@ from cyberdrop_dl.downloader.mega_nz import (
     base64_url_decode,
     decrypt_attr,
 )
-from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.exceptions import ScrapeError, LoginError
 from cyberdrop_dl.types import AbsoluteHttpURL, SupportedPaths
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils.log import logger
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -57,7 +58,10 @@ class MegaNzCrawler(Crawler):
             self.ready = True
 
     async def async_startup(self) -> None:
-        await self.login(self.user, self.password)
+        try:
+            await self.login(self.user, self.password)
+        except LoginError as e:
+            logger.warning(str(e))
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if scrape_item.url.fragment:  # Mega stores access key in fragment. We can't do anything without the key
@@ -149,5 +153,11 @@ class MegaNzCrawler(Crawler):
             scrape_item.add_children()
 
     @error_handling_wrapper
-    async def login(self, *_):
-        await self.api.login()
+    async def login(self, user: str, password: str) -> None:
+        if not user or not password:
+            return
+        try:
+            await self.api.login(user, password)
+            logger.info(f"[{self.DOMAIN}] Successfully logged in as {user}")
+        except Exception as e:
+            raise LoginError(f"[{self.DOMAIN}] Failed to login as {user}") from e
