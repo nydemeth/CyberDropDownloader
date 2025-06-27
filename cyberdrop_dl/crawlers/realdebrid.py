@@ -20,6 +20,7 @@ class RealDebridCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
     DOMAIN: ClassVar[str] = "real-debrid"
     FOLDER_DOMAIN: ClassVar[str] = "RealDebrid"
+    SUPPORTED_PATHS: ClassVar[tuple[str, ...]] = ("/d/",)
 
     def __post_init__(self) -> None:
         self.headers = {}
