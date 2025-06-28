@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+import random
 from dataclasses import astuple, dataclass
 from functools import cached_property, singledispatchmethod
 from typing import TYPE_CHECKING, ClassVar
@@ -271,6 +272,8 @@ class XenforoCrawler(Crawler, is_abc=True):
             if next_page:
                 return self.pre_filter_link(next_page)
 
+        if self.DOMAIN == "simpcity":
+            await asyncio.sleep(random.uniform(1, 60))
         async for soup in self._web_pager(scrape_item.url, get_next_page):
             yield soup
 
