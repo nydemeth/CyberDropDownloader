@@ -264,6 +264,8 @@ class XenforoCrawler(Crawler, is_abc=True):
         """Generator of forum thread pages."""
 
         def get_next_page(soup: BeautifulSoup) -> str | None:
+            if self.DOMAIN == "simpcity":
+                await asyncio.sleep(20)
             select, attr = self.selectors.next_page.astuple
             next_page = css.select_one_get_attr_or_none(soup, selector=select, attribute=attr)
             if next_page:
