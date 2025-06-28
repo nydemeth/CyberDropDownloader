@@ -16,6 +16,7 @@ from cyberdrop_dl.downloader.mega_nz import (
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.types import AbsoluteHttpURL, SupportedPaths
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils.logger import log
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -154,4 +155,5 @@ class MegaNzCrawler(Crawler):
         try:
             await self.api.login(user, password)
         except Exception as e:
+            log(e)
             return
