@@ -205,6 +205,7 @@ class Crawler(ABC):
 
             self.scraped_items.append(url.path_qs)
             async with self._fetch_context(scrape_item):
+                self.pre_check_scrape_item(scrape_item)
                 await self.fetch(scrape_item)
 
     def pre_check_scrape_item(self, scrape_item: ScrapeItem) -> None:
@@ -223,7 +224,6 @@ class Crawler(ABC):
     async def _fetch_context(self, scrape_item: ScrapeItem) -> AsyncGenerator[TaskID]:
         with self.new_task_id(scrape_item.url) as task_id:
             try:
-                self.pre_check_scrape_item(scrape_item)
                 yield task_id
             except ValueError:
                 await self.raise_e(scrape_item, ScrapeError("Unknown URL path"))
@@ -252,9 +252,13 @@ class Crawler(ABC):
         finally:
             self.manager.progress_manager.scraping_progress.remove_task(task_id)
 
+    @staticmethod
+    def is_subdomain(url: AbsoluteHttpURL) -> bool:
+        return url.host.removeprefix("www.").count(".") > 1
+
     @classmethod
-    def is_subdomain(cls, url: AbsoluteHttpURL, domain_to_compare: str | None = None) -> bool:
-        primary_domain = (domain_to_compare or cls.PRIMARY_URL.host).removeprefix("www.")
+    def is_self_subdomain(cls, url: AbsoluteHttpURL) -> bool:
+        primary_domain = cls.PRIMARY_URL.host.removeprefix("www.")
         other_domain = url.host.removeprefix("www.")
         if primary_domain == other_domain:
             return False
