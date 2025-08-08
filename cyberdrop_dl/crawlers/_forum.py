@@ -329,16 +329,14 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     async def write_last_forum_post(self, thread_url: AbsoluteHttpURL, last_post_url: AbsoluteHttpURL | None) -> None:
         if not last_post_url or last_post_url == thread_url:
             return
-        await self.manager.log_manager.write_last_post_log(last_post_url)
+        self.manager.log_manager.write_last_post_log(last_post_url)
 
     # TODO: Move this to the base crawler
     # TODO: Define an unified workflow for crawlers to perform and check login
     @final
     @error_handling_wrapper
     async def _login(self, login_url: AbsoluteHttpURL) -> None:
-        host_cookies: dict = self.client.client_manager.cookies.filter_cookies(self.PRIMARY_URL)
-        session_cookie = host_cookies.get(self.LOGIN_USER_COOKIE_NAME)
-        session_cookie = session_cookie.value if session_cookie else None
+        session_cookie = self.get_cookie_value(self.LOGIN_USER_COOKIE_NAME)
         msg = f"No cookies found for {self.FOLDER_DOMAIN}"
         if not session_cookie and self.login_required:
             raise LoginError(message=msg)

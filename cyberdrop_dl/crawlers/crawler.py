@@ -5,6 +5,7 @@ import contextlib
 import datetime
 import inspect
 import re
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -36,7 +37,6 @@ from cyberdrop_dl.utils.utilities import (
     remove_file_id,
     remove_trailing_slash,
     sanitize_filename,
-    sort_dict,
     truncate_str,
 )
 
@@ -48,6 +48,7 @@ _T_co = TypeVar("_T_co", covariant=True)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Generator
+    from http.cookies import BaseCookie
 
     from aiohttp_client_cache.response import AnyResponse
     from bs4 import BeautifulSoup, Tag
@@ -86,6 +87,7 @@ class CrawlerInfo(NamedTuple):
 
 
 class Crawler(ABC):
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
@@ -94,9 +96,9 @@ class Crawler(ABC):
     SKIP_PRE_CHECK: ClassVar[bool] = False
     NEXT_PAGE_SELECTOR: ClassVar[str] = ""
 
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL]
-    DOMAIN: ClassVar[str]
     FOLDER_DOMAIN: ClassVar[str] = ""
+    DOMAIN: ClassVar[str]
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL]
 
     @final
     def __init__(self, manager: Manager) -> None:
@@ -108,7 +110,7 @@ class Crawler(ABC):
         self.ready: bool = False
         self.disabled: bool = False
         self.logged_in: bool = False
-        self.scraped_items: list[str] = []
+        self.scraped_items: set[str] = set()
         self.waiting_items = 0
         self.log = log
         self.log_debug = log_debug
@@ -127,16 +129,16 @@ class Crawler(ABC):
         super().__init_subclass__(**kwargs)
 
         msg = (
-            f"Subclass {cls.__name__} must not override __init__ method,",
-            "use __post_init__ for additional setup",
-            "use async_startup for setup that requires database access, making a request or setting cookies",
+            f"Subclass {cls.__name__} must not override __init__ method,"
+            "use __post_init__ for additional setup"
+            "use async_startup for setup that requires database access, making a request or setting cookies"
         )
         assert cls.__init__ is Crawler.__init__, msg
         cls.NAME = cls.__name__.removesuffix("Crawler")
         cls.IS_GENERIC = is_generic
         cls.IS_FALLBACK_GENERIC = cls.NAME == "Generic"
         cls.IS_REAL_DEBRID = cls.NAME == "RealDebrid"
-        cls.SUPPORTED_PATHS = sort_dict(cls.SUPPORTED_PATHS)
+        cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)
 
         if cls.IS_GENERIC:
             cls.GENERIC_NAME = generic_name or cls.NAME
@@ -152,10 +154,20 @@ class Crawler(ABC):
             for field_name in REQUIRED_FIELDS:
                 assert getattr(cls, field_name, None), f"Subclass {cls.__name__} must override: {field_name}"
 
+        if cls.OLD_DOMAINS:
+            cls.REPLACE_OLD_DOMAINS_REGEX = re.compile("|".join(cls.OLD_DOMAINS))
+            if not cls.SUPPORTED_DOMAINS:
+                cls.SUPPORTED_DOMAINS = ()
+            elif isinstance(cls.SUPPORTED_DOMAINS, str):
+                cls.SUPPORTED_DOMAINS = (cls.SUPPORTED_DOMAINS,)
+            cls.SUPPORTED_DOMAINS = tuple(sorted({*cls.OLD_DOMAINS, *cls.SUPPORTED_DOMAINS, cls.PRIMARY_URL.host}))
+        else:
+            cls.REPLACE_OLD_DOMAINS_REGEX = None
         _validate_supported_paths(cls)
         cls.SCRAPE_MAPPER_KEYS = _make_scrape_mapper_keys(cls)
         cls.FOLDER_DOMAIN = cls.FOLDER_DOMAIN or cls.DOMAIN.capitalize()
-        cls.INFO = CrawlerInfo(cls.FOLDER_DOMAIN, cls.PRIMARY_URL, cls.SCRAPE_MAPPER_KEYS, cls.SUPPORTED_PATHS)
+        wiki_supported_domains = _make_wiki_supported_domains(cls.SCRAPE_MAPPER_KEYS)
+        cls.INFO = CrawlerInfo(cls.FOLDER_DOMAIN, cls.PRIMARY_URL, wiki_supported_domains, cls.SUPPORTED_PATHS)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
@@ -198,12 +210,12 @@ class Crawler(ABC):
             og_url = scrape_item.url
             scrape_item.url = url = self.transform_url(scrape_item.url)
             if og_url != url:
-                log(f"URL transformed: \n old: {og_url} \n new: {url}")
+                log(f"URL transformation applied [{self.FOLDER_DOMAIN}]: \n  old_url: {og_url}\n  new_url: {url}")
 
             if url.path_qs in self.scraped_items:
                 return log(f"Skipping {url} as it has already been scraped", 10)
 
-            self.scraped_items.append(url.path_qs)
+            self.scraped_items.add(url.path_qs)
             async with self._fetch_context(scrape_item):
                 self.pre_check_scrape_item(scrape_item)
                 await self.fetch(scrape_item)
@@ -217,6 +229,9 @@ class Crawler(ABC):
         """Transforms an URL before it reaches the fetch method
 
         Override it to transform thumbnail URLs into full res URLs or URLs in an old unsupported format into a new one"""
+        if cls.REPLACE_OLD_DOMAINS_REGEX is not None:
+            new_host = re.sub(cls.REPLACE_OLD_DOMAINS_REGEX, cls.PRIMARY_URL.host, url.host)
+            return url.with_host(new_host)
         return url
 
     @final
@@ -264,19 +279,21 @@ class Crawler(ABC):
             return False
         return primary_domain in other_domain and other_domain.count(".") > primary_domain.count(".")
 
+    # TODO: make this sync
     async def handle_file(
         self,
         url: URL,
         scrape_item: ScrapeItem,
         filename: str,
-        ext: str,
+        ext: str | None = None,
         *,
         custom_filename: str | None = None,
         debrid_link: URL | None = None,
         m3u8: m3u8.RenditionGroup | None = None,
     ) -> None:
         """Finishes handling the file and hands it off to the downloader."""
-
+        if not ext:
+            _, ext = filename.rsplit(".", 1)
         if custom_filename:
             original_filename, filename = filename, custom_filename
         elif self.DOMAIN in ["cyberdrop"]:
@@ -288,14 +305,25 @@ class Crawler(ABC):
         if isinstance(debrid_link, URL):
             assert is_absolute_http_url(debrid_link)
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
-        media_item = MediaItem(url, scrape_item, download_folder, filename, original_filename, debrid_link, ext=ext)
-        await self.handle_media_item(media_item, m3u8)
+        media_item = MediaItem.from_item(
+            scrape_item, url, download_folder, filename, original_filename, debrid_link, ext=ext
+        )
+
+        self.create_task(self.handle_media_item(media_item, m3u8))
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
+        try:
+            return await self._handle_media_item(media_item, m3u8)
+        finally:
+            if self.manager.config_manager.settings_data.files.dump_json:
+                data = [media_item.as_jsonable_dict()]
+                await self.manager.log_manager.write_jsonl(data)
+
+    async def _handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
         await self.manager.states.RUNNING.wait()
         if media_item.datetime and not isinstance(media_item.datetime, int):
             msg = f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.datetime!r}, expected int."
-            log(msg, 30, bug=True)
+            log(msg, bug=True)
 
         check_complete = await self.manager.db_manager.history_table.check_complete(
             self.DOMAIN, media_item.url, media_item.referer
@@ -345,10 +373,17 @@ class Crawler(ABC):
 
         return False
 
-    async def check_complete_from_referer(self, scrape_item: ScrapeItem | URL) -> bool:
-        """Checks if the scrape item has already been scraped."""
+    @final
+    async def check_complete_from_referer(
+        self: Crawler, scrape_item: ScrapeItem | URL, any_crawler: bool = False
+    ) -> bool:
+        """Checks if the scrape item has already been scraped.
+
+        if `any_crawler` is `True`, checks database entries for all crawlers and returns `True` if at least 1 of them has marked it as completed
+        """
         url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
-        downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(self.DOMAIN, url)
+        domain = None if any_crawler else self.DOMAIN
+        downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
             log(f"Skipping {url} as it has already been downloaded", 10)
             self.manager.progress_manager.download_progress.add_previously_completed()
@@ -551,36 +586,52 @@ class Crawler(ABC):
         filename, ext = self.get_filename_and_ext(link.name, assume_ext=assume_ext)
         await self.handle_file(link, scrape_item, filename, ext)
 
+    @final
     def parse_date(self, date_or_datetime: str, format: str | None = None, /) -> TimeStamp | None:
         if parsed_date := self._parse_date(date_or_datetime, format):
             return to_timestamp(parsed_date)
 
+    @final
     def parse_iso_date(self, date_or_datetime: str, /) -> TimeStamp | None:
         if parsed_date := self._parse_date(date_or_datetime, None, iso=True):
             return to_timestamp(parsed_date)
 
+    @final
     def _parse_date(
         self, date_or_datetime: str, format: str | None = None, /, *, iso: bool = False
     ) -> datetime.datetime | None:
-        assert not (iso and format)
+        assert not (iso and format), "Only `format` or `iso` can be used, not both"
         msg = f"Date parsing for {self.DOMAIN} seems to be broken"
         if not date_or_datetime:
-            log(f"{msg}: Unable to extract date from soup", 30, bug=True)
-            return None
+            log(f"{msg}: Unable to extract date", bug=True)
+            return
+        if format:
+            assert not (format == "%Y-%m-%d" or format.startswith("%Y-%m-%d %H:%M:%S")), (
+                f"{msg} Do not use a custom format to parse iso8601 dates. Call parse_iso_date instead"
+            )
         try:
-            if iso:
-                parsed_date = datetime.datetime.fromisoformat(date_or_datetime)
-            elif format:
-                parsed_date = datetime.datetime.strptime(date_or_datetime, format)
-            else:
-                parsed_date = parse_human_date(date_or_datetime)
+            with warnings.catch_warnings(action="error"):
+                if iso:
+                    parsed_date = datetime.datetime.fromisoformat(date_or_datetime)
+                elif format:
+                    parsed_date = datetime.datetime.strptime(date_or_datetime, format)
+                else:
+                    parsed_date = parse_human_date(date_or_datetime)
+
+            if parsed_date:
+                return parsed_date
+
         except Exception as e:
-            msg = f"{msg}: {e}"
+            msg = f"{msg}. {format = }: {e!r}"
 
-        if parsed_date:
-            return parsed_date
+        log(msg, bug=True)
 
-        log(msg, 30, bug=True)
+    async def _get_redirect_url(self, url: AbsoluteHttpURL):
+        async with self.request_limiter:
+            head = await self.client.get_head(self.DOMAIN, url)
+        if location := head.get("location"):
+            return self.parse_url(location, url.origin())
+        return url
 
     @staticmethod
     def register_cache_filter(
@@ -627,13 +678,12 @@ class Crawler(ABC):
         file_id: str | None = None,
         video_codec: str | None = None,
         audio_codec: str | None = None,
-        resolution: str | int | None = None,
+        resolution: m3u8.Resolution | str | int | None = None,
         hash_string: str | None = None,
         only_truncate_stem: bool = True,
     ) -> str:
         calling_args = {name: value for name, value in locals().items() if value is not None and name not in ("self",)}
-        clean_name = sanitize_filename(Path(name).as_posix().replace("/", "-"))  # remove OS separators (if any)
-        stem = Path(clean_name).stem.removesuffix(".")  # remove extensions (if any)
+        stem = sanitize_filename(Path(name).as_posix().replace("/", "-"))  # remove OS separators (if any)
         extra_info: list[str] = []
 
         if _placeholder_config.include_file_id and file_id:
@@ -644,8 +694,10 @@ class Crawler(ABC):
             extra_info.append(audio_codec)
 
         if _placeholder_config.include_resolution and resolution:
+            if isinstance(resolution, m3u8.Resolution):
+                resolution = resolution.name
             if isinstance(resolution, str):
-                if digits := resolution.casefold().removesuffix("p").isdigit():
+                if (digits := resolution.casefold().removesuffix("p")).isdigit():
                     extra_info.append(f"{digits}p")
                 else:
                     resolution_ = next(
@@ -667,18 +719,35 @@ class Crawler(ABC):
                 f"Important information was removed while creating a filename. "
                 f"\n{calling_args}"
             )
-            log(msg, 30, bug=True)
+            log(msg, bug=True)
         return filename
+
+    @final
+    def get_cookies(self, partial_match_domain: bool = False) -> Iterable[tuple[str, BaseCookie[str]]]:
+        if partial_match_domain:
+            yield from self.client.client_manager.filter_cookies_by_word_in_domain(self.DOMAIN)
+        else:
+            yield str(self.PRIMARY_URL.host), self.client.client_manager.cookies.filter_cookies(self.PRIMARY_URL)
+
+    @final
+    def get_cookie_value(self, cookie_name: str, partial_match_domain: bool = False) -> str | None:
+        def get_morsels_by_name():
+            for _, cookie in self.get_cookies(partial_match_domain):
+                if morsel := cookie.get(cookie_name):
+                    yield morsel
+
+        if newest := max(get_morsels_by_name(), key=lambda x: int(x["max-age"] or 0), default=None):
+            return newest.value
 
 
 def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:
     if cls.SUPPORTED_DOMAINS:
-        hosts: SupportedDomains = cls.SUPPORTED_DOMAINS
+        hosts = cls.SUPPORTED_DOMAINS
     else:
-        hosts = cls.DOMAIN or cls.PRIMARY_URL.host
+        hosts = cls.DOMAIN
     if isinstance(hosts, str):
         hosts = (hosts,)
-    return tuple(sorted(host.removeprefix("www.") for host in hosts))
+    return tuple(sorted({host.removeprefix("www.") for host in hosts}))
 
 
 def _make_custom_filename(stem: str, ext: str, extra_info: list[str], only_truncate_stem: bool) -> tuple[str, bool]:
@@ -749,6 +818,25 @@ def _validate_supported_paths(cls: type[Crawler]) -> None:
             paths = (paths,)
         for path in paths:
             assert "`" not in path, f"{cls.__name__}, Invalid path {path_name}: {path}"
+
+
+def _make_wiki_supported_domains(scrape_mapper_keys: tuple[str, ...]) -> tuple[str, ...]:
+    def generalize(domain):
+        if "." not in domain:
+            return f"{domain}.*"
+        return domain
+
+    return tuple(sorted(generalize(domain) for domain in scrape_mapper_keys))
+
+
+def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTuple[str]]:
+    def try_sort(value: OneOrTuple[str]) -> OneOrTuple[str]:
+        if isinstance(value, tuple):
+            return tuple(sorted(value))
+        return value
+
+    path_pairs = ((key, try_sort(value)) for key, value in supported_paths.items())
+    return dict(sorted(path_pairs, key=lambda x: x[0].casefold()))
 
 
 def auto_task_id(
