@@ -151,6 +151,29 @@ class ScraperClient:
         text = f"<!-- cyberdrop-dl scraping result\n{json_data}\n-->\n{content}"
         self.client_manager.manager.task_group.create_task(try_write(file_path, text))
 
+    # Convenience methods for backward compatibility
+    async def get_text(self, domain: str, url: AbsoluteHttpURL, **kwargs) -> str:
+        """Get text content from a URL."""
+        async with self._limiter(domain):
+            async with self._request(url, **kwargs) as response:
+                return await response.text()
+
+    async def get_soup(self, domain: str, url: AbsoluteHttpURL, **kwargs):
+        """Get BeautifulSoup object from a URL."""
+        async with self._limiter(domain):
+            async with self._request(url, **kwargs) as response:
+                return await response.soup()
+
+    async def post_data(self, domain: str, url: AbsoluteHttpURL, data: Any = None, **kwargs) -> Any:
+        """Post data to a URL and return JSON response."""
+        async with self._limiter(domain):
+            async with self._request(url, method="POST", data=data, **kwargs) as response:
+                return await response.json()
+
+    @property
+    def _session(self):
+        """Provide access to the underlying session for backward compatibility."""
+        return self.client_manager._session
 
 async def try_write(file: Path, content: str) -> None:
     try:
