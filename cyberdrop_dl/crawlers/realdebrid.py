@@ -104,7 +104,7 @@ class RealDebridCrawler(Crawler):
             return
         try:
             files_r, folders_r = await asyncio.gather(
-                await self._api_request("hosts/regex"), await self._api_request("hosts/regexFolder")
+                self._api_request("hosts/regex"), self._api_request("hosts/regexFolder")
             )
             file_regex: list[str] = [pattern[1:-1] for pattern in files_r]
             folder_regex: list[str] = [pattern[1:-1] for pattern in folders_r]
