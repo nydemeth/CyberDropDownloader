@@ -169,7 +169,58 @@ class ScraperClient:
         async with self._limiter(domain):
             async with self._request(url, method="POST", data=data, **kwargs) as response:
                 return await response.json()
+                
+    async def get_json(self, domain: str, url: AbsoluteHttpURL, **kwargs) -> Any:
+        """Get JSON response from a URL."""
+        async with self._limiter(domain):
+            async with self._request(url, **kwargs) as response:
+                return await response.json()
 
+    async def get_soup_cffi(self, domain: str, url: AbsoluteHttpURL, **kwargs):
+        """Get BeautifulSoup object from a URL using curl_cffi."""
+        async with self._limiter(domain):
+            async with self._request(url, impersonate=True, **kwargs) as response:
+                return await response.soup()
+
+    async def post_data_raw(self, domain: str, url: AbsoluteHttpURL, data: Any = None, **kwargs) -> bytes:
+        """Post data to a URL and return raw bytes response."""
+        async with self._limiter(domain):
+            async with self._request(url, method="POST", data=data, **kwargs) as response:
+                return await response.read()
+
+    async def get_head(self, domain: str, url: AbsoluteHttpURL, **kwargs) -> dict[str, str]:
+        """Get HEAD response headers from a URL."""
+        async with self._limiter(domain):
+            async with self._request(url, method="HEAD", **kwargs) as response:
+                return dict(response.headers)
+
+    async def _get_response_and_soup(self, domain: str, url: AbsoluteHttpURL, **kwargs) -> tuple[Any, Any]:
+        """Get response and soup objects from a URL."""
+        async with self._limiter(domain):
+            async with self._request(url, **kwargs) as response:
+                soup = await response.soup()
+                return response, soup
+
+    async def _get_response_and_soup_cffi(self, domain: str, url: AbsoluteHttpURL, **kwargs) -> tuple[Any, Any]:
+        """Get response and soup objects from a URL using curl_cffi."""
+        async with self._limiter(domain):
+            async with self._request(url, impersonate=True, **kwargs) as response:
+                soup = await response.soup()
+                return response, soup
+
+    async def _get_head(self, domain: str, url: AbsoluteHttpURL, **kwargs):
+        """Get HEAD response object from a URL."""
+        async with self._limiter(domain):
+            async with self._request(url, method="HEAD", **kwargs) as response:
+                return response
+
+    async def _get(self, domain: str, url: AbsoluteHttpURL, **kwargs) -> tuple[Any, Any]:
+        """Get response and soup objects from a URL (alternative method name)."""
+        async with self._limiter(domain):
+            async with self._request(url, **kwargs) as response:
+                soup = await response.soup()
+                return response, soup
+                
     @property
     def _session(self):
         """Provide access to the underlying session for backward compatibility."""
