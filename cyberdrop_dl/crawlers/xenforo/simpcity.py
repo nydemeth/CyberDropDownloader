@@ -20,4 +20,4 @@ class SimpCityCrawler(XenforoCrawler):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.request_limiter = AsyncLimiter(1, 60)
+        self.request_limiter = AsyncLimiter(1, 120)
