@@ -141,6 +141,7 @@ class Crawler(ABC):
         self.log = log
         self.log_debug = log_debug
         self._semaphore = asyncio.Semaphore(20)
+        self.request_limiter = AsyncLimiter(1, 1)
         self.__post_init__()
 
     @final
@@ -879,3 +880,4 @@ def auto_task_id(
             return result
 
     return wrapper
+
