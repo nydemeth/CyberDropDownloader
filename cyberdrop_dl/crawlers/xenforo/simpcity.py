@@ -17,6 +17,7 @@ class SimpCityCrawler(XenforoCrawler):
     login_required = False
     IGNORE_EMBEDED_IMAGES_SRC = False
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("simpcity.su",)
+    _RATE_LIMIT: ClassVar[tuple[float, float]] = 1, 60
 
     def __post_init__(self) -> None:
         super().__post_init__()
