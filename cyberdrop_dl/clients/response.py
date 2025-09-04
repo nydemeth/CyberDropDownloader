@@ -44,7 +44,10 @@ class AbstractResponse:
             headers = response.headers
         else:
             status = response.status_code
-            headers = CIMultiDictProxy(CIMultiDict({k: v or "" for k, v in response.headers}))
+            if hasattr(response.headers, 'items'):
+                headers = CIMultiDictProxy(CIMultiDict({k: v or "" for k, v in response.headers.items()}))
+            else:
+                headers = CIMultiDictProxy(CIMultiDict(response.headers))
 
         url = AbsoluteHttpURL(response.url)
         content_type, location = cls.parse_headers(url, headers)
