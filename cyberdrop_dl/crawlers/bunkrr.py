@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from aiohttp import ClientConnectorError
+from aiolimiter import AsyncLimiter
+
 
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
@@ -141,6 +143,7 @@ class BunkrrCrawler(Crawler):
     def __post_init__(self) -> None:
         self.known_good_host: str = ""
         self.switch_host_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self.request_limiter = AsyncLimiter(1, 5)
 
     @property
     def known_good_url(self) -> AbsoluteHttpURL | None:
