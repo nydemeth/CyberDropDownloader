@@ -143,7 +143,6 @@ class BunkrrCrawler(Crawler):
     def __post_init__(self) -> None:
         self.known_good_host: str = ""
         self.switch_host_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self.request_limiter = AsyncLimiter(1, 5)
 
     @property
     def known_good_url(self) -> AbsoluteHttpURL | None:
