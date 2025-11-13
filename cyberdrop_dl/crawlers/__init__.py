@@ -83,6 +83,7 @@ from .pornhub import PornHubCrawler
 from .pornpics import PornPicsCrawler
 from .porntrex import PorntrexCrawler
 from .postimg import PostImgCrawler
+from .ranoz import RanozCrawler, RootzCrawler
 from .realbooru import RealBooruCrawler
 from .reddit import RedditCrawler
 from .redgifs import RedGifsCrawler
