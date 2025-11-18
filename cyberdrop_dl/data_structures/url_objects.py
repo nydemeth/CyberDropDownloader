@@ -171,8 +171,12 @@ class MediaItem:
     downloaded: bool = field(default=False, compare=False)
 
     parent_media_item: MediaItem | None = field(default=None, compare=False)
-    db_path: str = field(init=False, repr=False)
+    db_path: str = field(init=False)
     _task_id: TaskID | None = field(default=None, compare=False)
+    metadata: object = field(init=False, default_factory=dict, compare=False)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
 
     def __post_init__(self) -> None:
         self.db_path = self.create_db_path(self.url, self.domain)
@@ -180,6 +184,9 @@ class MediaItem:
     @staticmethod
     def create_db_path(url: yarl.URL, domain: str) -> str:
         """Gets the URL path to be put into the DB and checked from the DB."""
+
+        if url.scheme == "metadata":
+            return ""
 
         if domain:
             if "e-hentai" in domain:
