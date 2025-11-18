@@ -271,7 +271,6 @@ class ScrapeItem:
     part_of_album: bool = False
     album_id: str | None = None
     possible_datetime: int | None = None
-    retry: bool = False
     retry_path: Path | None = None
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
@@ -291,8 +290,9 @@ class ScrapeItem:
         """Adds a title to the parent title."""
         from cyberdrop_dl.utils.utilities import sanitize_folder
 
-        if not title or self.retry:
+        if not title or self.retry_path:
             return
+
         title = sanitize_folder(title)
         if title.endswith(")") and " (" in title:
             for part in reversed(self.parent_title.split("/")):
@@ -416,6 +416,15 @@ class ScrapeItem:
     def parent(self) -> AbsoluteHttpURL | None:
         if self.parents:
             return self.parents[-1]
+
+    def create_download_path(self, domain: str) -> Path:
+        if self.retry_path:
+            return self.retry_path
+        if self.parent_title and self.part_of_album:
+            return Path(self.parent_title)
+        if self.parent_title:
+            return Path(self.parent_title) / f"Loose Files ({domain})"
+        return Path(f"Loose Files ({domain})")
 
     def copy(self) -> Self:
         """Returns a deep copy of this scrape_item"""
