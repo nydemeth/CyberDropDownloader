@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-import builtins
+import weakref
 from stat import S_ISREG
-from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Final, Generic, TypeVar, cast
 
 if TYPE_CHECKING:
     import pathlib
     from collections.abc import Awaitable, Sequence
 
-    _P = ParamSpec("_P")
-    _T = TypeVar("_T")
-    _R = TypeVar("_R")
+_T = TypeVar("_T")
+
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Sequence
 
 
 async def gather(coros: Sequence[Awaitable[_T]], batch_size: int = 10) -> list[_T]:
@@ -36,7 +38,7 @@ async def gather(coros: Sequence[Awaitable[_T]], batch_size: int = 10) -> list[_
             semaphore.release()
 
     async with asyncio.TaskGroup() as tg:
-        for index, coro in builtins.enumerate(coros):
+        for index, coro in enumerate(coros):
             await semaphore.acquire()
             tg.create_task(worker(index, coro))
 
@@ -75,3 +77,22 @@ async def get_size(path: pathlib.Path) -> int | None:
     else:
         if S_ISREG(stat_result.st_mode):
             return stat_result.st_size
+
+
+class WeakAsyncLocks(Generic[_T]):
+    """A WeakValueDictionary wrapper for asyncio.Locks.
+
+    Unused locks are automatically garbage collected. When trying to retrieve a
+    lock that does not exists, a new lock will be created.
+    """
+
+    __slots__ = ("__locks",)
+
+    def __init__(self) -> None:
+        self.__locks: Final = weakref.WeakValueDictionary[_T, asyncio.Lock]()
+
+    def __getitem__(self, key: _T, /) -> asyncio.Lock:
+        lock = self.__locks.get(key)
+        if lock is None:
+            self.__locks[key] = lock = asyncio.Lock()
+        return lock
