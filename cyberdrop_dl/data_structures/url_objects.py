@@ -200,6 +200,11 @@ class MediaItem:
 
         return url.path
 
+    def datetime_obj(self) -> datetime.datetime | None:
+        if self.datetime:
+            assert isinstance(self.datetime, int), f"Invalid {self.datetime =!r} from {self.referer}"
+            return datetime.datetime.fromtimestamp(self.datetime)
+
     @staticmethod
     def from_item(
         origin: ScrapeItem | MediaItem,
@@ -253,9 +258,8 @@ class MediaItem:
 
     def as_jsonable_dict(self) -> dict[str, Any]:
         item = asdict(self)
-        if self.datetime:
-            assert isinstance(self.datetime, int), f"Invalid {self.datetime =!r} from {self.referer}"
-            item["datetime"] = datetime.datetime.fromtimestamp(self.datetime)
+        if datetime := self.datetime_obj():
+            item["datetime"] = datetime
         item["attempts"] = item.pop("current_attempt")
         if self.hash:
             item["hash"] = f"xxh128:{self.hash}"
