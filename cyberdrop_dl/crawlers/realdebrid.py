@@ -153,8 +153,8 @@ class RealDebridAPI:
             self._api_request("hosts/regexFolder"),
         )
 
-        file_regex = [pattern[1:-1] for pattern in responses[0]]
-        folder_regex = [pattern[1:-1] for pattern in responses[1]]
+        file_regex = (pattern[1:-1] for pattern in responses[0])
+        folder_regex = (pattern[1:-1] for pattern in responses[1])
         self._file_regex = re.compile("|".join(file_regex))
         self._folder_regex = re.compile("|".join(folder_regex))
 
