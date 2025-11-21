@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import ssl
-import weakref
 from base64 import b64encode
 from collections import defaultdict
 from http import HTTPStatus
@@ -17,7 +16,6 @@ from aiohttp_client_cache.response import CachedResponse
 from aiohttp_client_cache.session import CachedSession
 from aiolimiter import AsyncLimiter
 from bs4 import BeautifulSoup
-from videoprops import get_audio_properties, get_video_properties
 
 from cyberdrop_dl import constants, env
 from cyberdrop_dl.clients.download_client import DownloadClient
@@ -32,7 +30,9 @@ from cyberdrop_dl.exceptions import (
     TooManyCrawlerErrors,
 )
 from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
+from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.cookie_management import read_netscape_files
+from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
 _VALID_EXTENSIONS = (
@@ -40,7 +40,7 @@ _VALID_EXTENSIONS = (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator, Iterable, Mapping
+    from collections.abc import Callable, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
     from aiohttp_client_cache.response import CachedResponse
@@ -119,27 +119,6 @@ class CloudflareTurnstile:
     ALL_SELECTORS = ", ".join(SELECTORS)
 
 
-class FileLocksVault:
-    """Is this necessary? No. But I want it."""
-
-    def __init__(self) -> None:
-        self._locked_files: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
-
-    @contextlib.asynccontextmanager
-    async def get_lock(self, filename: str) -> AsyncGenerator:
-        """Get filelock for the provided filename. Creates one if none exists"""
-        log_debug(f"Checking lock for '{filename}'", 20)
-        if filename not in self._locked_files:
-            log_debug(f"Lock for '{filename}' does not exists", 20)
-            lock = asyncio.Lock()
-            self._locked_files[filename] = lock
-
-        async with self._locked_files[filename]:
-            log_debug(f"Lock for '{filename}' acquired", 20)
-            yield
-            log_debug(f"Lock for '{filename}' released", 20)
-
-
 class ClientManager:
     """Creates a 'client' that can be referenced by scraping or download sessions."""
 
@@ -165,7 +144,7 @@ class ClientManager:
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
         self.flaresolverr = FlareSolverr(manager)
-        self.file_locks = FileLocksVault()
+        self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
         self._default_headers = {"user-agent": self.manager.global_config.general.user_agent}
         self.reddit_session: CachedSession
         self._session: CachedSession
@@ -244,12 +223,20 @@ class ClientManager:
             return False
         return not (ignore_options.exclude_other and media_item.ext.lower() not in _VALID_EXTENSIONS)
 
-    def pre_check_duration(self, media_item: MediaItem) -> bool:
-        """Checks if the download is above the maximum runtime."""
-        if not media_item.duration:
+    def check_allowed_date_range(self, media_item: MediaItem) -> bool:
+        """Checks if the file was uploaded within the config date range"""
+        datetime = media_item.datetime_obj()
+        if not datetime:
             return True
 
-        return self.check_file_duration(media_item)
+        item_date = datetime.date()
+        ignore_options = self.manager.config_manager.settings_data.ignore_options
+
+        if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
+            return False
+        if ignore_options.exclude_after and item_date > ignore_options.exclude_after:
+            return False
+        return True
 
     def filter_cookies_by_word_in_domain(self, word: str) -> Iterable[tuple[str, BaseCookie[str]]]:
         """Yields pairs of `[domain, BaseCookie]` for every cookie with a domain that has `word` in it"""
@@ -451,7 +438,7 @@ class ClientManager:
 
         return bool(soup.select_one(CloudflareTurnstile.ALL_SELECTORS))
 
-    def check_file_duration(self, media_item: MediaItem) -> bool:
+    async def check_file_duration(self, media_item: MediaItem) -> bool:
         """Checks the file runtime against the config runtime limits."""
         if media_item.is_segment:
             return True
@@ -461,16 +448,6 @@ class ClientManager:
         if not (is_video or is_audio):
             return True
 
-        def get_duration() -> float | None:
-            if media_item.duration:
-                return media_item.duration
-            props: dict = {}
-            if is_video:
-                props: dict = get_video_properties(str(media_item.complete_file))
-            elif is_audio:
-                props: dict = get_audio_properties(str(media_item.complete_file))
-            return float(props.get("duration", 0)) or None
-
         duration_limits = self.manager.config.media_duration_limits
         min_video_duration: float = duration_limits.minimum_video_duration.total_seconds()
         max_video_duration: float = duration_limits.maximum_video_duration.total_seconds()
@@ -478,21 +455,44 @@ class ClientManager:
         max_audio_duration: float = duration_limits.maximum_audio_duration.total_seconds()
         video_duration_limits = min_video_duration, max_video_duration
         audio_duration_limits = min_audio_duration, max_audio_duration
+
         if is_video and not any(video_duration_limits):
             return True
         if is_audio and not any(audio_duration_limits):
             return True
 
-        duration: float = get_duration()  # type: ignore
+        async def get_duration() -> float | None:
+            if media_item.duration:
+                return media_item.duration
+
+            if media_item.downloaded:
+                properties = await probe(media_item.complete_file)
+
+            else:
+                headers = self.download_client._get_download_headers(media_item.domain, media_item.referer)
+                properties = await probe(media_item.url, headers=headers)
+
+            if is_video and (video := properties.video):
+                return video.duration
+            if is_audio and (audio := properties.audio):
+                return audio.duration
+            return None
+
+        duration: float | None = await get_duration()
         media_item.duration = duration
+
         if duration is None:
             return True
 
-        max_video_duration = max_video_duration or float("inf")
-        max_audio_duration = max_audio_duration or float("inf")
+        await self.manager.db_manager.history_table.add_duration(media_item.domain, media_item)
+
         if is_video:
-            return min_video_duration <= media_item.duration <= max_video_duration
-        return min_audio_duration <= media_item.duration <= max_audio_duration
+            max_video_duration = max_video_duration or float("inf")
+
+            return min_video_duration <= duration <= max_video_duration
+
+        max_audio_duration = max_audio_duration or float("inf")
+        return min_audio_duration <= duration <= max_audio_duration
 
     async def close(self) -> None:
         await self.flaresolverr.close()

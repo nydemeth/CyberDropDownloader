@@ -9,7 +9,7 @@ import platform
 import re
 import sys
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
 from functools import lru_cache, partial, wraps
 from pathlib import Path
 from stat import S_ISREG
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Iterable, Mapping
 
     from cyberdrop_dl.crawlers import Crawler
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, AnyURL, MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
     from cyberdrop_dl.managers.manager import Manager
 
@@ -231,13 +231,7 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
     """Returns the path to the download folder."""
     download_dir = manager.path_manager.download_folder
 
-    if scrape_item.retry:
-        return scrape_item.retry_path  # type: ignore
-    if scrape_item.parent_title and scrape_item.part_of_album:
-        return download_dir / scrape_item.parent_title
-    if scrape_item.parent_title:
-        return download_dir / scrape_item.parent_title / f"Loose Files ({domain})"
-    return download_dir / f"Loose Files ({domain})"
+    return download_dir / scrape_item.create_download_path(domain)
 
 
 def remove_file_id(manager: Manager, filename: str, ext: str) -> tuple[str, str]:
@@ -309,7 +303,7 @@ def purge_dir_tree(dirname: Path | str) -> bool:
         return False
 
 
-def check_partials_and_empty_folders(manager: Manager):
+def check_partials_and_empty_folders(manager: Manager) -> None:
     """Checks for partial downloads, deletes partial files and empty folders."""
     settings = manager.config_manager.settings_data.runtime_options
     if settings.delete_partial_files:
@@ -320,17 +314,32 @@ def check_partials_and_empty_folders(manager: Manager):
         delete_empty_folders(manager)
 
 
-def delete_partial_files(manager: Manager):
+def _partial_files(dir: Path | str) -> Generator[Path]:
+    for entry in os.scandir(dir):
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                yield from _partial_files(entry.path)
+                continue
+        except OSError:
+            pass
+
+        suffix = entry.name.rpartition(".")[-1]
+        if f".{suffix}" in constants.TempExt:
+            yield Path(entry.path)
+
+
+def delete_partial_files(manager: Manager) -> None:
     """Deletes partial download files recursively."""
     log_red("Deleting partial downloads...")
-    for file in manager.path_manager.download_folder.rglob("*.part"):
+    for file in _partial_files(manager.path_manager.download_folder):
         file.unlink(missing_ok=True)
 
 
-def check_for_partial_files(manager: Manager):
+def check_for_partial_files(manager: Manager) -> None:
     """Checks if there are partial downloads in any subdirectory and logs if found."""
     log_yellow("Checking for partial downloads...")
-    if next(manager.path_manager.download_folder.rglob("*.part"), None) is not None:
+    has_partial_files = next(_partial_files(manager.path_manager.download_folder), None)
+    if has_partial_files:
         log_yellow("There are partial downloads in the downloads folder")
 
 
@@ -400,7 +409,7 @@ def is_absolute_http_url(url: URL) -> TypeGuard[AbsoluteHttpURL]:
     return url.absolute and url.scheme.startswith("http")
 
 
-def remove_trailing_slash(url: AnyURL) -> AnyURL:
+def remove_trailing_slash(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     if url.name or url.path == "/":
         return url
     return url.parent.with_fragment(url.fragment).with_query(url.query)

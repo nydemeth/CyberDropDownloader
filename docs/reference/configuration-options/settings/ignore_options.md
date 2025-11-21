@@ -96,3 +96,19 @@ You can supply hosts that you'd like the program to exclusively scrape/download 
 | `list[NonEmptyStr]` | `[]`    | This is an [`AdditiveArg`](../special_setting_types.md#additiveargs) |
 
 You can supply hosts that you'd like the program to skip, to not scrape/download from them. This setting accepts any domain, even if they are no supported.
+
+## `exclude_before`
+
+| Type                 | Default | Additional Info                                                    |
+| -------------------- | ------- | ------------------------------------------------------------------ |
+| `date` or `null` | `null`  | The date should a valid ISO 8601 format, for example, `2021-12-23` |
+
+Do not download files uploaded before this date.
+
+## `exclude_after`
+
+| Type                 | Default | Additional Info                                                    |
+| -------------------- | ------- | ------------------------------------------------------------------ |
+| `date` or `null` | `null`  | The date should a valid ISO 8601 format, for example, `2021-12-23` |
+
+Do not download files uploaded after this date.
