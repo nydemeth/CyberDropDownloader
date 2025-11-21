@@ -1,24 +1,16 @@
 from __future__ import annotations
 
 import datetime
-import inspect
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from yarl import URL
 
-from cyberdrop_dl import constants
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from aiohttp import ClientResponse
-
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
-
-
-return_values: dict[AbsoluteHttpURL | str, tuple] = {}
 
 
 def is_valid_url(scrape_item: ScrapeItem) -> bool:
@@ -52,22 +44,3 @@ def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None,
 
 def is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
     return any(domain in scrape_item.url.host for domain in domain_list)
-
-
-cache_filter_functions = {}
-HTTP_404_LIKE_STATUS = {HTTPStatus.NOT_FOUND, HTTPStatus.GONE, HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS}
-
-
-async def cache_filter_fn(response: ClientResponse) -> bool:
-    """Filter function for aiohttp_client_cache"""
-    if constants.DISABLE_CACHE:
-        return False
-
-    if response.status in HTTP_404_LIKE_STATUS:
-        return True
-
-    filter_fn = cache_filter_functions.get(response.url.host)
-    if filter_fn:
-        return await filter_fn(response) if inspect.iscoroutinefunction(filter_fn) else filter_fn(response)
-
-    return False
