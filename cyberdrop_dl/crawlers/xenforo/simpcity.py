@@ -15,4 +15,4 @@ class SimpCityCrawler(XenforoCrawler):
     login_required = False
     IGNORE_EMBEDED_IMAGES_SRC = False
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("simpcity.su",)
-    _RATE_LIMIT = 1, 20
+    _RATE_LIMIT = 1, 30
