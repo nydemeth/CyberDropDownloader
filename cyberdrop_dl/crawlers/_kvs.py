@@ -30,7 +30,7 @@ class KVSVideo:
 
 class Selectors:
     UNAUTHORIZED = "div.video-holder:-soup-contains('This video is a private video')"
-    FLASHVARS = "script:-soup-contains('video_title:')"
+    FLASHVARS = "script:-soup-contains('video_id:')"
     USER_NAME = "div.headline > h2"
     ALBUM_NAME = "div.headline > h1"
     ALBUM_PICTURES = "div.album-list > a, .images a"
@@ -203,7 +203,7 @@ def _parse_video_vars(video_vars: str) -> KVSVideo:
             yield resolution, url
 
     resolution, url = max(get_formats())
-    return KVSVideo(flashvars["video_id"], flashvars["video_title"], url, resolution)
+    return KVSVideo(flashvars["video_id"], flashvars.get("video_title", ""), url, resolution)
 
 
 def _get_license_token(license_code: str) -> tuple[int, ...]:
