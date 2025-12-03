@@ -13,8 +13,8 @@ from cyberdrop_dl import constants
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
+from cyberdrop_dl.utils import dates
 from cyberdrop_dl.utils.aio import WeakAsyncLocks
-from cyberdrop_dl.utils.dates import parse_http_date
 from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
@@ -93,7 +93,7 @@ class DownloadClient:
         if media_item.is_segment:
             media_item.partial_file = media_item.complete_file = download_dir / media_item.filename
         else:
-            media_item.partial_file = download_dir / f"{downloaded_filename}.{constants.TempExt.PART}"
+            media_item.partial_file = download_dir / f"{downloaded_filename}{constants.TempExt.PART}"
 
         resume_point = 0
         if media_item.partial_file and (size := await asyncio.to_thread(get_size_or_none, media_item.partial_file)):
@@ -484,7 +484,7 @@ def get_content_type(ext: str, headers: Mapping[str, str]) -> str | None:
 
 def get_last_modified(headers: Mapping[str, str]) -> int | None:
     if date_str := headers.get("Last-Modified"):
-        return parse_http_date(date_str)
+        return dates.parse_http(date_str)
 
 
 def is_html_or_text(content_type: str) -> bool:
