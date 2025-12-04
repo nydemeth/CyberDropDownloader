@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import functools
 import json
-from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar, overload
 
 import bs4.css
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 
 from cyberdrop_dl.exceptions import ScrapeError
 
@@ -14,8 +15,8 @@ if TYPE_CHECKING:
 
     from bs4 import Tag
 
-P = ParamSpec("P")
-R = TypeVar("R")
+    _P = ParamSpec("_P")
+    _R = TypeVar("_R")
 
 
 class SelectorError(ScrapeError):
@@ -28,12 +29,12 @@ class CssAttributeSelector(NamedTuple):
     attribute: str = ""
 
     def __call__(self, soup: Tag) -> str:
-        return select_one_get_attr(soup, self.element, self.attribute)
+        return select(soup, self.element, self.attribute)
 
 
-def not_none(func: Callable[P, R | None]) -> Callable[P, R]:
+def not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
     @functools.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         result = func(*args, **kwargs)
         if result is None:
             raise SelectorError
@@ -43,22 +44,20 @@ def not_none(func: Callable[P, R | None]) -> Callable[P, R]:
 
 
 @not_none
-def select_one(tag: Tag, selector: str) -> Tag | None:
+def _select_one(tag: Tag, selector: str) -> Tag | None:
     """Same as `tag.select_one` but asserts the result is not `None`"""
     return tag.select_one(selector)
 
 
-def select_one_get_text(tag: Tag, selector: str, strip: bool = True, *, decompose: str | None = None) -> str:
+def select_text(tag: Tag, selector: str, strip: bool = True, *, decompose: str | None = None) -> str:
     """Same as `tag.select_one.get_text(strip=strip)` but asserts the result is not `None`"""
-    inner_tag = select_one(tag, selector)
+    inner_tag = select(tag, selector)
     if decompose:
         for trash in iselect(inner_tag, decompose):
             trash.decompose()
     return get_text(inner_tag, strip)
 
 
-# TODO: Rename this to just get_attr
-# get_attr_no_error should be get_attr_or_none. `or_none` implies no error
 def get_attr_or_none(tag: Tag, attribute: str) -> str | None:
     """Same as `tag.get(attribute)` but asserts the result is a single str"""
     attribute_ = attribute
@@ -76,13 +75,6 @@ def get_attr_or_none(tag: Tag, attribute: str) -> str | None:
     return value
 
 
-def get_attr_no_error(tag: Tag, attribute: str) -> str | None:
-    try:
-        return get_attr_or_none(tag, attribute)
-    except Exception:
-        return
-
-
 def get_text(tag: Tag, strip: bool = True) -> str:
     return tag.get_text(strip=strip)
 
@@ -93,9 +85,18 @@ def get_attr(tag: Tag, attribute: str) -> str | None:
     return get_attr_or_none(tag, attribute)
 
 
-def select_one_get_attr(tag: Tag, selector: str, attribute: str) -> str:
-    """Same as `tag.select_one(selector)[attribute]` but asserts the result is not `None` and is a single string"""
-    inner_tag = select_one(tag, selector)
+@overload
+def select(tag: Tag, selector: str) -> Tag: ...
+
+
+@overload
+def select(tag: Tag, selector: str, attribute: str) -> str: ...
+
+
+def select(tag: Tag, selector: str, attribute: str | None = None) -> Tag | str:
+    inner_tag = _select_one(tag, selector)
+    if not attribute:
+        return inner_tag
     return get_attr(inner_tag, attribute)
 
 
@@ -139,14 +140,14 @@ def sanitize_page_title(title: str, domain: str) -> str:
 
 
 def page_title(soup: Tag, domain: str | None = None) -> str:
-    title = select_one_get_text(soup, "title")
+    title = select_text(soup, "title")
     if domain:
         return sanitize_page_title(title, domain)
     return title
 
 
 def get_json_ld_date(soup: Tag) -> str:
-    return get_json_ld_value(soup, "uploadDate")
+    return get_json_ld(soup)["uploadDate"]
 
 
 def get_json_ld(soup: Tag, /, contains: str | None = None) -> dict[str, Any]:
@@ -154,16 +155,11 @@ def get_json_ld(soup: Tag, /, contains: str | None = None) -> dict[str, Any]:
     if contains:
         selector += f":-soup-contains('{contains}')"
 
-    ld_json = json.loads(select_one_get_text(soup, selector)) or {}
+    ld_json = json.loads(select_text(soup, selector)) or {}
     if isinstance(ld_json, list):
         return ld_json[0]
 
     return ld_json
-
-
-def get_json_ld_value(soup: Tag, key: str) -> Any:
-    ld_json = get_json_ld(soup, key)
-    return ld_json[key]
 
 
 def unescape(html: str) -> str:

@@ -29,7 +29,7 @@ from .efukt import EfuktCrawler
 from .ehentai import EHentaiCrawler
 from .eightmuses import EightMusesCrawler
 from .eporner import EpornerCrawler
-from .erome import EromeCrawler
+from .erome import EromeCrawler, EromeFanCrawler
 from .fapello import FapelloCrawler
 from .fileditch import FileditchCrawler
 from .files_vc import FilesVcCrawler
@@ -107,6 +107,7 @@ from .spankbang import SpankBangCrawler
 from .streamable import StreamableCrawler
 from .streamtape import StreamtapeCrawler
 from .thisvid import ThisVidCrawler
+from .thothub import ThotHubCrawler
 from .tiktok import TikTokCrawler
 from .tnaflix import TNAFlixCrawler
 from .tokyomotion import TokioMotionCrawler

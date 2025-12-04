@@ -6,14 +6,12 @@ import ssl
 from base64 import b64encode
 from collections import defaultdict
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, Literal, Self, overload
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import aiohttp
 import certifi
 import truststore
 from aiohttp import ClientResponse, ClientSession
-from aiohttp_client_cache.response import CachedResponse
-from aiohttp_client_cache.session import CachedSession
 from aiolimiter import AsyncLimiter
 from bs4 import BeautifulSoup
 
@@ -43,7 +41,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
-    from aiohttp_client_cache.response import CachedResponse
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
@@ -146,8 +143,8 @@ class ClientManager:
         self.flaresolverr = FlareSolverr(manager)
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
         self._default_headers = {"user-agent": self.manager.global_config.general.user_agent}
-        self.reddit_session: CachedSession
-        self._session: CachedSession
+        self.reddit_session: aiohttp.ClientSession
+        self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
         self._curl_session: AsyncSession[CurlResponse]
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
@@ -188,9 +185,7 @@ class ClientManager:
         return min(instances, self.rate_limiting_options.max_simultaneous_downloads_per_domain)
 
     @staticmethod
-    def cache_control(session: CachedSession, disabled: bool = False):
-        if constants.DISABLE_CACHE or disabled:
-            return session.disabled()
+    def cache_control(session: ClientSession, disabled: bool = False):
         return _null_context
 
     @staticmethod
@@ -252,10 +247,23 @@ class ClientManager:
 
     def new_curl_cffi_session(self) -> AsyncSession:
         # Calling code should have validated if curl is actually available
+        import warnings
+
+        from curl_cffi.aio import AsyncCurl
         from curl_cffi.requests import AsyncSession
+        from curl_cffi.utils import CurlCffiWarning
+
+        loop = asyncio.get_running_loop()
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=CurlCffiWarning)
+            acurl = AsyncCurl(loop=loop)
 
         proxy_or_none = str(proxy) if (proxy := self.manager.global_config.general.proxy) else None
+
         return AsyncSession(
+            loop=loop,
+            async_curl=acurl,
             headers=self._default_headers,
             impersonate="chrome",
             verify=bool(self.ssl_context),
@@ -265,7 +273,7 @@ class ClientManager:
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
-    def new_scrape_session(self) -> CachedSession:
+    def new_scrape_session(self) -> ClientSession:
         trace_configs = _create_request_log_hooks("scrape")
         return self._new_session(cached=True, trace_configs=trace_configs)
 
@@ -273,28 +281,11 @@ class ClientManager:
         trace_configs = _create_request_log_hooks("download")
         return self._new_session(cached=False, trace_configs=trace_configs)
 
-    @overload
-    def _new_session(
-        self, cached: Literal[True], trace_configs: list[aiohttp.TraceConfig] | None = None
-    ) -> CachedSession: ...
-
-    @overload
-    def _new_session(
-        self, cached: Literal[False] = False, trace_configs: list[aiohttp.TraceConfig] | None = None
-    ) -> ClientSession: ...
-
     def _new_session(
         self, cached: bool = False, trace_configs: list[aiohttp.TraceConfig] | None = None
-    ) -> CachedSession | ClientSession:
-        if cached:
-            timeout = self.rate_limiting_options._aiohttp_timeout
-            session_cls = CachedSession
-            kwargs: dict[str, Any] = {"cache": self.manager.cache_manager.request_cache}
-        else:
-            timeout = self.rate_limiting_options._aiohttp_timeout
-            session_cls = ClientSession
-            kwargs = {}
-        return session_cls(
+    ) -> ClientSession:
+        timeout = self.rate_limiting_options._aiohttp_timeout
+        return ClientSession(
             headers=self._default_headers,
             raise_for_status=False,
             cookie_jar=self.cookies,
@@ -303,7 +294,6 @@ class ClientManager:
             proxy=self.manager.global_config.general.proxy,
             connector=self._new_tcp_connector(),
             requote_redirect_url=False,
-            **kwargs,
         )
 
     def _new_tcp_connector(self) -> aiohttp.TCPConnector:
@@ -359,7 +349,7 @@ class ClientManager:
 
     async def check_http_status(
         self,
-        response: ClientResponse | CachedResponse | CurlResponse | AbstractResponse,
+        response: ClientResponse | CurlResponse | AbstractResponse,
         download: bool = False,
     ) -> BeautifulSoup | None:
         """Checks the HTTP status code and raises an exception if it's not acceptable.
