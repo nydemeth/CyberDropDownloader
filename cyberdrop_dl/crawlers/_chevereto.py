@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import base64
+import urllib.parse
 from typing import TYPE_CHECKING, ClassVar, final
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import PasswordProtectedError
-from cyberdrop_dl.utils import css, open_graph
+from cyberdrop_dl.utils import css, json, open_graph
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, xor_decrypt
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from bs4 import BeautifulSoup
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -75,7 +78,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
             case ["images", _, *_]:
                 return await self.direct_file(scrape_item)
             case [_, "albums"]:
-                return await self.profile(scrape_item)
+                return await self.profile(scrape_item, albums=True)
             case [_]:
                 return await self.profile(scrape_item)
             case _:
@@ -90,12 +93,6 @@ class CheveretoCrawler(Crawler, is_generic=True):
         return url.with_name(new_name)
 
     @classmethod
-    def _match_img(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL | None:
-        match url.parts[1:]:
-            case ["img" | "image" as part, image_slug, *_]:
-                return url.origin() / part / _id(image_slug)
-
-    @classmethod
     def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         url = super().transform_url(url)
         match url.parts[1:]:
@@ -107,12 +104,19 @@ class CheveretoCrawler(Crawler, is_generic=True):
                 return url
 
     @error_handling_wrapper
-    async def profile(self, scrape_item: ScrapeItem) -> None:
+    async def profile(self, scrape_item: ScrapeItem, *, albums: bool = False) -> None:
         title: str = ""
         async for soup in self.web_pager(_sort_by_new(scrape_item.url), trim=False):
             if not title:
                 title = self.create_title(open_graph.title(soup))
                 scrape_item.setup_as_profile(title)
+
+            if albums:
+                for _, sub_album in self.iter_children(scrape_item, soup, Selector.ITEM):
+                    self.create_task(self.run(sub_album))
+
+                return
+
             self._process_page(scrape_item, soup)
 
     async def _get_final_album_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
@@ -155,21 +159,14 @@ class CheveretoCrawler(Crawler, is_generic=True):
     def _process_page(
         self, scrape_item: ScrapeItem, soup: BeautifulSoup, results: dict[str, int] | None = None
     ) -> None:
-        for thumb, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
-            if image_url := self._match_img(new_scrape_item.url):
-                new_scrape_item.url = image_url
+        results = results or {}
+        for web_url, src_url in self._get_album_files(soup):
+            if self.check_album_results(web_url, results):
+                continue
 
-                if thumb:
-                    # for images, we can download the file from the thumbnail, skipping an additional request per img
-                    # cons: we won't get the upload date
-                    source = self._thumbnail_to_src(thumb)
-                    if results and self.check_album_results(source, results):
-                        continue
-
-                    self.create_task(self.direct_file(new_scrape_item, source))
-                    continue
-
-            self.create_task(self.run(new_scrape_item))
+            new_scrape_item = scrape_item.create_child(web_url)
+            self.create_task(self.direct_file(new_scrape_item, src_url))
+            scrape_item.add_children()
 
     async def _unlock_password_protected_album(self, scrape_item: ScrapeItem) -> None:
         if not scrape_item.password:
@@ -212,6 +209,14 @@ class CheveretoCrawler(Crawler, is_generic=True):
             encrypted_url = bytes.fromhex(base64.b64decode(link_str).decode())
             link_str = xor_decrypt(encrypted_url, _DECRYPTION_KEY)
         return super().parse_url(link_str, relative_to, trim=trim)
+
+    def _get_album_files(self, soup: BeautifulSoup) -> Generator[tuple[AbsoluteHttpURL, AbsoluteHttpURL]]:
+        for item in soup.select(".list-item[data-object]"):
+            web_url = self.parse_url(css.select(item, "a.image-container", "href"))
+            encoded_data = css.get_attr(item, "data-object")
+            data = json.loads(urllib.parse.unquote(encoded_data))
+            src_url = self.parse_url(data["image"]["url"])
+            yield self.transform_url(web_url), src_url
 
 
 def _is_password_protected(soup: BeautifulSoup) -> bool:
