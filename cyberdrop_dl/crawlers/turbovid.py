@@ -8,8 +8,6 @@ from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from yarl import URL
-
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -29,8 +27,8 @@ class TurboVidCrawler(Crawler):
         "Direct links": "/data/...",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://turbovid.cr")
-    DOMAIN: ClassVar[str] = "turbovid.cr"
-    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("turbo.cr",)
+    DOMAIN: ClassVar[str] = "turbovid"
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("turbo.cr", "saint.to", "saint2.su", "saint2.cr")
     FOLDER_DOMAIN: ClassVar[str] = "TurboVid"
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
 
@@ -46,12 +44,6 @@ class TurboVidCrawler(Crawler):
                 return await self.direct_file(scrape_item)
             case _:
                 raise ValueError
-
-    def __post_init__(self) -> None:
-        # Re-define instances as saint crawler to share DB entries
-        # TODO: delete saint crawler when turbovid is out of beta
-        # TODO: rename old saint DB entries to turbovid
-        self.DOMAIN = "saint"
 
     @error_handling_wrapper
     async def search(self, scrape_item: ScrapeItem, query: str) -> None:
@@ -91,9 +83,7 @@ class TurboVidCrawler(Crawler):
         link = self.parse_url((await self.request_json(sign_url))["url"])
         await self.direct_file(scrape_item, link)
 
-    async def check_complete_from_referer(self, scrape_item: ScrapeItem | URL, any_crawler: bool = False) -> bool:
-        downloaded = await super().check_complete_from_referer(scrape_item)
-        if not downloaded:
-            saint_url = scrape_item.url.with_host("saint2.cr")
-            downloaded = await super().check_complete_from_referer(saint_url)
-        return downloaded
+
+def fix_db_referer(referer: str) -> str:
+    url = AbsoluteHttpURL(referer.replace("/embed/", "/d/"))
+    return str(TurboVidCrawler.transform_url(url))
