@@ -82,6 +82,7 @@ from .mydesi import MyDesiCrawler
 from .nekohouse import NekohouseCrawler
 from .nhentai import NHentaiCrawler
 from .noodle_magazine import NoodleMagazineCrawler
+from .nsfw_xxx import NsfwXXXCrawler
 from .nudostartv import NudoStarTVCrawler
 from .odnoklassniki import OdnoklassnikiCrawler
 from .omegascans import OmegaScansCrawler
