@@ -88,7 +88,7 @@ class ScrapeMapper:
     @classmethod
     @contextlib.asynccontextmanager
     async def managed(cls, manager: Manager) -> AsyncGenerator[Self]:
-        """Creates a new scrape mapper that auto closses http session on exit"""
+        """Creates a new scrape mapper that auto closes http session on exit"""
 
         self = cls(manager)
         await self.manager.client_manager.load_cookie_files()
