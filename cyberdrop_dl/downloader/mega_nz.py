@@ -824,6 +824,7 @@ class MegaDownloadClient(DownloadClient):
     def __init__(self, manager: Manager) -> None:
         super().__init__(manager, manager.client_manager)
         self.decrypt_mapping: dict[URL, DecryptData] = {}
+        self._supports_ranges = False
 
     async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader) -> None:
         """Appends content to a file."""
@@ -834,7 +835,7 @@ class MegaDownloadClient(DownloadClient):
         await check_free_space()
         await self._pre_download_check(media_item)
 
-        crypto_data = self.decrypt_mapping[media_item.url]
+        crypto_data = self.decrypt_mapping.pop(media_item.url)
         chunk_decryptor = MegaDecryptor(crypto_data)
 
         async with aiofiles.open(media_item.partial_file, mode="ab") as f:
