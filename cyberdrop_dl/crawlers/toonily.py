@@ -41,7 +41,7 @@ class ToonilyCrawler(Crawler):
 
         title_tag = css.select(soup, Selector.SERIES_TITLE)
         css.decompose(title_tag, "*")
-        series_title = self.create_title(css.get_text(title_tag))
+        series_title = self.create_title(css.text(title_tag))
         scrape_item.setup_as_profile(series_title)
         for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.CHAPTER):
             self.create_task(self.run(new_scrape_item))
@@ -56,7 +56,7 @@ class ToonilyCrawler(Crawler):
             scrape_item.add_to_parent_title(series_title)
 
         scrape_item.setup_as_album(chapter_title)
-        iso_date = css.get_json_ld(soup)["@graph"][0]["datePublished"]
+        iso_date = css.json_ld(soup)["@graph"][0]["datePublished"]
         scrape_item.possible_datetime = self.parse_iso_date(iso_date)
 
         for _, link in self.iter_tags(soup, Selector.IMAGE, "src"):

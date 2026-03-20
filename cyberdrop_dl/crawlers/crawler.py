@@ -8,7 +8,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
-from functools import partial, wraps
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Literal, NamedTuple, ParamSpec, TypeAlias, TypeVar, final
 
@@ -652,7 +652,7 @@ class Crawler(ABC):
 
         seen: set[str] = set()
         for tag in css.iselect(soup, selector):
-            link_str: str | None = css.get_attr_or_none(tag, attribute)
+            link_str: str | None = css.attr_or_none(tag, attribute)
             if not link_str or link_str in seen:
                 continue
             seen.add(link_str)
@@ -660,7 +660,7 @@ class Crawler(ABC):
             if self.check_album_results(link, album_results):
                 continue
             if t_tag := tag.select_one("img"):
-                thumb_str: str | None = css.get_attr_or_none(t_tag, "src")
+                thumb_str: str | None = css.attr_or_none(t_tag, "src")
             else:
                 thumb_str = None
             thumb = self.parse_url(thumb_str) if thumb_str and not is_blob_or_svg(thumb_str) else None
@@ -746,8 +746,12 @@ class Crawler(ABC):
         else:
             selector = selector or self.NEXT_PAGE_SELECTOR
             assert selector, f"No selector was provided and {self.DOMAIN} does define a next_page_selector"
-            func = css.select_one_get_attr_or_none
-            get_next_page = partial(func, selector=selector, attribute="href")
+
+            def get_next_page(soup: BeautifulSoup, /) -> str | None:
+                try:
+                    return css.select(soup, selector, "href")
+                except css.SelectorError:
+                    return
 
         while True:
             soup = await self.request_soup(page_url, impersonate=cffi or None)

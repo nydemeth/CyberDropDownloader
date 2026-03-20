@@ -51,7 +51,7 @@ class MyDesiCrawler(Crawler):
         resolution, link = max(_parse_formats(soup))
         link = self.parse_url(link)
         _, ext = self.get_filename_and_ext(link.name)
-        metadata: dict[str, str] = css.get_json_ld(soup)["subjectOf"]
+        metadata: dict[str, str] = css.json_ld(soup)["subjectOf"]
         title = metadata["name"]
         scrape_item.possible_datetime = self.parse_iso_date(metadata.get("uploadDate", ""))
         custom_filename = self.create_custom_filename(title, ext, resolution=resolution)
@@ -76,7 +76,7 @@ class MyDesiCrawler(Crawler):
 
 def _parse_formats(soup: BeautifulSoup) -> Generator[tuple[Resolution, str]]:
     for src in soup.select("#video-rate > a"):
-        quality = css.get_attr(src, "title")
-        link = css.get_attr(src, "href")
+        quality = css.attr(src, "title")
+        link = css.attr(src, "href")
         resolution = Resolution.highest() if "original" in quality.casefold() else Resolution.parse(quality)
         yield resolution, link

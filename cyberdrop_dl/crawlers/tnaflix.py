@@ -63,7 +63,7 @@ class TNAFlixCrawler(Crawler):
         link = self.parse_url(best_format.link_str)
         filename, ext = self.get_filename_and_ext(link.name)
         title = open_graph.title(soup)
-        scrape_item.possible_datetime = self.parse_iso_date(css.get_json_ld_date(soup))
+        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_format.resolution)
         return await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)
 
@@ -83,8 +83,8 @@ class TNAFlixCrawler(Crawler):
 def _get_best_format(soup: BeautifulSoup) -> Format:
     def parse():
         for src in soup.select(Selector.VIDEO_SRC):
-            url = css.get_attr(src, "src")
-            resolution = Resolution.parse(css.get_attr(src, "size"))
+            url = css.attr(src, "src")
+            resolution = Resolution.parse(css.attr(src, "size"))
             yield Format(resolution, url)
 
     return max(parse())

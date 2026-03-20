@@ -85,8 +85,9 @@ class ImageBamCrawler(Crawler):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selectors.THUMBNAILS, results=results):
                 self.create_task(self._image_task(new_scrape_item))
 
-            next_page = css.select_one_get_attr_or_none(soup, Selectors.NEXT_PAGE, "href")
-            if not next_page:
+            try:
+                next_page = css.select(soup, Selectors.NEXT_PAGE, "href")
+            except css.SelectorError:
                 break
             soup = await self.request_soup(self.parse_url(next_page))
 
@@ -100,11 +101,11 @@ class ImageBamCrawler(Crawler):
 
         image_tag = css.select(soup, Selectors.IMAGE)
         if not scrape_item.album_id and (gallery_info := soup.select_one(Selectors.GALLERY_INFO)):
-            gallery_id = self.parse_url(css.get_attr(gallery_info, "href")).name
+            gallery_id = self.parse_url(css.attr(gallery_info, "href")).name
             scrape_item.album_id = gallery_id
 
-        title = css.get_attr(image_tag, "alt")
-        link = self.parse_url(css.get_attr(image_tag, "src"))
+        title = css.attr(image_tag, "alt")
+        link = self.parse_url(css.attr(image_tag, "src"))
         custom_filename, ext = self.get_filename_and_ext(title)
         await self.handle_file(link, scrape_item, link.name, ext, custom_filename=custom_filename)
 
