@@ -3,14 +3,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import sys
 from datetime import datetime
 from enum import IntEnum
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
-
-from pydantic import ValidationError
 
 from cyberdrop_dl import aio, constants, env, storage
 from cyberdrop_dl.dependencies import browser_cookie3
@@ -29,7 +26,6 @@ from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.updates import check_latest_pypi
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.utils.webhook import send_webhook_message
-from cyberdrop_dl.utils.yaml import handle_validation_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
@@ -194,21 +190,11 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
     """
 
     manager = Manager(args)
-    try:
-        manager.startup()
 
-        if not manager.parsed_args.cli_only_args.download:
-            ProgramUI(manager)
+    manager.startup()
 
-    except ValidationError as e:
-        file = {
-            "GlobalSettings": manager.config_manager.global_settings,
-            "ConfigSettings": manager.config_manager.settings,
-            "AuthSettings": manager.config_manager.authentication_settings,
-        }.get(e.title)
-
-        handle_validation_error(e, file=file)
-        sys.exit(_C.ERROR)
+    if not manager.parsed_args.cli_only_args.download:
+        ProgramUI(manager)
 
     return manager
 
