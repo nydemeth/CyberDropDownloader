@@ -4,12 +4,13 @@ import dataclasses
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.compat import IntEnum
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
-from cyberdrop_dl.utils import aio, css, m3u8
+from cyberdrop_dl.utils import css, m3u8
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
@@ -206,6 +207,6 @@ class RumbleCrawler(Crawler):
             )
 
         if hls_formats:
-            hls_formats = await aio.gather([resolve_m3u8(f) for f in hls_formats])
+            hls_formats = await aio.map(resolve_m3u8, hls_formats)
 
         return max((*hls_formats, *other_formats))
