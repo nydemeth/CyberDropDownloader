@@ -17,7 +17,7 @@ from aiolimiter import AsyncLimiter
 from cyberdrop_dl import constants, ddos_guard, env
 from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.clients.download_client import DownloadClient
-from cyberdrop_dl.clients.flaresolverr import FlareSolverr
+from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
-    from bs4 import BeautifulSoup
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
@@ -135,13 +134,18 @@ class ClientManager:
         self.scraper_client = ScraperClient(self)
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
-        self.flaresolverr = FlareSolverr(manager)
+        self._flaresolverr: FlareSolverrClient | None = None
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
-
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
         self._curl_session: AsyncSession[CurlResponse]
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
+
+    @property
+    def flaresolverr(self) -> FlareSolverrClient | None:
+        if self._flaresolverr is None and (url := self.manager.global_config.general.flaresolverr):
+            self._flaresolverr = FlareSolverrClient(url, self._session)
+        return self._flaresolverr
 
     def _startup(self) -> None:
         self._session = self.new_scrape_session()
@@ -336,15 +340,15 @@ class ClientManager:
 
     async def check_http_status(
         self,
-        response: ClientResponse | CurlResponse | AbstractResponse,
+        response: ClientResponse | CurlResponse | AbstractResponse[Any],
         download: bool = False,
-    ) -> BeautifulSoup | None:
+    ) -> None:
         """Checks the HTTP status code and raises an exception if it's not acceptable.
 
         If the response is successful and has valid html, returns soup
         """
         if not isinstance(response, AbstractResponse):
-            response = AbstractResponse.from_resp(response)
+            response = AbstractResponse.create(response)
 
         message = None
 
@@ -363,7 +367,7 @@ class ClientManager:
         await ddos_guard.check(response)
         raise DownloadError(status=response.status, message=message)
 
-    async def _check_json(self, response: AbstractResponse) -> None:
+    async def _check_json(self, response: AbstractResponse[Any]) -> None:
         if "json" not in response.content_type:
             return
 
@@ -445,7 +449,8 @@ class ClientManager:
         return min_audio_duration <= duration <= max_audio_duration
 
     async def close(self) -> None:
-        await self.flaresolverr.close()
+        if self._flaresolverr:
+            await self._flaresolverr.aclose()
 
 
 async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from datetime import datetime
 from json import dumps as json_dumps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-import cyberdrop_dl.constants as constants
+from cyberdrop_dl import constants, ddos_guard
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils.cookie_management import make_simple_cookie
@@ -20,8 +21,11 @@ if TYPE_CHECKING:
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from curl_cffi.requests.session import HttpMethod
 
+    from cyberdrop_dl.clients import flaresolverr
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.client_manager import ClientManager
+
+logger = logging.getLogger(__name__)
 
 
 class ScraperClient:
@@ -54,7 +58,7 @@ class ScraperClient:
         json: Any = None,
         cache_disabled: bool = False,
         **request_params: Any,
-    ) -> AsyncGenerator[AbstractResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         """
         Asynchronous context manager for HTTP requests.
 
@@ -73,7 +77,7 @@ class ScraperClient:
         if not impersonate:
             headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
 
-        async with self.__request_context(url, method, request_params, impersonate, cache_disabled) as resp:
+        async with self.__request_context(url, method, request_params, impersonate) as resp:
             exc = None
             try:
                 yield await self._check_response(resp, url)
@@ -103,8 +107,7 @@ class ScraperClient:
         method: HttpMethod,
         request_params: dict[str, Any],
         impersonate: BrowserTypeLiteral | bool | None,
-        cache_disabled: bool,
-    ) -> AsyncGenerator[AbstractResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         impersonate = self.client_manager.manager.parsed_args.cli_only_args.impersonate or impersonate
         if impersonate:
             self.client_manager.check_curl_cffi_is_available()
@@ -113,7 +116,7 @@ class ScraperClient:
             request_params["impersonate"] = impersonate
             curl_resp = await self.client_manager._curl_session.request(method, str(url), stream=True, **request_params)
             try:
-                yield AbstractResponse.from_resp(curl_resp)
+                yield AbstractResponse.create(curl_resp)
                 self.__sync_session_cookies(url)
             finally:
                 await curl_resp.aclose()
@@ -123,20 +126,48 @@ class ScraperClient:
         async with (
             self.client_manager._session.request(method, url, **request_params) as aio_resp,
         ):
-            yield AbstractResponse.from_resp(aio_resp)
+            yield AbstractResponse.create(aio_resp)
 
-    async def _check_response(self, abs_resp: AbstractResponse, url: AbsoluteHttpURL, data: Any | None = None):
+    async def _check_response(self, abs_resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page."""
         try:
             await self.client_manager.check_http_status(abs_resp)
             return abs_resp
-        except DDOSGuardError:
-            flare_solution = await self.client_manager.flaresolverr.request(url, data)
-            return AbstractResponse.from_flaresolverr(flare_solution)
+        except DDOSGuardError as e:
+            if not (flare := self.client_manager.flaresolverr):
+                raise
 
-    async def write_soup_to_disk(self, url: AbsoluteHttpURL, response: AbstractResponse, exc: Exception | None = None):
+            try:
+                solution = await flare.request(url, data)
+            except RuntimeError:
+                raise e from None
+
+            self.client_manager.cookies.update_cookies(solution.cookies)
+            await self._check_flaresolverr_resp(solution)
+            return AbstractResponse.create(solution)
+
+    async def _check_flaresolverr_resp(self, solution: flaresolverr.Solution) -> None:
+        cdl_user_agent = self.client_manager.manager.global_config.general.user_agent
+        mismatch_ua_msg = (
+            "Config user_agent and flaresolverr user_agent do not match:"
+            f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
+            f"\n  Flaresolverr: '{solution.user_agent}'"
+        )
+
+        try:
+            await ddos_guard.check(solution.content)
+        except DDOSGuardError:
+            if solution.user_agent != cdl_user_agent:
+                raise DDOSGuardError(mismatch_ua_msg) from None
+
+        if solution.user_agent != cdl_user_agent:
+            logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
+
+    async def write_soup_to_disk(
+        self, url: AbsoluteHttpURL, response: AbstractResponse[Any], exc: Exception | None = None
+    ):
         """Writes html to a file."""
 
         if not (
