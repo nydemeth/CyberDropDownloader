@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, Self
 import aiofiles
 from yarl import URL
 
+from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler, create_crawlers
@@ -21,7 +22,6 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.scraper.filters import is_in_domain_list, is_outside_date_range, is_valid_url
-from cyberdrop_dl.scraper.jdownloader import JDownloader
 from cyberdrop_dl.utils.logger import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
@@ -47,8 +47,7 @@ class ScrapeMapper:
         self.manager = manager
         self.existing_crawlers: dict[str, Crawler] = {}
         self.direct_crawler = DirectHttpFile(self.manager)
-        self.jdownloader = JDownloader(self.manager)
-        self.jdownloader_whitelist = self.manager.config_manager.settings_data.runtime_options.jdownloader_whitelist
+        self.jdownloader = JDownloader.from_manager(self.manager)
         self.using_input_file = False
         self.groups = set()
         self.count = 0
@@ -63,10 +62,6 @@ class ScrapeMapper:
     @property
     def global_settings(self) -> GlobalSettings:
         return self.manager.config_manager.global_settings_data
-
-    @property
-    def enable_generic_crawler(self) -> bool:
-        return self.global_settings.general.enable_generic_crawler
 
     def start_scrapers(self) -> None:
         """Starts all scrapers."""
@@ -101,7 +96,11 @@ class ScrapeMapper:
         """Starts the orchestra."""
         self.start_scrapers()
         await self.manager.db_manager.history_table.update_previously_unsupported(self.existing_crawlers)
-        self.jdownloader.connect()
+        try:
+            await self.jdownloader.connect()
+        except JDownloaderError:
+            logger.exception("Failed to connect to jDownloader")
+
         await self.start_real_debrid()
         self.direct_crawler._init_downloader()
         async for item in self.get_input_items():
@@ -213,9 +212,6 @@ class ScrapeMapper:
         """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
         crawler_match = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
-        jdownloader_whitelisted = True
-        if self.jdownloader_whitelist:
-            jdownloader_whitelisted = any(domain in scrape_item.url.host for domain in self.jdownloader_whitelist)
 
         if crawler_match:
             if not crawler_match.ready:
@@ -235,13 +231,13 @@ class ScrapeMapper:
         except (NoExtensionError, ValueError):
             pass
 
-        if self.jdownloader.enabled and jdownloader_whitelisted:
+        if self.jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
             success = False
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
                 relative_download_dir = download_folder.relative_to(self.manager.path_manager.download_folder)
-                self.jdownloader.direct_unsupported_to_jdownloader(
+                await self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,
                     relative_download_dir,
