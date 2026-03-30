@@ -3,14 +3,29 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime
+import importlib
 import inspect
+import pkgutil
 import re
+import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Literal, NamedTuple, ParamSpec, TypeAlias, TypeVar, final
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Concatenate,
+    Literal,
+    NamedTuple,
+    ParamSpec,
+    Self,
+    TypeAlias,
+    TypeVar,
+    final,
+)
 
 import yarl
 from aiolimiter import AsyncLimiter
@@ -106,8 +121,95 @@ class CrawlerInfo(NamedTuple):
     supported_domains: tuple[str, ...]
     supported_paths: SupportedPaths
 
+    @classmethod
+    def generic(cls, name: str, paths: SupportedPaths) -> Self:
+        return cls(name, "::GENERIC CRAWLER::", (), paths)  # pyright: ignore[reportArgumentType]
 
-class Crawler(ABC):
+
+class Registry:
+    abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    concrete: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    generic: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    # generics are concrete crawlers that are not bound to any specific site
+    # They can be mapped to a site by just subclassing and setting a PRIMARY URL. ex: Chevereto
+
+    _loaded: bool = False
+
+    @classmethod
+    def import_all(cls) -> None:
+        if cls._loaded:
+            return
+
+        cls._import(__package__ or __name__)
+        cls._loaded = True
+
+    @classmethod
+    def _import(cls, pkg_name: str) -> None:
+        """Import every module (and sub-package) inside *pkg_name*."""
+        module = importlib.import_module(pkg_name)
+        for module_info in pkgutil.iter_modules(module.__path__, pkg_name + "."):
+            _ = importlib.import_module(module_info.name)
+            if module_info.ispkg:
+                cls._import(module_info.name)
+
+
+class HTTPClientProxy:
+    DOMAIN: ClassVar[str]
+    _IMPERSONATE: ClassVar[str | bool | None] = None
+    client: ScraperClient  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    @classmethod
+    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
+        """Custom check for JSON responses.
+
+        This method is called automatically by the `HttpClient` when a JSON response is received from `cls.DOMAIN`
+        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
+
+        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
+
+        Example:
+            ```python
+            if isinstance(json, dict) and json.get("status") == "error":
+                raise ScrapeError(422, f"API error: {json['message']}")
+            ```
+
+        IMPORTANT:
+            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
+            should be handled by the crawler itself
+        """
+
+    @signature.copy(ScraperClient._request)
+    @contextlib.asynccontextmanager
+    async def request(
+        self, *args, impersonate: str | bool | None = None, **kwargs
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
+        if impersonate is None:
+            impersonate = self._IMPERSONATE
+
+        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
+            async with (
+                self.client._limiter(self.DOMAIN),
+                self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
+            ):
+                yield resp
+
+    @signature.copy(request)
+    async def request_json(self, *args, **kwargs) -> Any:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.json()
+
+    @signature.copy(request)
+    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.soup()
+
+    @signature.copy(request)
+    async def request_text(self, *args, **kwargs) -> str:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.text()
+
+
+class Crawler(ABC, HTTPClientProxy):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
@@ -125,37 +227,8 @@ class Crawler(ABC):
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
-    _IMPERSONATE: ClassVar[str | bool | None] = None
 
     create_db_path = staticmethod(DBPathBuilder.path)
-
-    @signature.copy(ScraperClient._request)
-    @contextlib.asynccontextmanager
-    async def request(self, *args, impersonate: str | bool | None = None, **kwargs) -> AsyncGenerator[AbstractResponse]:
-        if impersonate is None:
-            impersonate = self._IMPERSONATE
-
-        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
-            async with (
-                self.client._limiter(self.DOMAIN),
-                self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
-            ):
-                yield resp
-
-    @signature.copy(ScraperClient._request)
-    async def request_json(self, *args, **kwargs) -> Any:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.json()
-
-    @signature.copy(ScraperClient._request)
-    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.soup()
-
-    @signature.copy(ScraperClient._request)
-    async def request_text(self, *args, **kwargs) -> str:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.text()
 
     @final
     def __init__(self, manager: Manager) -> None:
@@ -178,27 +251,35 @@ class Crawler(ABC):
     def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> asyncio.Task[_T_co]:
         return self.manager.task_group.create_task(coro)
 
-    def __post_init__(self) -> None: ...  # noqa: B027
+    def __post_init__(self) -> None:
+        """Override in subclasses to add custom init logic
 
-    @classmethod  # noqa: B027
-    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
-        """Custom check for JSON responses.
+        This method gets called inmediatly on class creation"""
 
-        This method is called automatically by the `client_manager` when a JSON response is received from `cls.DOMAIN`
-        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
+    @final
+    async def __async_init__(self) -> None:
+        """Starts the crawler."""
+        async with self.startup_lock:
+            if self.ready:
+                return
+            self.client = self.manager.client_manager.scraper_client
+            self.manager.client_manager.rate_limits[self.DOMAIN] = self.RATE_LIMIT
+            if self._DOWNLOAD_SLOTS:
+                self.manager.client_manager.download_slots[self.DOMAIN] = self._DOWNLOAD_SLOTS
+            if self._USE_DOWNLOAD_SERVERS_LOCKS:
+                self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
+            self.downloader = self._init_downloader()
+            await self.async_startup()
+            self.ready = True
 
-        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
+    async def async_startup(self) -> None: ...
 
-        Example:
-            ```python
-            if isinstance(json, dict) and json.get("status") == "error":
-                raise ScrapeError(422, f"API error: {json['message']}")
-            ```
+    async def __async_post_init__(self) -> None:
+        """Perform additional setup that requires I/O
 
-        IMPORTANT:
-            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
-            should be handled by the crawler itself
-        """
+        ex: login, getting API tokens, etc..
+
+        This method its called once and only if the crawler is actually going to be scrape something"""
 
     @final
     @staticmethod
@@ -207,48 +288,59 @@ class Crawler(ABC):
             assert getattr(subclass, field_name, None), f"Subclass {subclass.__name__} must override: {field_name}"
 
     def __init_subclass__(
-        cls, is_abc: bool = False, is_generic: bool = False, generic_name: str = "", **kwargs
+        cls,
+        is_abc: bool = False,
+        is_generic: bool = False,
+        generic_name: str = "",
+        db_path: Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"] | None = None,
+        **kwargs,
     ) -> None:
         super().__init_subclass__(**kwargs)
 
         msg = (
-            f"Subclass {cls.__name__} must not override __init__ method,"
+            f"Subclass {cls.__name__} must not override __init__/_async_init_ method,"
             "use __post_init__ for additional setup"
-            "use async_startup for setup that requires database access, making a request or setting cookies"
+            "use _async_post_init_ for setup that requires manipulating cookies or any IO (database access, https requests, etc...)"
         )
         assert cls.__init__ is Crawler.__init__, msg
-        cls.NAME = cls.__name__.removesuffix("Crawler")
-        cls.IS_GENERIC = is_generic
-        cls.IS_REAL_DEBRID = cls.NAME == "RealDebrid"
-        cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)
-        cls.IS_ABC = is_abc
+        assert cls.__async_init__ is Crawler.__async_init__, msg
+        cls.NAME: str = cls.__name__.removesuffix("Crawler")
+        cls.IS_GENERIC: bool = is_generic
+        cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)  # pyright: ignore[reportConstantRedefinition]
+        cls.IS_ABC: bool = is_abc
 
         if cls.IS_GENERIC:
-            cls.GENERIC_NAME = generic_name or cls.NAME
+            cls.GENERIC_NAME: str = generic_name or cls.NAME
             cls.SCRAPE_MAPPER_KEYS = ()
-            cls.INFO = CrawlerInfo(cls.GENERIC_NAME, "::GENERIC CRAWLER::", (), cls.SUPPORTED_PATHS)  # type: ignore
+            cls.INFO: CrawlerInfo = CrawlerInfo.generic(cls.GENERIC_NAME, cls.SUPPORTED_PATHS)
+            Registry.generic.add(cls)
             return
 
         if is_abc:
+            Registry.abc.add(cls)
             return
 
-        if not cls.IS_REAL_DEBRID:
+        if cls.NAME != "RealDebrid":
             Crawler._assert_fields_overrides(cls, "PRIMARY_URL", "DOMAIN", "SUPPORTED_PATHS")
 
+        cls.REPLACE_OLD_DOMAINS_REGEX: str | None = "|".join(cls.OLD_DOMAINS) if cls.OLD_DOMAINS else None
         if cls.OLD_DOMAINS:
-            cls.REPLACE_OLD_DOMAINS_REGEX = re.compile("|".join(cls.OLD_DOMAINS))
             if not cls.SUPPORTED_DOMAINS:
-                cls.SUPPORTED_DOMAINS = ()
+                cls.SUPPORTED_DOMAINS = ()  # pyright: ignore[reportConstantRedefinition]
             elif isinstance(cls.SUPPORTED_DOMAINS, str):
-                cls.SUPPORTED_DOMAINS = (cls.SUPPORTED_DOMAINS,)
-            cls.SUPPORTED_DOMAINS = tuple(sorted({*cls.OLD_DOMAINS, *cls.SUPPORTED_DOMAINS, cls.PRIMARY_URL.host}))
-        else:
-            cls.REPLACE_OLD_DOMAINS_REGEX = None
+                cls.SUPPORTED_DOMAINS = (cls.SUPPORTED_DOMAINS,)  # pyright: ignore[reportConstantRedefinition]
+            cls.SUPPORTED_DOMAINS = tuple(sorted({*cls.OLD_DOMAINS, *cls.SUPPORTED_DOMAINS, cls.PRIMARY_URL.host}))  # pyright: ignore[reportConstantRedefinition]
+
         _validate_supported_paths(cls)
-        cls.SCRAPE_MAPPER_KEYS = _make_scrape_mapper_keys(cls)
-        cls.FOLDER_DOMAIN = cls.FOLDER_DOMAIN or cls.DOMAIN.capitalize()
-        wiki_supported_domains = _make_wiki_supported_domains(cls.SCRAPE_MAPPER_KEYS)
-        cls.INFO = CrawlerInfo(cls.FOLDER_DOMAIN, cls.PRIMARY_URL, wiki_supported_domains, cls.SUPPORTED_PATHS)
+        cls.SCRAPE_MAPPER_KEYS: tuple[str, ...] = _make_scrape_mapper_keys(cls)  # pyright: ignore[reportConstantRedefinition]
+        cls.FOLDER_DOMAIN = cls.FOLDER_DOMAIN or cls.DOMAIN.capitalize()  # pyright: ignore[reportConstantRedefinition]
+        cls.INFO = CrawlerInfo(  # pyright: ignore[reportConstantRedefinition]
+            site=cls.FOLDER_DOMAIN,
+            primary_url=cls.PRIMARY_URL,
+            supported_domains=_make_wiki_supported_domains(cls.SCRAPE_MAPPER_KEYS),
+            supported_paths=cls.SUPPORTED_PATHS,
+        )
+        Registry.concrete.add(cls)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
@@ -268,22 +360,6 @@ class Crawler(ABC):
         return dl
 
     @final
-    async def startup(self) -> None:
-        """Starts the crawler."""
-        async with self.startup_lock:
-            if self.ready:
-                return
-            self.client = self.manager.client_manager.scraper_client
-            self.manager.client_manager.rate_limits[self.DOMAIN] = self.RATE_LIMIT
-            if self._DOWNLOAD_SLOTS:
-                self.manager.client_manager.download_slots[self.DOMAIN] = self._DOWNLOAD_SLOTS
-            if self._USE_DOWNLOAD_SERVERS_LOCKS:
-                self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
-            self.downloader = self._init_downloader()
-            await self.async_startup()
-            self.ready = True
-
-    @final
     @contextlib.contextmanager
     def disable_on_error(self, msg: str) -> Generator[None]:
         try:
@@ -292,8 +368,6 @@ class Crawler(ABC):
             self.log(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled", 40)
             self.disabled = True
             raise
-
-    async def async_startup(self) -> None: ...  # noqa: B027
 
     catch_errors = final(error_handling_context)
 
