@@ -18,7 +18,7 @@ from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
-from cyberdrop_dl.managers.log_manager import LogManager
+from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
@@ -50,7 +50,7 @@ class Manager:
         self.config_manager: ConfigManager = field(init=False)
         self.hash_manager: HashManager = field(init=False)
 
-        self.log_manager: LogManager = field(init=False)
+        self.logs: LogManager = field(init=False)
         self.db_manager: Database = field(init=False)
         self.client_manager: ClientManager = field(init=False)
 
@@ -60,7 +60,7 @@ class Manager:
         self._loaded_args_config: bool = False
         self._made_portable: bool = False
 
-        self.task_group: TaskGroup = field(init=False)
+        self.task_group: TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
         self.start_time: float = perf_counter()
@@ -98,7 +98,7 @@ class Manager:
         self.args_consolidation()
 
         self.path_manager.startup()
-        self.log_manager = LogManager(self)
+        self.logs = LogManager.from_manager(self)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 

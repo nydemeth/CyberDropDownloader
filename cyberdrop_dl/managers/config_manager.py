@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from cyberdrop_dl import yaml
 from cyberdrop_dl.config import AuthSettings, ConfigSettings, GlobalSettings
 from cyberdrop_dl.exceptions import InvalidYamlError
-from cyberdrop_dl.managers.log_manager import LogManager
+from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.utils.apprise import get_apprise_urls
 
 if TYPE_CHECKING:
@@ -183,7 +183,7 @@ class ConfigManager:
 
         self.manager.path_manager.startup()
         sleep(1)
-        self.manager.log_manager = LogManager(self.manager)
+        self.manager.logs = LogManager.from_manager(self.manager)
         sleep(1)
 
     def _set_apprise_fixed(self):
