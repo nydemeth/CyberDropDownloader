@@ -223,7 +223,7 @@ class ClientManager:
 
     def check_allowed_date_range(self, media_item: MediaItem) -> bool:
         """Checks if the file was uploaded within the config date range"""
-        datetime = media_item.datetime_obj()
+        datetime = media_item.uploaded_at_date
         if not datetime:
             return True
 
@@ -424,7 +424,7 @@ class ClientManager:
                 return media_item.duration
 
             if media_item.downloaded:
-                properties = await probe(media_item.complete_file)
+                properties = await probe(media_item.path)
 
             else:
                 headers = self.download_client._get_download_headers(media_item.domain, media_item.referer)

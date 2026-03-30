@@ -1,6 +1,7 @@
 # pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
+import base64
 import contextlib
 import copy
 import datetime
@@ -134,43 +135,60 @@ class MediaItem:
     download_folder: Path
     filename: str
     original_filename: str
-    download_filename: str | None = field(default=None)
-    filesize: int | None = field(default=None, compare=False)
+    download_filename: str | None = None
+    filesize: int | None = None
     ext: str
     db_path: str
 
-    debrid_link: AbsoluteHttpURL | None = field(default=None, compare=False)
-    duration: float | None = field(default=None, compare=False)
+    debrid_link: AbsoluteHttpURL | None = None
+    duration: float | None = None
     is_segment: bool = False
     fallbacks: Callable[[aiohttp.ClientResponse, int], AbsoluteHttpURL] | list[AbsoluteHttpURL] | None = field(
-        default=None, compare=False
+        default=None
     )
     album_id: str | None = None
-    datetime: int | None = field(default=None, compare=False)
-    parents: list[AbsoluteHttpURL] = field(default_factory=list, compare=False)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, compare=False)
+    uploaded_at: int | None = None
 
-    current_attempt: int = field(default=0, compare=False)
+    parents: list[AbsoluteHttpURL] = field(default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
+
+    attempts: int = 0
     partial_file: Path = None  # type: ignore
-    complete_file: Path = None  # type: ignore
-    hash: str | None = field(default=None, compare=False)
-    downloaded: bool = field(default=False, compare=False)
+    path: Path = None  # type: ignore
+    hash: str | None = None
+    downloaded: bool = field(default=False)
 
-    parent_media_item: MediaItem | None = field(default=None, compare=False)
-    _task_id: TaskID | None = field(default=None, compare=False)
-    metadata: object = field(init=False, default_factory=dict, compare=False)
+    parent_media_item: MediaItem | None = None
+    _task_id: TaskID | None = None
+    metadata: object = field(init=False, default_factory=dict)
 
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
+    uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
+    extra_info: dict[str, Any] = field(init=False, default_factory=dict)
+
+    base64_id: str = field(init=False)
 
     def __post_init__(self) -> None:
         if self.url.scheme == "metadata":
             self.db_path = ""
 
-    def datetime_obj(self) -> datetime.datetime | None:
-        if self.datetime:
-            assert isinstance(self.datetime, int), f"Invalid {self.datetime =!r} from {self.referer}"
-            return datetime.datetime.fromtimestamp(self.datetime)
+        if self.uploaded_at:
+            assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
+            self.uploaded_at_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
+
+        self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode()
+
+    @property
+    def id(self) -> tuple[str, str]:
+        assert self.db_path
+        return self.domain, self.db_path
+
+    @property
+    def real_url(self) -> AbsoluteHttpURL:
+        return self.debrid_link or self.url
+
+    @property
+    def unique_temp_path(self) -> Path:
+        return self.path.parent / f"{self.base64_id}.part"
 
     @staticmethod
     def from_item(
@@ -196,7 +214,7 @@ class MediaItem:
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
             parents=origin.parents.copy(),
-            datetime=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.datetime,
+            uploaded_at=origin.uploaded_at,
             parent_media_item=None if isinstance(origin, ScrapeItem) else origin,
             parent_threads=origin.parent_threads.copy(),
         )
@@ -218,16 +236,13 @@ class MediaItem:
         else:
             self._task_id = task_id
 
-    def as_jsonable_dict(self) -> dict[str, Any]:
-        item = asdict(self)
-        if datetime := self.datetime_obj():
-            item["datetime"] = datetime
-        item["attempts"] = item.pop("current_attempt")
+    def __json__(self) -> dict[str, Any]:
+        me = asdict(self)
         if self.hash:
-            item["hash"] = f"xxh128:{self.hash}"
+            me["hash"] = f"xxh128:{self.hash}"
         for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):
-            _ = item.pop(name)
-        return item
+            _ = me.pop(name)
+        return me
 
 
 @dataclass(kw_only=True, slots=True)
@@ -236,7 +251,7 @@ class ScrapeItem:
     parent_title: str = ""
     part_of_album: bool = False
     album_id: str | None = None
-    possible_datetime: int | None = None
+    uploaded_at: int | None = None
     retry_path: Path | None = None
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
@@ -269,7 +284,7 @@ class ScrapeItem:
                 logger.info(f"URL transformation applied: \n  {old_url = }\n  new_url: {self.url}")
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
+        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.uploaded_at!r}"
 
     def __post_init__(self) -> None:
         self.password = self.url.query.get("password")
@@ -322,7 +337,7 @@ class ScrapeItem:
 
         Reset `part_of_album` back to `False`
         """
-        self.album_id = self.possible_datetime = self.type = None
+        self.album_id = self.uploaded_at = self.type = None
         self.part_of_album = False
         self.reset_childen()
         if reset_parents:
@@ -365,7 +380,7 @@ class ScrapeItem:
 
         scrape_item.url = url
         scrape_item.part_of_album = part_of_album or scrape_item.part_of_album
-        scrape_item.possible_datetime = possible_datetime or scrape_item.possible_datetime
+        scrape_item.uploaded_at = possible_datetime or scrape_item.uploaded_at
         scrape_item.album_id = album_id or scrape_item.album_id
         return scrape_item
 
