@@ -62,7 +62,7 @@ def _ui_error_handling_wrapper(
 @_ui_error_handling_wrapper
 async def _run_manager(manager: Manager) -> None:
     """Runs the program and handles the UI."""
-    manager.path_manager.startup()
+    manager.config.resolve_paths()
     manager.logs.delete_old_logs()
     debug_log_file_path = _setup_debug_logger(manager)
     start_time = manager.start_time
@@ -126,7 +126,7 @@ async def _post_runtime(manager: Manager) -> None:
 
     if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
         log_spacer(20)
-        await manager.logs.update_last_forum_post(manager.path_manager.input_file)
+        await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 
 def _setup_debug_logger(manager: Manager) -> Path | None:
@@ -162,7 +162,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 
 def _setup_main_logger(manager: Manager) -> None:
     logger = logging.getLogger("cyberdrop_dl")
-    file_io = manager.path_manager.main_log.open("w", encoding="utf8")
+    file_io = manager.config.logs.main_log.open("w", encoding="utf8")
     settings_data = manager.config_manager.settings_data
     log_level = settings_data.runtime_options.log_level
     logger.setLevel(log_level)

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 from dataclasses import Field, field
+from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypeVar
 
@@ -18,7 +20,6 @@ from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
@@ -26,7 +27,9 @@ from cyberdrop_dl.utils.utilities import close_if_defined, get_system_informatio
 if TYPE_CHECKING:
     from asyncio import TaskGroup
     from collections.abc import Sequence
+    from os import PathLike
 
+    from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 
 
@@ -45,7 +48,6 @@ class Manager:
 
         self.parsed_args: ParsedArgs = field(init=False)
         self.cache: dict[str, Any] = {}
-        self.path_manager: PathManager = field(init=False)
         self.config_manager: ConfigManager = field(init=False)
         self.hash_manager: HashManager = field(init=False)
 
@@ -67,6 +69,8 @@ class Manager:
         self.loggers: dict[str, QueuedLogger] = {}
         self.args = args
         self.states: AsyncioEvents
+        self._appdata: AppData | None = None
+        self._completed_downloads: list[MediaItem] = []
 
         constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
 
@@ -83,9 +87,9 @@ class Manager:
         return self.config_manager.global_settings_data
 
     async def __aenter__(self) -> Self:
-        cache_file = self.path_manager.cache_folder / "cache.yaml"
+        cache_file = self.appdata.cache_file
         try:
-            self.cache.update(yaml.load(self.path_manager.cache_folder / "cache.yaml"))
+            self.cache.update(yaml.load(cache_file))
         except FileNotFoundError:
             cache_file.parent.mkdir(exist_ok=True, parents=True)
             cache_file.touch()
@@ -93,7 +97,7 @@ class Manager:
 
     async def __aexit__(self, *_) -> None:
         self.cache["version"] = __version__
-        yaml.save(self.path_manager.cache_folder / "cache.yaml", self.cache)
+        yaml.save(self.appdata.cache_file, self.cache)
 
     def startup(self) -> None:
         """Startup process for the manager."""
@@ -101,16 +105,23 @@ class Manager:
         if isinstance(self.parsed_args, Field):
             self.parsed_args = parse_args(self.args)
 
-        self.path_manager = PathManager(self)
-        self.path_manager.pre_startup()
+        self.appdata.mkdirs()
 
         self.config_manager = ConfigManager(self)
         self.config_manager.startup()
 
         self.args_consolidation()
-
-        self.path_manager.startup()
+        self.config.resolve_paths()
         self.logs = LogManager.from_manager(self)
+
+    def add_completed(self, media_item: MediaItem) -> None:
+        if media_item.is_segment:
+            return
+        self._completed_downloads.append(media_item)
+
+    @property
+    def completed_downloads(self) -> list[MediaItem]:
+        return self._completed_downloads
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -131,11 +142,11 @@ class Manager:
     async def async_db_hash_startup(self) -> None:
         if not isinstance(self.db_manager, Database):
             self.db_manager = Database(
-                self.path_manager.history_db,
+                self.appdata.db_file,
                 self.config.runtime_options.ignore_history,
             )
             await self.db_manager.startup()
-        transfer_v5_db_to_v6(self.path_manager.history_db)
+        transfer_v5_db_to_v6(self.appdata.db_file)
         if not isinstance(self.hash_manager, HashManager):
             self.hash_manager = HashManager(self)
         if not isinstance(self.live_manager, LiveManager):
@@ -186,9 +197,9 @@ class Manager:
             f"System Info: {system_info}",
             f"Using Config: {self.config_manager.loaded_config}",
             f"Using Config File: {self.config_manager.settings}",
-            f"Using Input File: {self.path_manager.input_file}",
-            f"Using Download Folder: {self.path_manager.download_folder}",
-            f"Using Database File: {self.path_manager.history_db}",
+            f"Using Input File: {self.config.files.input_file}",
+            f"Using Download Folder: {self.config.files.download_folder}",
+            f"Using Database File: {self.appdata.db_file}",
             f"Using CLI only options: {cli_only_args}",
             f"Using Authentication: \n{json.dumps(auth_provided, indent=4, sort_keys=True)}",
             f"Using Settings: \n{config_settings}",
@@ -215,6 +226,18 @@ class Manager:
         while self.loggers:
             _, queued_logger = self.loggers.popitem()
             queued_logger.stop()
+
+    @property
+    def appdata(self) -> AppData:
+        if self._appdata is None:
+            if folder := self.parsed_args.cli_only_args.appdata_folder:
+                path = folder / "AppData"
+            else:
+                path = Path("AppData")
+
+            self._appdata = AppData.from_path(path.resolve())
+
+        return self._appdata
 
 
 def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
@@ -255,3 +278,45 @@ def merge_models(default: M, new: M) -> M:
 
     updated_dict = merge_dicts(default_dict, new_dict)
     return default.model_validate(updated_dict)
+
+
+@dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
+class AppData:
+    path: Path
+    cache_file: Path
+    db_file: Path
+    config_file: Path
+
+    cache: Path
+    cookies: Path
+    configs: Path
+
+    @classmethod
+    def from_path(cls, path: Path) -> Self:
+        assert path.is_absolute()
+        cache = path / "Cache"
+        return cls(
+            path=path,
+            cache=cache,
+            configs=path / "Configs",
+            cookies=path / "Cookies",
+            config_file=path / "config.yaml",
+            cache_file=cache / "cache.yaml",
+            db_file=cache / "cyberdrop.db",
+        )
+
+    def __truediv__(self, other: PathLike[str]):
+        try:
+            return self.path / other
+        except TypeError:
+            return NotImplemented
+
+    def __fspath__(self) -> str:
+        return str(self)
+
+    def __str__(self) -> str:
+        return str(self.path)
+
+    def mkdirs(self) -> None:
+        for dir in (self.cache, self.configs, self.cookies):
+            dir.mkdir(parents=True, exist_ok=True)
