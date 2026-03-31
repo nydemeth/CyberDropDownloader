@@ -19,15 +19,6 @@ class Selector:
     NEXT_PAGE = "a.page-link:-soup-contains(→)"
     FILE_DETAILS = "#detailsContent"
 
-    @staticmethod
-    def file_attr(name: str) -> str:
-        return f"span:-soup-contains({name}) + span"
-
-    MIME_TYPE = file_attr("Type")
-    SHA_256 = file_attr("SHA-256")
-    MD5 = file_attr("MD5")
-    UPLOAD_DATE = file_attr("Uploaded")
-
 
 class FilesterCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
@@ -76,22 +67,30 @@ class FilesterCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        file = css.select(soup, Selector.FILE_DETAILS)
+        file_details = css.select(soup, Selector.FILE_DETAILS)
+
+        def file_attr(name: str) -> str:
+            return css.select_text(file_details, f"span:-soup-contains({name}) + span")
 
         try:
-            hash, checksum = "sha256", css.select_text(file, Selector.SHA_256)
+            hash, checksum = "sha256", file_attr("SHA-256")
         except css.SelectorError:
-            hash, checksum = "md5", css.select_text(file, Selector.MD5)
+            hash, checksum = "md5", file_attr("MD5")
 
         if await self.check_complete_by_hash(scrape_item, hash, checksum):
             return
 
-        dl_link = await self._request_download(slug)
-        name = open_graph.title(soup)
-        mime_type = css.select_text(file, Selector.MIME_TYPE)
-        scrape_item.uploaded_at = self.parse_iso_date(css.select_text(file, Selector.UPLOAD_DATE))
-        filename, ext = self.get_filename_and_ext(name, mime_type=mime_type)
-        await self.handle_file(scrape_item.url, scrape_item, name, ext, custom_filename=filename, debrid_link=dl_link)
+        scrape_item.uploaded_at = self.parse_iso_date(file_attr("Uploaded"))
+        filename = open_graph.title(soup)
+        custom_filename, ext = self.get_filename_and_ext(filename, mime_type=file_attr("Type"))
+        await self.handle_file(
+            scrape_item.url,
+            scrape_item,
+            filename,
+            ext,
+            custom_filename=custom_filename,
+            debrid_link=await self._request_download(slug),
+        )
 
     async def _request_download(self, slug: str) -> AbsoluteHttpURL:
         resp = await self.request_json(
@@ -99,5 +98,5 @@ class FilesterCrawler(Crawler):
             method="POST",
             json={"file_slug": slug},
         )
-        base = random.choice(_CDN_URLS)
-        return base.with_path(resp["download_url"]).with_query(download="true")
+        dl_link = random.choice(_CDN_URLS).with_path(resp["download_url"])
+        return dl_link.with_query(download="true")
