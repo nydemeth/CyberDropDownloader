@@ -5,15 +5,14 @@ import json
 import logging
 from dataclasses import Field, field
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypeVar
 
 from pydantic import BaseModel
 
-from cyberdrop_dl import __version__, constants, ffmpeg
+from cyberdrop_dl import __version__, constants, ffmpeg, yaml
 from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
-from cyberdrop_dl.managers.cache_manager import CacheManager
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
@@ -45,7 +44,7 @@ class Manager:
             args = [args]
 
         self.parsed_args: ParsedArgs = field(init=False)
-        self.cache_manager: CacheManager = CacheManager(self)
+        self.cache: dict[str, Any] = {}
         self.path_manager: PathManager = field(init=False)
         self.config_manager: ConfigManager = field(init=False)
         self.hash_manager: HashManager = field(init=False)
@@ -83,6 +82,19 @@ class Manager:
     def global_config(self):
         return self.config_manager.global_settings_data
 
+    async def __aenter__(self) -> Self:
+        cache_file = self.path_manager.cache_folder / "cache.yaml"
+        try:
+            self.cache.update(yaml.load(self.path_manager.cache_folder / "cache.yaml"))
+        except FileNotFoundError:
+            cache_file.parent.mkdir(exist_ok=True, parents=True)
+            cache_file.touch()
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        self.cache["version"] = __version__
+        yaml.save(self.path_manager.cache_folder / "cache.yaml", self.cache)
+
     def startup(self) -> None:
         """Startup process for the manager."""
 
@@ -91,7 +103,7 @@ class Manager:
 
         self.path_manager = PathManager(self)
         self.path_manager.pre_startup()
-        self.cache_manager.startup(self.path_manager.cache_folder / "cache.yaml")
+
         self.config_manager = ConfigManager(self)
         self.config_manager.startup()
 
@@ -199,7 +211,6 @@ class Manager:
         await self.async_db_close()
 
         self.client_manager = await close_if_defined(self.client_manager)
-        self.cache_manager = await close_if_defined(self.cache_manager)
 
         while self.loggers:
             _, queued_logger = self.loggers.popitem()
