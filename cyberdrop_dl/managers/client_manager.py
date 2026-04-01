@@ -24,10 +24,10 @@ from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FileExt
+from cyberdrop_dl.cookies import export_cookies, extract_cookies, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
-from cyberdrop_dl.utils.cookie_management import get_cookies_from_browsers, read_netscape_files
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
@@ -247,7 +247,7 @@ class ClientManager:
     async def startup(self) -> None:
         await _set_dns_resolver()
 
-    def new_curl_cffi_session(self) -> AsyncSession:
+    def new_curl_cffi_session(self) -> AsyncSession[CurlResponse]:
         # Calling code should have validated if curl is actually available
         import warnings
 
@@ -322,15 +322,16 @@ class ClientManager:
 
     async def load_cookie_files(self) -> None:
         if self.manager.config_manager.settings_data.browser_cookies.auto_import:
-            assert self.manager.config_manager.settings_data.browser_cookies.browser
-            get_cookies_from_browsers(
-                self.manager, browser=self.manager.config_manager.settings_data.browser_cookies.browser
-            )
-        cookie_files = sorted(self.manager.appdata.cookies.glob("*.txt"))
+            assert self.manager.config.browser_cookies.browser
+            cookies = await extract_cookies(self.manager.config.browser_cookies.browser)
+            await export_cookies(cookies, output_path=self.manager.appdata.cookies)
+
+        cookie_files = await asyncio.to_thread(lambda: sorted(self.manager.appdata.cookies.glob("*.txt")))
         if not cookie_files:
             return
-        async for domain, cookie in read_netscape_files(cookie_files):
-            self.cookies.update_cookies(cookie, response_url=AbsoluteHttpURL(f"https://{domain}"))
+
+        async for cookie in read_netscape_files(cookie_files):
+            self.cookies.update_cookies(cookie)
 
     def get_rate_limiter(self, domain: str) -> AsyncLimiter:
         """Get a rate limiter for a domain."""
