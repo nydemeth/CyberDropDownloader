@@ -56,6 +56,7 @@ from cyberdrop_dl.utils.utilities import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
+    from types import ModuleType
 
     import yarl
     from bs4 import BeautifulSoup, Tag
@@ -129,17 +130,18 @@ class Registry:
         if cls._loaded:
             return
 
-        cls._import(__package__ or __name__)
+        assert __package__
+        module = importlib.import_module(__package__)
+        cls._import_from(module)
         cls._loaded = True
 
     @classmethod
-    def _import(cls, pkg_name: str) -> None:
+    def _import_from(cls, module: ModuleType) -> None:
         """Import every module (and sub-package) inside *pkg_name*."""
-        module = importlib.import_module(pkg_name)
-        for module_info in pkgutil.iter_modules(module.__path__, pkg_name + "."):
-            _ = importlib.import_module(module_info.name)
-            if module_info.ispkg:
-                cls._import(module_info.name)
+        for sub_module_info in pkgutil.iter_modules(module.__path__, module.__name__ + "."):
+            sub_module = importlib.import_module(sub_module_info.name)
+            if sub_module_info.ispkg:
+                cls._import_from(sub_module)
 
 
 class Crawler(HTTPClientProxy, ABC):
