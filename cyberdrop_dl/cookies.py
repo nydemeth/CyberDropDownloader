@@ -106,17 +106,26 @@ async def export_cookies(cookies: CookieJar, output_path: Path) -> None:
 
 async def read_netscape_files(cookie_files: Sequence[Path]) -> AsyncGenerator[SimpleCookie]:
     now = int(time.time())
-    domains: set[str] = set()
-    for fut in asyncio.as_completed([asyncio.create_task(_read_netscape_file(file)) for file in cookie_files]):
-        cookie_jar = await fut
+    all_domains: set[str] = set()
+    duplicates: set[str] = set()
+    for cookie_jar in await asyncio.gather(*(asyncio.to_thread(_read_netscape_file, file) for file in cookie_files)):
         if not cookie_jar:
             continue
 
+        domains_here: set[str] = set()
         for domain, cookie in _parse_cookie_jar(cookie_jar, now):
-            if domain in domains:
-                logger.warning(f"Multiple files have cookies for {domain}. They will be overwritten")
-            domains.add(domain)
+            domains_here.add(domain)
             yield cookie
+
+        duplicates.update(all_domains.intersection(domains_here))
+        all_domains.update(domains_here)
+
+    for domain in sorted(duplicates):
+        msg = (
+            f"Found cookies for {domain} in more than one file; "
+            "The value from the last parsed file will be used in case of cookie name collisions"
+        )
+        logger.warning(msg)
 
 
 def _parse_cookie_jar(cookie_jar: MozillaCookieJar, now: int) -> Generator[tuple[str, SimpleCookie]]:
@@ -139,16 +148,13 @@ def _parse_cookie_jar(cookie_jar: MozillaCookieJar, now: int) -> Generator[tuple
         yield domain, make_simple_cookie(cookie, now)
 
 
-async def _read_netscape_file(file: Path) -> MozillaCookieJar | None:
-    def read():
-        cookie_jar = MozillaCookieJar(file)
-        try:
-            cookie_jar.load(ignore_discard=True)
-            return cookie_jar
-        except OSError as e:
-            logger.error(f"Unable to load cookies from '{file.name}':\n  {e!s}")
-
-    return await asyncio.to_thread(read)
+def _read_netscape_file(file: Path) -> MozillaCookieJar | None:
+    cookie_jar = MozillaCookieJar(file)
+    try:
+        cookie_jar.load(ignore_discard=True)
+        return cookie_jar
+    except OSError as e:
+        logger.error(f"Unable to load cookies from '{file.name}':\n  {e!s}")
 
 
 def make_simple_cookie(cookie: Cookie, now: float) -> SimpleCookie:
