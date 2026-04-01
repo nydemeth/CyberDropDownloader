@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import datetime
 import importlib
 import inspect
@@ -11,7 +12,6 @@ import re
 import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
-from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
 from typing import (
@@ -28,9 +28,7 @@ from typing import (
     final,
 )
 
-import yarl
 from aiolimiter import AsyncLimiter
-from yarl import URL
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
@@ -59,6 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
 
+    import yarl
     from bs4 import BeautifulSoup, Tag
     from rich.progress import TaskID
 
@@ -80,7 +79,7 @@ HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 VALID_RESOLUTION_NAMES = "4K", "8K", "HQ", "Unknown"
 
 
-@dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class PlaceHolderConfig:
     include_file_id: bool = True
     include_video_codec: bool = True
@@ -91,32 +90,23 @@ class PlaceHolderConfig:
 
 _placeholder_config = PlaceHolderConfig()
 
+_DB_PATH_BUILDERS: dict[str, Callable[[AbsoluteHttpURL], str]] = {
+    "url": lambda url: str(url),
+    "name": lambda url: url.name,
+    "path": lambda url: url.path,
+    "path_qs": lambda url: url.path_qs,
+    "path_qs_frag": lambda url: f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs,
+    "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
+}
 
-class DBPathBuilder:
-    @staticmethod
-    def url(url: yarl.URL) -> str:
-        return str(url)
 
-    @staticmethod
-    def name(url: yarl.URL) -> str:
-        return url.name
-
-    @staticmethod
-    def path(url: yarl.URL) -> str:
-        return url.path
-
-    @staticmethod
-    def path_qs(url: yarl.URL) -> str:
-        return url.path_qs
-
-    @staticmethod
-    def path_qs_frag(url: yarl.URL) -> str:
-        return f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs
+def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
+    return item if isinstance(item, AbsoluteHttpURL) else item.url
 
 
 class CrawlerInfo(NamedTuple):
     site: str
-    primary_url: URL
+    primary_url: AbsoluteHttpURL
     supported_domains: tuple[str, ...]
     supported_paths: SupportedPaths
 
@@ -171,13 +161,15 @@ class Crawler(HTTPClientProxy, ABC):
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
 
-    create_db_path = staticmethod(DBPathBuilder.path)
+    @staticmethod
+    def __db_path__(url: AbsoluteHttpURL, /) -> str:
+        return url.path
 
     @final
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.downloader: Downloader = field(init=False)
-        self.client: HTTPClient = field(init=False)
+        self.downloader: Downloader = dataclasses.field(init=False)
+        self.client: HTTPClient = dataclasses.field(init=False)
         self.startup_lock = asyncio.Lock()
         self.ready: bool = False
         self.disabled: bool = False
@@ -239,6 +231,9 @@ class Crawler(HTTPClientProxy, ABC):
         cls.IS_GENERIC: bool = is_generic
         cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)  # pyright: ignore[reportConstantRedefinition]
         cls.IS_ABC: bool = is_abc
+
+        if db_path:
+            cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[db_path])
 
         if cls.IS_GENERIC:
             cls.GENERIC_NAME: str = generic_name or cls.NAME
@@ -435,7 +430,7 @@ class Crawler(HTTPClientProxy, ABC):
             self.DOMAIN,
             filename=custom_filename or filename,
             download_folder=download_folder,
-            db_path=self.create_db_path(url),
+            db_path=self.__db_path__(url),
             original_filename=filename,
             ext=ext,
         )
@@ -469,7 +464,7 @@ class Crawler(HTTPClientProxy, ABC):
 
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
-        db_path = self.create_db_path(url)
+        db_path = self.__db_path__(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
             logger.info(f"Skipping {url} as it has already been downloaded")
@@ -512,13 +507,13 @@ class Crawler(HTTPClientProxy, ABC):
 
     @final
     async def check_complete_from_referer(
-        self: Crawler, scrape_item: ScrapeItem | URL, any_crawler: bool = False
+        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, any_crawler: bool = False
     ) -> bool:
         """Checks if the scrape item has already been scraped.
 
         if `any_crawler` is `True`, checks database entries for all crawlers and returns `True` if at least 1 of them has marked it as completed
         """
-        url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
+        url = _url(scrape_item)
         domain = None if any_crawler else self.DOMAIN
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
@@ -529,12 +524,12 @@ class Crawler(HTTPClientProxy, ABC):
 
     @final
     async def check_complete_by_hash(
-        self: Crawler, scrape_item: ScrapeItem | URL, hash_type: Literal["md5", "sha256"], hash_value: str
+        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
         downloaded = await self.manager.db_manager.hash_table.check_hash_exists(hash_type, hash_value)
         if downloaded:
-            url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
+            url = _url(scrape_item)
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
         return downloaded
@@ -565,17 +560,19 @@ class Crawler(HTTPClientProxy, ABC):
                 return get_filename_and_ext(filename + assume_ext, forum, mime_type)
             raise
 
-    def check_album_results(self, url: URL, album_results: dict[str, Any]) -> bool:
+    @final
+    def check_album_results(self, url: AbsoluteHttpURL, album_results: dict[str, Any]) -> bool:
         """Checks whether an album has completed given its domain and album id."""
         if not album_results:
             return False
-        url_path = self.create_db_path(url)
+        url_path = self.__db_path__(url)
         if url_path in album_results and album_results[url_path] != 0:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
             return True
         return False
 
+    @final
     def create_title(self, title: str, album_id: str | None = None, thread_id: int | None = None) -> str:
         """Creates the title for the scrape item."""
         if not title:
@@ -602,6 +599,7 @@ class Crawler(HTTPClientProxy, ABC):
     def separate_posts(self) -> bool:
         return self.manager.config.download_options.separate_posts
 
+    @final
     def create_separate_post_title(
         self,
         title: str | None = None,
@@ -622,7 +620,7 @@ class Crawler(HTTPClientProxy, ABC):
 
     @classmethod
     def parse_url(
-        cls, link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
+        cls, link_str: yarl.URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
     ) -> AbsoluteHttpURL:
         """Wrapper around `utils.parse_url` to use `self.PRIMARY_URL` as base"""
         base = relative_to or cls.PRIMARY_URL
@@ -631,7 +629,8 @@ class Crawler(HTTPClientProxy, ABC):
             trim = cls.DEFAULT_TRIM_URLS
         return parse_url(link_str, base, trim=trim)
 
-    def update_cookies(self, cookies: dict[str, Any], url: URL | None = None) -> None:
+    @final
+    def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
         """Update cookies for the provided URL
 
         If `url` is `None`, defaults to `self.PRIMARY_URL`
@@ -639,6 +638,7 @@ class Crawler(HTTPClientProxy, ABC):
         response_url = url or self.PRIMARY_URL
         self.client.client_manager.cookies.update_cookies(cookies, response_url)
 
+    @final
     def iter_tags(
         self,
         soup: Tag,
@@ -670,6 +670,7 @@ class Crawler(HTTPClientProxy, ABC):
             thumb = self.parse_url(thumb_str) if thumb_str and not is_blob_or_svg(thumb_str) else None
             yield thumb, link
 
+    @final
     def iter_children(
         self,
         scrape_item: ScrapeItem,
@@ -910,7 +911,7 @@ class Crawler(HTTPClientProxy, ABC):
         counter = Counter()
         video_stem = Path(video_filename).stem
         for sub in subtitles:
-            link = self.parse_url(sub.url) if isinstance(sub.url, str) else sub.url
+            link = self.parse_url(sub.url)
             counter[sub.lang_code] += 1
             if (count := counter[sub.lang_code]) > 1:
                 suffix = f"{sub.lang_code}.{count}{link.suffix}"
@@ -965,14 +966,15 @@ class Site(NamedTuple):
 _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 
 
-def create_crawlers(urls: Iterable[str] | Iterable[yarl.URL], base_crawler: type[_CrawlerT]) -> set[type[_CrawlerT]]:
+def create_crawlers(
+    urls: Iterable[str] | Iterable[AbsoluteHttpURL], base_crawler: type[_CrawlerT]
+) -> set[type[_CrawlerT]]:
     """Creates new subclasses of the base crawler from the urls"""
     return {_create_subclass(url, base_crawler) for url in urls}
 
 
-def _create_subclass(url: yarl.URL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
-    if isinstance(url, str):
-        url = AbsoluteHttpURL(url)
+def _create_subclass(url: AbsoluteHttpURL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
+    url = AbsoluteHttpURL(url)
     assert is_absolute_http_url(url)
     primary_url = remove_trailing_slash(url)
     domain = primary_url.host.removeprefix("www.")
