@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Pa
 from aiolimiter import AsyncLimiter
 from typing_extensions import deprecated
 
-from cyberdrop_dl import constants
 from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.crawlers._hls import HLSParser
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
@@ -27,18 +26,15 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem,
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import css, dates, m3u8
+from cyberdrop_dl.utils.filepath import compose_filename, get_filename_and_ext, remove_file_id
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
     error_handling_context,
     error_handling_wrapper,
     get_download_path,
-    get_filename_and_ext,
     is_absolute_http_url,
     is_blob_or_svg,
     parse_url,
-    remove_file_id,
-    sanitize_filename,
-    truncate_str,
 )
 
 if TYPE_CHECKING:
@@ -429,7 +425,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
         ext = ext or Path(filename).suffix
         if self.DOMAIN in ["cyberdrop"]:
-            custom_filename = remove_file_id(self.manager, filename, ext)
+            custom_filename = remove_file_id(filename, ext)
 
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
         media_item = MediaItem.from_item(
@@ -565,10 +561,10 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         If that fails, appends `assume_ext` and tries again, but only if the user had exclude_files_with_no_extension = `False`
         """
         try:
-            return get_filename_and_ext(filename, forum, mime_type)
+            return get_filename_and_ext(filename, mime_type, xenforo=forum)
         except NoExtensionError:
             if self.allow_no_extension and assume_ext:
-                return get_filename_and_ext(filename + assume_ext, forum, mime_type)
+                return get_filename_and_ext(filename + assume_ext, mime_type, xenforo=forum)
             raise
 
     @final
@@ -818,7 +814,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     def create_custom_filename(
         self,
-        name: str,
+        name: str,  # can be the full name or just the stem
         ext: str,
         /,
         *,
@@ -827,11 +823,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         audio_codec: str | None = None,
         resolution: Resolution | str | int | None = None,
         hash_string: str | None = None,
-        only_truncate_stem: bool = True,
     ) -> str:
-        calling_args = {name: value for name, value in locals().items() if value is not None and name not in ("self",)}
-        # remove OS separators (if any)
-        stem = sanitize_filename(Path(name).as_posix().replace("/", "-")).strip().removesuffix(ext).strip()
 
         def extra_info() -> Generator[str]:
             if _include.file_id and file_id:
@@ -849,15 +841,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 assert any(hash_string.startswith(x) for x in _HASH_PREFIXES), f"Invalid: {hash_string = }"
                 yield hash_string
 
-        filename, had_invalid_chars = _make_custom_filename(stem, ext, list(extra_info()), only_truncate_stem)
-        if had_invalid_chars:
-            msg = (
-                f"Custom filename creation seems to be broken. "
-                f"Important information was removed while creating a filename. "
-                f"\n{calling_args}"
-            )
-            self.log.warning(msg)
-        return filename
+        return compose_filename(name, ext, *extra_info())
 
     @final
     def handle_subs(self, scrape_item: ScrapeItem, video_filename: str, subtitles: Iterable[ISO639Subtitle]) -> None:
@@ -889,24 +873,6 @@ def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:
     if isinstance(hosts, str):
         hosts = (hosts,)
     return tuple(sorted({host.removeprefix("www.") for host in hosts}))
-
-
-def _make_custom_filename(stem: str, ext: str, extra_info: list[str], only_truncate_stem: bool) -> tuple[str, bool]:
-    truncate_len = constants.MAX_NAME_LENGTHS["FILE"] - len(ext)
-    invalid_extra_info_chars = False
-    if extra_info:
-        extra_info_str = "".join(f"[{info}]" for info in extra_info)
-        clean_extra_info_str = sanitize_filename(extra_info_str)
-        invalid_extra_info_chars = clean_extra_info_str != extra_info_str
-        if only_truncate_stem and (new_truncate_len := truncate_len - len(clean_extra_info_str) - 1) > 0:
-            truncated_stem = f"{truncate_str(stem, new_truncate_len)} {clean_extra_info_str}"
-        else:
-            truncated_stem = truncate_str(f"{stem} {clean_extra_info_str}", truncate_len)
-
-    else:
-        truncated_stem = truncate_str(stem, truncate_len)
-
-    return f"{truncated_stem}{ext}", invalid_extra_info_chars
 
 
 def _validate_supported_paths(cls: type[Crawler]) -> None:
