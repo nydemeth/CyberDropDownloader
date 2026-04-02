@@ -98,7 +98,7 @@ class ScrapeMapper:
     async def start_real_debrid(self) -> None:
         """Starts RealDebrid."""
         self.existing_crawlers["real-debrid"] = self.real_debrid = real = RealDebridCrawler(self.manager)
-        await real.__async_init__()
+        await real.ready()
 
     @classmethod
     @contextlib.asynccontextmanager
@@ -141,7 +141,6 @@ class ScrapeMapper:
             items_generator = self.load_links()
 
         async for item in items_generator:
-            await self.manager.states.RUNNING.wait()
             item.children_limits = self.manager.config_manager.settings_data.download_options.maximum_number_of_children
             if self.filter_items(item):
                 if item_limit and self.count >= item_limit:
@@ -234,8 +233,7 @@ class ScrapeMapper:
         crawler_match = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
 
         if crawler_match:
-            if not crawler_match.ready:
-                await crawler_match.__async_init__()
+            await crawler_match.ready()
             self.manager.task_group.create_task(crawler_match.run(scrape_item))
             return
 
