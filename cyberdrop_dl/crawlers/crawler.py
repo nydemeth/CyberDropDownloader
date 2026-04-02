@@ -27,7 +27,6 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem,
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import css, dates, m3u8
-from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
     error_handling_context,
@@ -78,6 +77,7 @@ class _PlaceHolderConfigInclude:
 
 
 _include = _PlaceHolderConfigInclude()
+
 
 _DB_PATH_BUILDERS: MappingProxyType[str, Callable[[AbsoluteHttpURL], str]] = MappingProxyType(
     {
@@ -135,6 +135,15 @@ class Registry:
                 cls._import_from(sub_module)
 
 
+class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
+    def __init__(self, crawler_name: str) -> None:
+        self._crawler_name: str = crawler_name
+        super().__init__(logger)
+
+    def process(self, msg: object, kwargs: Any) -> tuple[str, Any]:
+        return f"[{self._crawler_name}] {msg}", kwargs
+
+
 class Crawler(HTTPClientProxy, HLSParser, ABC):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
@@ -166,11 +175,10 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
         self.disabled: bool = False
-        self.logged_in: bool = False
+        self._logged_in: bool = False
         self._scraped_items: set[str] = set()
 
-        self.log = log
-        self.log_debug = log_debug
+        self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
@@ -282,7 +290,12 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         """Here goes the main logic to parse URL paths.
 
-        This method MUST NOT raise any exceptions other that ValueError to indiated that the path is not supported"""
+        This method MUST NOT raise any exceptions other that ValueError to indicate that the path is not supported"""
+
+    @final
+    @property
+    def log(self) -> _CrawlerLogger:
+        return self._logger
 
     @final
     @property
@@ -310,7 +323,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         try:
             yield
         except Exception:
-            logger.error(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled")
+            self.log.error(f"{msg}. Crawler has been disabled")
             self.disabled = True
             raise
 
@@ -361,7 +374,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @contextlib.contextmanager
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
-        logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}")
+        self.log.info(f"Scraping {url}")
         task_id = self.manager.progress_manager.scraping_progress.add_task(url)
         try:
             yield task_id
@@ -839,11 +852,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         filename, had_invalid_chars = _make_custom_filename(stem, ext, list(extra_info()), only_truncate_stem)
         if had_invalid_chars:
             msg = (
-                f"Custom filename creation for {self.FOLDER_DOMAIN} seems to be broken. "
+                f"Custom filename creation seems to be broken. "
                 f"Important information was removed while creating a filename. "
                 f"\n{calling_args}"
             )
-            logger.warning(msg)
+            self.log.warning(msg)
         return filename
 
     @final
