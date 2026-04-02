@@ -595,7 +595,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
-        title = " ".join(title.split(""))
+        title = " ".join(title.split(" "))
         return title
 
     @final
