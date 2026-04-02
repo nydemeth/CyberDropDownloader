@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import aiofiles
 import rich
@@ -14,7 +14,6 @@ from cyberdrop_dl.utils.logger import log_spacer
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.manager import Manager
     from cyberdrop_dl.models import AppriseURL
 
@@ -70,7 +69,7 @@ async def send_webhook_message(manager: Manager) -> None:
         return
 
     rich.print("\nSending Webhook Notifications.. ")
-    url = cast("AbsoluteHttpURL", webhook.url.get_secret_value())
+    url = str(webhook.url.get_secret_value())
     form = await _prepare_form(webhook, manager.config.logs.main_log)
 
     result = constants.NotificationResult.FAILED.value
