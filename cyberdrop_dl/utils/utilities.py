@@ -10,7 +10,7 @@ import os
 import platform
 import re
 import sys
-from collections.abc import Generator, Mapping
+from collections.abc import Generator
 from functools import partial, wraps
 from http import HTTPStatus
 from pathlib import Path
@@ -22,7 +22,7 @@ from typing import (
     Concatenate,
     ParamSpec,
     Protocol,
-    SupportsInt,
+    Self,
     TypeGuard,
     TypeVar,
     cast,
@@ -48,29 +48,50 @@ from cyberdrop_dl.utils import json
 from cyberdrop_dl.utils.logger import log_with_color
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator, Iterable, Mapping
+    from collections.abc import Callable, Coroutine, Generator, Iterable
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
     from cyberdrop_dl.managers.manager import Manager
 
-    _P = ParamSpec("_P")
-    _T = TypeVar("_T")
-    _R = TypeVar("_R")
-
-    class Dataclass(Protocol):
-        __dataclass_fields__: ClassVar[dict[str, Any]]
-
     class _HasManager(Protocol):
         manager: Manager
 
     _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
-    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
+    _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | URL)
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+class Dataclass(Protocol):
+    __dataclass_fields__: ClassVar[dict[str, Any]]
 
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
+
+_FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
+
+
+def _fields(cls: type) -> tuple[str, ...]:
+    if fields := _FIELDS_CACHE.get(cls):
+        return fields
+    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls))
+    return fields
+
+
+class DictDataclass(Dataclass, Protocol):
+    @classmethod
+    def filter_dict(cls, data: dict[str, Any], /) -> dict[str, Any]:
+        return {name: data.get(name) for name in _fields(cls)}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], /) -> Self:
+        return cls(**cls.filter_dict(data))
+
+
 _BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
 
@@ -145,32 +166,32 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R],
-) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R]: ...
+    func: Callable[Concatenate[_HasManagerT, _Origin, _P], _R],
+) -> Callable[Concatenate[_HasManagerT, _Origin, _P], _R]: ...
 
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]],
-) -> Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]]: ...
+    func: Callable[Concatenate[_HasManagerT, _Origin, _P], Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, _Origin, _P], Coroutine[None, None, _R]]: ...
 
 
 def error_handling_wrapper(
-    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]],
-) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]]:
+    func: Callable[Concatenate[_HasManagerT, _Origin, _P], _R | Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, _Origin, _P], _R | Coroutine[None, None, _R]]:
     """Wrapper handles errors for url scraping."""
 
     if inspect.iscoroutinefunction(func):
 
         @wraps(func)
-        async def async_wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        async def async_wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return async_wrapper
 
     @wraps(func)
-    def wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
             assert not inspect.isawaitable(result)
@@ -276,7 +297,7 @@ def check_for_partial_files(manager: Manager) -> None:
         log_yellow("There are partial downloads in the downloads folder")
 
 
-def delete_empty_folders(manager: Manager):
+def delete_empty_folders(manager: Manager) -> None:
     """Deletes empty folders efficiently."""
     log_yellow("Checking for empty folders...")
     purge_dir_tree(manager.config.files.download_folder)
@@ -284,12 +305,6 @@ def delete_empty_folders(manager: Manager):
     sorted_folder = manager.config.sorting.sort_folder
     if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
         purge_dir_tree(sorted_folder)
-
-
-def get_valid_dict(dataclass: Dataclass | type[Dataclass], info: Mapping[str, Any]) -> dict[str, Any]:
-    """Remove all keys that are not fields in the dataclass"""
-    fields_names = [f.name for f in dataclasses.fields(dataclass)]
-    return {name: info[name] for name in fields_names if name in info}
 
 
 def get_text_between(original_text: str, start: str, end: str) -> str:
@@ -444,40 +459,6 @@ def unique(iterable: Iterable[_T], *, hashable: bool = True) -> Iterable[_T]:
             yield value
 
 
-def get_valid_kwargs(
-    func: Callable[..., Any], kwargs: Mapping[str, _T], accept_kwargs: bool = True
-) -> Mapping[str, _T]:
-    """Get the subset of ``kwargs`` that are valid params for ``func`` and their values are not `None`
-
-    If func takes **kwargs, returns everything"""
-    params = inspect.signature(func).parameters
-    if accept_kwargs and any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-        return kwargs
-
-    return {k: v for k, v in kwargs.items() if k in params.keys() and v is not None}
-
-
-def call_w_valid_kwargs(cls: Callable[..., _R], kwargs: Mapping[str, Any]) -> _R:
-    return cls(**get_valid_kwargs(cls, kwargs))
-
-
-def type_adapter(func: Callable[..., _R], aliases: dict[str, str] | None = None) -> Callable[[dict[str, Any]], _R]:
-    """Like `pydantic.TypeAdapter`, but without type validation of attributes (faster)
-
-    Ignores attributes with `None` as value"""
-    param_names = inspect.signature(func).parameters.keys()
-
-    def call(kwargs: dict[str, Any]):
-        if aliases:
-            for original, alias in aliases.items():
-                if original not in kwargs:
-                    kwargs[original] = kwargs.get(alias)
-
-        return func(**{name: value for name in param_names if (value := kwargs.get(name)) is not None})
-
-    return call
-
-
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
     data = bytearray(b_input ^ b_key for b_input, b_key in zip(encrypted_data, itertools.cycle(key)))
     return data.decode("utf-8", errors="ignore")
@@ -485,42 +466,3 @@ def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
 
 log_yellow = partial(log_with_color, style="yellow", level=20)
 log_red = partial(log_with_color, style="red", level=20)
-
-
-def filter_query(
-    query: Mapping[str, str | SupportsInt | float],
-    *keep: str | tuple[str, str | SupportsInt | float],
-) -> dict[str, str | SupportsInt | float]:
-    """Returns a dictionary with only the `keep` keys.
-
-     Each `keep` argument can be either:
-    - A string: The key will be kept only if was present in `query`
-    - A tuple `(key, default_value)`: If `key` is not found in `query`, it will be added with `default_value`.
-    """
-
-    defaults: dict[str, str | SupportsInt | float] = {}
-    keys: set[str] = set()
-    for key in keep:
-        if isinstance(key, str):
-            keys.add(key)
-            continue
-        name, default = key
-        defaults[name] = default
-        keys.add(name)
-
-    def get_key(key: str):
-        if key in query:
-            return query[key]
-        return defaults.get(key)
-
-    return {k: value for k in sorted(keys) if (value := get_key(k)) is not None}
-
-
-def keep_query_params(url: AbsoluteHttpURL, *keep: str | tuple[str, str | SupportsInt | float]) -> AbsoluteHttpURL:
-    """Returns a new URL with only the `keep` keys as query params.
-
-    Each `keep` argument can be either:
-    - A string: The key will be kept only if was present in `url.query`
-    - A tuple `(key, default_value)`: If `key` is not found in `url.query`, it will be added with `default_value`.
-    """
-    return url.with_query(filter_query(url.query, *keep))
