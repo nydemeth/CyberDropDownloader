@@ -62,7 +62,10 @@ class Sorter:
         logger.info("Sorting downloads...", extra={"color": "cyan"})
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
-        self.tui._progress.disable = show_tui
+        if not show_tui:
+            await self._run()
+            return
+
         with self.tui:
             await self._run()
 
