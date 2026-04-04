@@ -127,7 +127,7 @@ class HlsSegment(NamedTuple):
     url: AbsoluteHttpURL
 
 
-@dataclass(unsafe_hash=True, slots=True, kw_only=True)
+@dataclass(slots=True, kw_only=True)
 class MediaItem:
     url: AbsoluteHttpURL
     domain: str
@@ -165,22 +165,23 @@ class MediaItem:
     uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
     extra_info: dict[str, Any] = field(init=False, default_factory=dict)
 
+    id: tuple[str, ...] = field(init=False)
     base64_id: str = field(init=False)
 
     def __post_init__(self) -> None:
+        self.id = self.domain, self.db_path
         if self.url.scheme == "metadata":
             self.db_path = ""
+            self.id = *self.id, "metadata"
 
         if self.uploaded_at:
             assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
             self.uploaded_at_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
 
-        self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode()
+        self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode().rstrip("=")
 
-    @property
-    def id(self) -> tuple[str, str]:
-        assert self.db_path
-        return self.domain, self.db_path
+    def __hash__(self) -> int:
+        return hash(self.id)
 
     @property
     def real_url(self) -> AbsoluteHttpURL:
