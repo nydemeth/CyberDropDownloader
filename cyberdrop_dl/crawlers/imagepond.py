@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+import dataclasses
+from typing import TYPE_CHECKING, ClassVar, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -8,6 +9,8 @@ from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from bs4 import BeautifulSoup
+
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -18,6 +21,39 @@ class Selector:
     NEXT_PAGE = "a[rel=next]"
     ARCHIVE = "[x-data='archiveViewer()']"
     DIRECT_DL = "#embed-direct"
+
+
+@dataclasses.dataclass(slots=True)
+class File:
+    name: str
+    mime: str | None
+    uploaded_at: str
+    assume_ext: str
+    source: str
+    is_archive: bool
+
+    @classmethod
+    def parse(cls, soup: BeautifulSoup) -> Self:
+        og = open_graph.parse(soup)
+        mimetype = None
+        is_archive = bool(soup.select_one(Selector.ARCHIVE))
+
+        if is_archive:
+            # source = self.parse_url(scrape_item.url / "download/file")
+            assume_ext, source = ".zip", css.select(soup, Selector.DIRECT_DL, "value")
+        elif og.video:
+            assume_ext, mimetype, source = ".mp4", og.video_type, og.video
+        else:
+            assume_ext, source = ".jpg", og.image
+
+        return cls(
+            name=og.title,
+            mime=mimetype,
+            uploaded_at=css.select_text(soup, Selector.UPLOAD_DATE),
+            assume_ext=assume_ext,
+            source=source,
+            is_archive=is_archive,
+        )
 
 
 class ImagePondCrawler(Crawler):
@@ -76,17 +112,16 @@ class ImagePondCrawler(Crawler):
             scrape_item.url = resp.url
             soup = await resp.soup()
 
-        og = open_graph.parse(soup)
-
-        if soup.select_one(Selector.ARCHIVE):
-            # source = self.parse_url(scrape_item.url / "download/file")
-            source = self.parse_url(css.select(soup, Selector.DIRECT_DL, "value"))
-        else:
-            source = self.parse_url(og.video or og.image)
-
-        scrape_item.uploaded_at = self.parse_date(css.select_text(soup, Selector.UPLOAD_DATE), "%b %d, %Y")
-        filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.get("video_type"))
-        await self.handle_file(source, scrape_item, og.title, ext, custom_filename=filename)
+        file = File.parse(soup)
+        scrape_item.uploaded_at = self.parse_date(file.uploaded_at, "%b %d, %Y")
+        filename, ext = self.get_filename_and_ext(file.name, assume_ext=file.assume_ext, mime_type=file.mime)
+        await self.handle_file(
+            self.parse_url(file.source),
+            scrape_item,
+            file.name,
+            ext,
+            custom_filename=filename,
+        )
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem) -> None:
