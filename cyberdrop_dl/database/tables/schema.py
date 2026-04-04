@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import TYPE_CHECKING
 
@@ -19,9 +20,9 @@ CURRENT_APP_SCHEMA_VERSION = "8.10.0"
 logger = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
 class SchemaVersionTable:
-    def __init__(self, database: Database) -> None:
-        self._database = database
+    _database: Database
 
     @property
     def db_conn(self) -> aiosqlite.Connection:
@@ -52,7 +53,7 @@ class SchemaVersionTable:
         await self.db_conn.execute(query, (CURRENT_APP_SCHEMA_VERSION,))
         await self.db_conn.commit()
 
-    async def startup(self) -> None:
+    async def create(self) -> None:
         logger.info(f"Expected database schema version: {CURRENT_APP_SCHEMA_VERSION}")
         version = await self.get_version()
         logger.info(f"Database reports installed version: {version}")

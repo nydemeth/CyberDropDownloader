@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from sqlite3 import IntegrityError, Row
 from typing import TYPE_CHECKING, cast
@@ -22,16 +23,15 @@ _FETCH_MANY_SIZE: int = 1000
 logger = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
 class HistoryTable:
-    def __init__(self, database: Database) -> None:
-        self._database = database
+    _database: Database
 
     @property
     def db_conn(self) -> aiosqlite.Connection:
         return self._database._db_conn
 
-    async def startup(self) -> None:
-        """Startup process for the HistoryTable."""
+    async def create(self) -> None:
         from cyberdrop_dl.crawlers import cyberdrop, jpg5, redgifs, turbovid
 
         def try_wrap(fn):
