@@ -54,7 +54,7 @@ class SortingUI:
             self._tasks_map[name] = self._progress.add_task(f"[{color}] {name.capitalize()} :{emoji}: ", total=None)
 
         def file_row(name: str, file: Path) -> Text:
-            return Text.assemble((f"{name}: ", "green"), Text.from_markup(hyperlink(file)))
+            return Text.assemble((f"{name}: ", "green"), hyperlink(file))
 
         self._total: int = 0
 

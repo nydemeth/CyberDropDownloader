@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from rich.live import Live
 from rich.markup import escape
 from rich.progress import Progress, Task, TaskID
+from rich.text import Text
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -21,9 +22,9 @@ def create_live(renderable: RenderableType) -> Live:
     )
 
 
-def hyperlink(file_path: Path, text: str | None = None) -> str:
+def hyperlink(file_path: Path, text: str | None = None) -> Text:
     text = escape(text or str(file_path))
-    return f"[blue][link={file_path.as_uri()}]{text}[/link][/blue]"
+    return Text.from_markup(f"[link={file_path.as_uri()}]{text}[/link]", style="blue")
 
 
 class DictProgress(Progress):

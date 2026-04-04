@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 _CONSOLE = Console()
 _ERROR = Text("ERROR: ", style="bold red")
+_WARNING = Text("WARNING: ", style="bold yellow")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
 _changelog: str = ""
 
@@ -74,9 +75,10 @@ class ProgramUI:
     def _sort_files(self) -> None:
         sorter = Sorter.from_manager(self.manager)
         _CONSOLE.print(
-            f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'", style="bold red"
+            _WARNING,
+            f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
         )
-        answer = input("Type 'YES' to proceed")
+        answer = _ask_text("Type 'YES' to proceed")
         if answer.strip().casefold() == "yes":
             asyncio.run(sorter.run())
             _enter_to_continue()
@@ -122,7 +124,11 @@ def _view_changelog() -> None:
 def _app_header(manager: Manager) -> None:
     _clear_term()
     _CONSOLE.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
-    _CONSOLE.print(f"config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
+    _CONSOLE.rule(style="blue")
+    _CONSOLE.print("Config file:  ", hyperlink(manager.config_manager.settings))
+    _CONSOLE.print("Database file:", hyperlink(manager.appdata.db_file))
+    _CONSOLE.print("URLs file:    ", hyperlink(manager.config.files.input_file))
+    _CONSOLE.line()
 
 
 def _ask_choices(choices: Iterable[str]) -> str:
@@ -143,6 +149,10 @@ def _ask(question: inquirer.questions.Question) -> str:
     )
     assert answers
     return next(iter(answers.values()))
+
+
+def _ask_text(text: str) -> str:
+    return _ask(inquirer.Text("text", message=text))
 
 
 def _ask_dir(message: str = "Select dir path", default: Path = Path.home()) -> Path:  # noqa: B008
