@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
 
 
-console = Console()
+_CONSOLE = Console()
 _ERROR = Text("ERROR: ", style="bold red")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
 _changelog: str = ""
@@ -46,7 +46,7 @@ class ProgramUI:
                 "Create file hashes": self._scan_and_create_hashes,
                 "Sort files in download folder": self._sort_files,
                 "Edit URLs.txt": self._edit_urls,
-                "View changelog": self._view_changelog,
+                "View changelog": _view_changelog,
                 "Exit": lambda: sys.exit(0),
             }
         )
@@ -73,7 +73,7 @@ class ProgramUI:
 
     def _sort_files(self) -> None:
         sorter = Sorter.from_manager(self.manager)
-        console.print(
+        _CONSOLE.print(
             f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'", style="bold red"
         )
         answer = input("Type 'YES' to proceed")
@@ -81,31 +81,23 @@ class ProgramUI:
             asyncio.run(sorter.run())
             _enter_to_continue()
 
-    def _view_changelog(self) -> None:
-        global _changelog
-
-        _clear_term()
-
-        if not _changelog:
-            try:
-                _changelog = asyncio.run(_get_changelog())
-            except Exception:
-                console.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION")
-                _enter_to_continue()
-                return None
-
-        with console.pager(links=True):
-            console.print(Markdown(_changelog, justify="left"))
-
     def _edit_urls(self) -> None:
         try:
             text_editor.open(self.manager.config.files.input_file)
         except ValueError as e:
-            console.print(_ERROR, str(e))
+            _CONSOLE.print(_ERROR, str(e))
             _enter_to_continue()
 
 
-async def _get_changelog() -> str:
+def changelog() -> str:
+    global _changelog
+    if not _changelog:
+        _changelog = asyncio.run(_fetch_changelog())
+
+    return _changelog
+
+
+async def _fetch_changelog() -> str:
     async with aiohttp.request(
         "GET",
         _CHANGELOG_URL,
@@ -114,10 +106,23 @@ async def _get_changelog() -> str:
         return await response.text()
 
 
+def _view_changelog() -> None:
+    _clear_term()
+    try:
+        _changelog = changelog()
+    except Exception:
+        _CONSOLE.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION")
+        _enter_to_continue()
+        return None
+
+    with _CONSOLE.pager(links=True):
+        _CONSOLE.print(Markdown(_changelog, justify="left"))
+
+
 def _app_header(manager: Manager) -> None:
     _clear_term()
-    console.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
-    console.print(f"config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
+    _CONSOLE.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
+    _CONSOLE.print(f"config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
 
 
 def _ask_choices(choices: Iterable[str]) -> str:
@@ -157,8 +162,8 @@ def _ask_dir(message: str = "Select dir path", default: Path = Path.home()) -> P
             if not path.is_dir():
                 raise NotADirectoryError(answer)
 
-        except (NotADirectoryError, FileNotFoundError) as e:
-            console.print(_ERROR, repr(e))
+        except OSError as e:
+            _CONSOLE.print(_ERROR, repr(e))
         else:
             return path
 
