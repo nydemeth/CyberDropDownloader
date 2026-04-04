@@ -111,14 +111,14 @@ async def _fetch_changelog() -> str:
 def _view_changelog() -> None:
     _clear_term()
     try:
-        _changelog = changelog()
-    except Exception:
-        _CONSOLE.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION")
+        content = changelog()
+    except Exception as e:
+        _CONSOLE.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION", repr(e))
         _enter_to_continue()
         return None
 
     with _CONSOLE.pager(links=True):
-        _CONSOLE.print(Markdown(_changelog, justify="left"))
+        _CONSOLE.print(Markdown(content, justify="left"))
 
 
 def _app_header(manager: Manager) -> None:
@@ -155,27 +155,51 @@ def _ask_text(text: str) -> str:
     return _ask(inquirer.Text("text", message=text))
 
 
-def _ask_dir(message: str = "Select dir path", default: Path = Path.home()) -> Path:  # noqa: B008
+def _ask_dir(message: str = "Select dir path", default: Path | None = None) -> Path:
+
+    def is_dir(path: Path) -> None:
+        if not path.is_dir():
+            raise NotADirectoryError(str(path))
+
+    return _ask_path(message, default, validate=is_dir)
+
+
+def _ask_file(message: str = "Select file", default: Path | None = None) -> Path:
+
+    def is_file(path: Path) -> None:
+        if not path.is_file():
+            raise IsADirectoryError(str(path))
+
+    return _ask_path(message, default, validate=is_file)
+
+
+def _ask_path(
+    message: str = "Select path",
+    default: Path | None = None,
+    *,
+    validate: Callable[[Path], None] | None = None,
+    must_exists: bool = True,
+) -> Path:
     while True:
         try:
             answer = _ask(
                 inquirer.Text(
-                    "dir",
+                    "path",
                     message=message,
-                    default=default,
+                    default=default or Path.home(),
                 )
             )
 
-            path = Path(answer)
-            if not path.exists():
+            path = Path(answer).expanduser()
+            if must_exists and not path.exists():
                 raise FileNotFoundError(answer)
-            if not path.is_dir():
-                raise NotADirectoryError(answer)
+            if validate:
+                validate(path)
 
         except OSError as e:
             _CONSOLE.print(_ERROR, repr(e))
         else:
-            return path
+            return path.resolve()
 
 
 def _enter_to_continue() -> None:
