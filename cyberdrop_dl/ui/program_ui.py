@@ -1,91 +1,77 @@
 from __future__ import annotations
 
 import asyncio
-import functools
+import dataclasses
+import os
 import sys
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from requests import request
+import aiohttp
+import inquirer
+import inquirer.questions
+from inquirer.themes import BlueComposure
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.text import Text
 
+from cyberdrop_dl import __version__
 from cyberdrop_dl.clients.hash_client import hash_directory_scanner
-from cyberdrop_dl.ui.prompts import user_prompts
-from cyberdrop_dl.ui.prompts.basic_prompts import ask_dir_path, enter_to_continue
-from cyberdrop_dl.ui.prompts.defaults import DONE_CHOICE, EXIT_CHOICE
+from cyberdrop_dl.progress import hyperlink
 from cyberdrop_dl.utils import text_editor
 from cyberdrop_dl.utils.sorting import Sorter
-from cyberdrop_dl.utils.utilities import clear_term
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
-    from pathlib import Path
-
-    from InquirerPy.base.control import Choice
+    from collections.abc import Callable, Iterable
 
     from cyberdrop_dl.managers.manager import Manager
 
 
 console = Console()
-ERROR_PREFIX = Text("ERROR: ", style="bold red")
+_ERROR = Text("ERROR: ", style="bold red")
+_CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
+_changelog: str = ""
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
 class ProgramUI:
-    def __init__(self, manager: Manager, run: bool = True) -> None:
-        self.manager = manager
-        if run:
-            self.run()
+    manager: Manager
+    choices: dict[str, Callable[[], bool | None]] = dataclasses.field(init=False, default_factory=dict)
 
-    @staticmethod
-    def print_error(msg: str, critical: bool = False) -> None:
-        text = ERROR_PREFIX + msg
-        console.print(text, style="bold red" if critical else None)
-        if critical:
-            sys.exit(1)
-        enter_to_continue()
+    def __post_init__(self) -> None:
+        self.choices.update(
+            {
+                "Download": lambda: True,
+                "Retry failed downloads": self._retry_failed_download,
+                "Create file hashes": self._scan_and_create_hashes,
+                "Sort files in download folder": self._sort_files,
+                "Edit URLs.txt": self._edit_urls,
+                "View changelog": self._view_changelog,
+                "Exit": lambda: sys.exit(0),
+            }
+        )
 
-    def run(self) -> bool | None:
-        done = False
-        while not done:
-            done = self._run()
-        return done
-
-    def _run(self) -> bool | None:
-        """Program UI."""
-        clear_term()
-        options_map = {
-            1: self._download,
-            2: self._retry_failed_download,
-            3: self._scan_and_create_hashes,
-            4: self._sort_files,
-            5: self._edit_urls,
-            6: self._view_changelog,
-        }
-
-        answer = user_prompts.main_prompt(self.manager)
-        result = self._process_answer(answer, options_map)
-        return_to_main = result and result != DONE_CHOICE
-        if return_to_main:
-            clear_term()
-        return return_to_main
-
-    def _download(self) -> bool:
-        """Starts download process."""
-        return True
+    def run(self) -> None:
+        while True:
+            _app_header(self.manager)
+            answer = _ask_choices(self.choices)
+            done = self.choices[answer]()
+            if done:
+                break
 
     def _retry_failed_download(self) -> bool:
-        """Sets retry failed and starts download process."""
         self.manager.parsed_args.cli_only_args.retry_failed = True
         return True
 
     def _scan_and_create_hashes(self) -> None:
-        """Scans a folder and creates hashes for all of its files."""
-        path = ask_dir_path("Select the directory to scan", default=str(self.manager.config.files.download_folder))
-        hash_directory_scanner(self.manager, path)
+        path = _ask_dir(
+            "Select the directory to scan",
+            default=self.manager.config.files.download_folder,
+        )
+        asyncio.run(hash_directory_scanner(self.manager, path))
+        _enter_to_continue()
 
     def _sort_files(self) -> None:
-        """Sort files in download folder"""
         sorter = Sorter.from_manager(self.manager)
         console.print(
             f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'", style="bold red"
@@ -93,58 +79,95 @@ class ProgramUI:
         answer = input("Type 'YES' to proceed")
         if answer.strip().casefold() == "yes":
             asyncio.run(sorter.run())
-            enter_to_continue()
+            _enter_to_continue()
 
     def _view_changelog(self) -> None:
-        clear_term()
-        try:
-            changelog_content = _get_changelog()
-        except Exception:
-            self.print_error("UNABLE TO GET CHANGELOG INFORMATION")
-            return None
+        global _changelog
+
+        _clear_term()
+
+        if not _changelog:
+            try:
+                _changelog = asyncio.run(_get_changelog())
+            except Exception:
+                console.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION")
+                _enter_to_continue()
+                return None
 
         with console.pager(links=True):
-            console.print(Markdown(changelog_content, justify="left"))
+            console.print(Markdown(_changelog, justify="left"))
 
     def _edit_urls(self) -> None:
-        self._open_in_text_editor(self.manager.config.files.input_file, reload_config=False)
-
-    def _open_in_text_editor(self, file_path: Path, *, reload_config: bool = True):
         try:
-            text_editor.open(file_path)
+            text_editor.open(self.manager.config.files.input_file)
         except ValueError as e:
-            self.print_error(str(e))
-            return
-        if reload_config:
-            console.print("Revalidating config, please wait..")
-            self.manager.config_manager.reload_config()
-
-    def _process_answer(
-        self, answer: Any, options_map: Mapping[int, Callable[[], bool | None]]
-    ) -> Choice | bool | None:
-        """Checks prompt answer and executes corresponding function."""
-        if answer == EXIT_CHOICE.value:
-            sys.exit(0)
-        if answer == DONE_CHOICE.value:
-            return DONE_CHOICE
-
-        function_to_call = options_map.get(answer)
-        if not function_to_call:
-            self.print_error("Something went wrong. Please report it to the developer", critical=True)
-            sys.exit(1)
-
-        return function_to_call()
+            console.print(_ERROR, str(e))
+            _enter_to_continue()
 
 
-@functools.cache
-def _get_changelog() -> str:
-    """Get latest changelog file from github. Returns its content."""
+async def _get_changelog() -> str:
+    async with aiohttp.request(
+        "GET",
+        _CHANGELOG_URL,
+        raise_for_status=True,
+    ) as response:
+        return await response.text()
 
-    url = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
-    with request("GET", url, timeout=15) as response:
-        response.raise_for_status()
-        content = response.text
 
-    lines = content.splitlines()
-    # remove keep_a_changelog disclaimer
-    return "\n".join(lines[:21] + lines[25:])
+def _app_header(manager: Manager) -> None:
+    _clear_term()
+    console.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
+    console.print(f"config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
+
+
+def _ask_choices(choices: Iterable[str]) -> str:
+    return _ask(
+        inquirer.List(
+            "main",
+            message="What would you like to do",
+            choices=list(choices),
+        )
+    )
+
+
+def _ask(question: inquirer.questions.Question) -> str:
+    answers = inquirer.prompt(
+        [question],
+        raise_keyboard_interrupt=True,
+        theme=BlueComposure(),
+    )
+    assert answers
+    return next(iter(answers.values()))
+
+
+def _ask_dir(message: str = "Select dir path", default: Path = Path.home()) -> Path:  # noqa: B008
+    while True:
+        try:
+            answer = _ask(
+                inquirer.Text(
+                    "dir",
+                    message=message,
+                    default=default,
+                )
+            )
+
+            path = Path(answer)
+            if not path.exists():
+                raise FileNotFoundError(answer)
+            if not path.is_dir():
+                raise NotADirectoryError(answer)
+
+        except (NotADirectoryError, FileNotFoundError) as e:
+            console.print(_ERROR, repr(e))
+        else:
+            return path
+
+
+def _enter_to_continue() -> None:
+    if "pytest" in sys.modules:
+        return
+    _ = input("Press <ENTER> to continue")
+
+
+def _clear_term() -> None:
+    _ = os.system("cls" if os.name == "nt" else "clear")
