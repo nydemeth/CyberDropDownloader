@@ -12,7 +12,7 @@ from cyberdrop_dl import aio, constants, env, storage
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.ui.program_ui import ProgramUI
+from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log_spacer, log_with_color
@@ -180,7 +180,7 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
     manager.startup()
 
     if not manager.parsed_args.cli_only_args.download:
-        ProgramUI(manager).run()
+        program_ui.run(manager)
 
     return manager
 

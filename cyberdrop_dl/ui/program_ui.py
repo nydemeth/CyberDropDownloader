@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import os
 import sys
 from pathlib import Path
@@ -34,69 +33,65 @@ _CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/ma
 _changelog: str = ""
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class ProgramUI:
-    manager: Manager
-    choices: dict[str, Callable[[], bool | None]] = dataclasses.field(init=False, default_factory=dict)
-
-    def __post_init__(self) -> None:
-        self.choices.update(
-            {
-                "Download": lambda: True,
-                "Retry failed downloads": self._retry_failed_download,
-                "Create file hashes": self._scan_and_create_hashes,
-                "Sort files in download folder": self._sort_files,
-                "Edit URLs.txt": self._edit_urls,
-                "View changelog": _view_changelog,
-                "Exit": lambda: sys.exit(0),
-            }
-        )
-
-    def run(self) -> None:
-        while True:
-            _app_header(self.manager)
-            answer = _ask_choices(self.choices)
-            done = self.choices[answer]()
-            if done:
-                break
-
-    def _retry_failed_download(self) -> bool:
-        self.manager.parsed_args.cli_only_args.retry_failed = True
-        return True
-
-    def _scan_and_create_hashes(self) -> None:
-        path = _ask_dir(
-            "Select the directory to scan",
-            default=self.manager.config.files.download_folder,
-        )
-        asyncio.run(hash_directory_scanner(self.manager, path))
-        _enter_to_continue()
-
-    def _sort_files(self) -> None:
-        sorter = Sorter.from_manager(self.manager)
-        _CONSOLE.print(
-            _WARNING,
-            f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
-        )
-        answer = _ask_text("Type 'YES' to proceed")
-        if answer.strip().casefold() == "yes":
-            asyncio.run(sorter.run())
-            _enter_to_continue()
-
-    def _edit_urls(self) -> None:
-        try:
-            text_editor.open(self.manager.config.files.input_file)
-        except ValueError as e:
-            _CONSOLE.print(_ERROR, str(e))
-            _enter_to_continue()
-
-
 def changelog() -> str:
     global _changelog
     if not _changelog:
         _changelog = asyncio.run(_fetch_changelog())
 
     return _changelog
+
+
+def run(manager: Manager) -> None:
+    choices: dict[str, Callable[[Manager], bool | None]] = {
+        "Download": lambda _: True,
+        "Retry failed downloads": _retry_failed_download,
+        "Create file hashes": _scan_and_create_hashes,
+        "Sort files in download folder": _sort_files,
+        "Edit URLs.txt": _edit_urls,
+        "View changelog": lambda _: _view_changelog(),
+        "Exit": lambda _: sys.exit(0),
+    }
+
+    while True:
+        _app_header(manager)
+        answer = _ask_choices(choices)
+        done = choices[answer](manager)
+        if done:
+            break
+
+
+def _retry_failed_download(manager: Manager) -> bool:
+    manager.parsed_args.cli_only_args.retry_failed = True
+    return True
+
+
+def _scan_and_create_hashes(manager: Manager) -> None:
+    path = _ask_dir(
+        "Select the directory to scan",
+        default=manager.config.files.download_folder,
+    )
+    asyncio.run(hash_directory_scanner(manager, path))
+    _enter_to_continue()
+
+
+def _sort_files(manager: Manager) -> None:
+    sorter = Sorter.from_manager(manager)
+    _CONSOLE.print(
+        _WARNING,
+        f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
+    )
+    answer = _ask_text("Type 'YES' to proceed")
+    if answer.strip().casefold() == "yes":
+        asyncio.run(sorter.run())
+        _enter_to_continue()
+
+
+def _edit_urls(manager: Manager) -> None:
+    try:
+        text_editor.open(manager.config.files.input_file)
+    except ValueError as e:
+        _CONSOLE.print(_ERROR, str(e))
+        _enter_to_continue()
 
 
 async def _fetch_changelog() -> str:
