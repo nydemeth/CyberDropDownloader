@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from cyberdrop_dl import __version__, constants, ffmpeg, yaml
 from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
@@ -23,7 +22,7 @@ from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
-from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
+from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
     from asyncio import TaskGroup
@@ -125,31 +124,24 @@ class Manager:
         """Async startup process for the manager."""
 
         self.args_logging()
+        self.async_db_hash_startup()
 
-        if not isinstance(self.client_manager, ClientManager):
-            self.client_manager = ClientManager(self)
-            await self.client_manager.startup()
-
-        await self.async_db_hash_startup()
+        self.client_manager = ClientManager(self)
+        await self.client_manager.startup()
 
         filepath.MAX_FILE_LEN.set(self.config_manager.global_settings_data.general.max_file_name_length)
         filepath.MAX_FOLDER_LEN.set(self.config_manager.global_settings_data.general.max_folder_name_length)
 
-    async def async_db_hash_startup(self) -> None:
-        if not isinstance(self.db_manager, Database):
-            self.db_manager = Database(
-                self.appdata.db_file,
-                self.config.runtime_options.ignore_history,
-            )
-            await self.db_manager.startup()
-        transfer_v5_db_to_v6(self.appdata.db_file)
-        if not isinstance(self.hash_manager, HashManager):
-            self.hash_manager = HashManager(self)
-        if not isinstance(self.live_manager, LiveManager):
-            self.live_manager = LiveManager(self)
-        if not isinstance(self.progress_manager, ProgressManager):
-            self.progress_manager = ProgressManager(self)
-            self.progress_manager.startup()
+    def async_db_hash_startup(self) -> None:
+
+        self.db_manager = Database(
+            self.appdata.db_file,
+            self.config.runtime_options.ignore_history,
+        )
+
+        self.hash_manager = HashManager(self)
+        self.live_manager = LiveManager(self)
+        self.progress_manager = ProgressManager(self)
 
     def process_additive_args(self) -> None:
         cli_general_options = self.parsed_args.global_settings.general
@@ -205,18 +197,9 @@ class Manager:
         )
         logger.info("\n".join(args_info))
 
-    async def async_db_close(self) -> None:
-        "Partial shutdown for managers used for hash directory scanner"
-        self.db_manager = await close_if_defined(self.db_manager)
-        self.hash_manager = constants.NOT_DEFINED
-        self.progress_manager.hash_progress.reset()
-
     async def close(self) -> None:
-        """Closes the manager."""
 
-        await self.async_db_close()
-
-        self.client_manager = await close_if_defined(self.client_manager)
+        await self.client_manager.close()
 
         while self.loggers:
             _, queued_logger = self.loggers.popitem()

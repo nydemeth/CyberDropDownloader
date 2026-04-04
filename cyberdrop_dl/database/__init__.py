@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import dataclasses
+from typing import TYPE_CHECKING, Self
 
 import aiosqlite
 
@@ -10,29 +11,31 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+@dataclasses.dataclass(slots=True)
 class Database:
-    def __init__(self, db_path: Path, ignore_history: bool) -> None:
-        self._db_conn: aiosqlite.Connection
-        self._db_path: Path = db_path
-        self.ignore_history = ignore_history
-        self.history_table: HistoryTable
-        self.hash_table: HashTable
+    _db_path: Path
+    ignore_history: bool
 
-    async def startup(self) -> None:
-        """Startup process for the DBManager."""
-        self._db_conn = await aiosqlite.connect(self._db_path, timeout=20)
-        self._db_conn.row_factory = aiosqlite.Row
+    history_table: HistoryTable = dataclasses.field(init=False)
+    hash_table: HashTable = dataclasses.field(init=False)
+    _schema_versions: SchemaVersionTable = dataclasses.field(init=False)
+    _db_conn: aiosqlite.Connection = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
         self.history_table = HistoryTable(self)
         self.hash_table = HashTable(self)
         self._schema_versions = SchemaVersionTable(self)
 
+    async def __aenter__(self) -> Self:
+        self._db_conn = await aiosqlite.connect(self._db_path, timeout=20)
+        self._db_conn.row_factory = aiosqlite.Row
         await self._pre_allocate()
         await self.history_table.startup()
         await self.hash_table.startup()
         await self._schema_versions.startup()
+        return self
 
-    async def close(self) -> None:
-        """Close the DBManager."""
+    async def __aexit__(self, *_) -> None:
         await self._db_conn.close()
 
     async def _pre_allocate(self) -> None:
