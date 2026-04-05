@@ -4,13 +4,8 @@ import asyncio
 import contextlib
 import logging
 import os
-import shutil
-import subprocess
-import sys
 from dataclasses import field
-from datetime import datetime
-from functools import wraps
-from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, NamedTuple
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
@@ -26,48 +21,19 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     TooManyCrawlerErrors,
 )
+from cyberdrop_dl.utils import dates
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
 logger = logging.getLogger(__name__)
 
-# Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
-WIN_EPOCH_OFFSET = 116444736e9
-MAC_OS_SET_FILE = None
-
-
-# Try to import win32con for Windows constants, fallback to hardcoded values if unavailable
-try:
-    import win32con  # type: ignore[reportMissingModuleSource]
-
-    FILE_WRITE_ATTRIBUTES = 256
-    OPEN_EXISTING = win32con.OPEN_EXISTING
-    FILE_ATTRIBUTE_NORMAL = win32con.FILE_ATTRIBUTE_NORMAL
-    FILE_FLAG_BACKUP_SEMANTICS = win32con.FILE_FLAG_BACKUP_SEMANTICS
-except ImportError:
-    FILE_WRITE_ATTRIBUTES = 256
-    OPEN_EXISTING = 3
-    FILE_ATTRIBUTE_NORMAL = 128
-    FILE_FLAG_BACKUP_SEMANTICS = 33554432
-
-if sys.platform == "win32":
-    from ctypes import byref, windll, wintypes
-
-
-elif sys.platform == "darwin":
-    # SetFile is non standard in macOS. Only users that have xcode installed will have SetFile
-    MAC_OS_SET_FILE = shutil.which("SetFile")
-
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator
+    from collections.abc import Generator
     from pathlib import Path
 
     from cyberdrop_dl.clients.download_client import DownloadClient
     from cyberdrop_dl.managers.manager import Manager
     from cyberdrop_dl.utils.m3u8 import M3U8, Rendition
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class SegmentDownloadResult(NamedTuple):
@@ -83,35 +49,6 @@ KNOWN_BAD_URLS = {
     "https://c.bunkr-cache.se/maintenance-vid.mp4": 503,
     "https://c.bunkr-cache.se/maintenance.jpg": 503,
 }
-
-
-def retry(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[None, None, R]]:
-    """This function is a wrapper that handles retrying for failed downloads."""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs) -> R:
-        self: Downloader = args[0]
-        media_item: MediaItem = args[1]
-        while True:
-            try:
-                return await func(*args, **kwargs)
-            except DownloadError as e:
-                if not e.retry:
-                    raise
-
-                self.attempt_task_removal(media_item)
-                if e.status != 999:
-                    media_item.attempts += 1
-
-                logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
-                if media_item.attempts >= self.max_attempts:
-                    raise
-
-                logger.info(
-                    f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.attempts + 1}"
-                )
-
-    return wrapper
 
 
 GENERIC_CRAWLERS = ".", "no_crawler"
@@ -132,6 +69,28 @@ class Downloader:
         self._file_lock_vault = manager.client_manager.file_locks
         self._ignore_history = manager.config_manager.settings_data.runtime_options.ignore_history
         self._semaphore: asyncio.Semaphore = field(init=False)
+
+    @error_handling_wrapper
+    async def download(self, media_item: MediaItem) -> bool:
+        while True:
+            try:
+                return bool(await self._download(media_item))
+
+            except DownloadError as e:
+                if not e.retry:
+                    raise
+
+                self.attempt_task_removal(media_item)
+                if e.status != 999:
+                    media_item.attempts += 1
+
+                logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
+                if media_item.attempts >= self.max_attempts:
+                    raise
+
+                logger.info(
+                    f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.attempts + 1}"
+                )
 
     @property
     def max_attempts(self):
@@ -350,58 +309,8 @@ class Downloader:
             logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
             return
 
-        # TODO: Make this entire method async (run in another thread)
-
         # 1. try setting creation date
-        try:
-            if sys.platform == "win32":
-
-                def set_win_time():
-                    nano_ts: float = media_item.uploaded_at * 1e7  # Windows uses nano seconds for dates
-                    timestamp = int(nano_ts + WIN_EPOCH_OFFSET)
-
-                    # Windows dates are 64bits, split into 2 32bits unsigned ints (dwHighDateTime , dwLowDateTime)
-                    # XOR to get the date as bytes, then shift to get the first 32 bits (dwHighDateTime)
-                    ctime = wintypes.FILETIME(timestamp & 0xFFFFFFFF, timestamp >> 32)
-                    access_mode = FILE_WRITE_ATTRIBUTES
-                    sharing_mode = 0  # Exclusive access
-                    security_mode = None  # Use default security attributes
-                    creation_disposition = OPEN_EXISTING
-
-                    # FILE_FLAG_BACKUP_SEMANTICS allows access to directories
-                    flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS
-                    template_file = None
-
-                    params = (
-                        access_mode,
-                        sharing_mode,
-                        security_mode,
-                        creation_disposition,
-                        flags,
-                        template_file,
-                    )
-
-                    handle = windll.kernel32.CreateFileW(str(complete_file), *params)
-                    windll.kernel32.SetFileTime(
-                        handle,
-                        byref(ctime),  # Creation time
-                        None,  # Access time
-                        None,  # Modification time
-                    )
-                    windll.kernel32.CloseHandle(handle)
-
-                await asyncio.to_thread(set_win_time)
-
-            elif sys.platform == "darwin" and MAC_OS_SET_FILE:
-                date_string = datetime.fromtimestamp(media_item.uploaded_at).strftime("%m/%d/%Y %H:%M:%S")
-                cmd = ["-d", date_string, complete_file]
-                process = await asyncio.subprocess.create_subprocess_exec(
-                    MAC_OS_SET_FILE, *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                _ = await process.wait()
-
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError):
-            pass
+        await dates.set_creation_time(complete_file, media_item.uploaded_at)
 
         # 2. try setting modification and access date
         try:
@@ -439,9 +348,7 @@ class Downloader:
             finally:
                 logger.debug(f"Lock for '{media_item.filename}' released")
 
-    @error_handling_wrapper
-    @retry
-    async def download(self, media_item: MediaItem) -> bool | None:
+    async def _download(self, media_item: MediaItem) -> bool | None:
         """Downloads the media item."""
         url_as_str = str(media_item.url)
         if url_as_str in KNOWN_BAD_URLS:
