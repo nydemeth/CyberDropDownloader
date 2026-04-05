@@ -10,32 +10,17 @@ import os
 import platform
 import re
 import sys
-from collections.abc import Generator
-from functools import wraps
 from http import HTTPStatus
 from pathlib import Path
-from stat import S_ISREG
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Concatenate,
-    ParamSpec,
-    Protocol,
-    Self,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, ParamSpec, Protocol, Self, TypeVar, cast, overload
 
+import yarl
 from aiohttp import ClientConnectorError, TooManyRedirects
 from mega.errors import MegaNzError
 from pydantic import ValidationError
-from yarl import URL
+from typing_extensions import TypeIs
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.constants import TempExt
 from cyberdrop_dl.exceptions import (
     CDLBaseError,
     ErrorLogMessage,
@@ -44,10 +29,9 @@ from cyberdrop_dl.exceptions import (
     create_error_msg,
     get_origin,
 )
-from cyberdrop_dl.utils import json
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator, Iterable
+    from collections.abc import Callable, Coroutine, Generator
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
@@ -57,10 +41,9 @@ if TYPE_CHECKING:
         manager: Manager
 
     _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
-    _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | URL)
+    _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | yarl.URL)
 
 _P = ParamSpec("_P")
-_T = TypeVar("_T")
 _R = TypeVar("_R")
 
 
@@ -93,14 +76,11 @@ class DictDataclass(Dataclass, Protocol):
         return cls(**cls.filter_dict(data))
 
 
-_BLOB_OR_SVG = ("data:", "blob:", "javascript:")
-
-
 @contextlib.contextmanager
-def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
-    link: URL = item if isinstance(item, URL) else item.url
+def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:
+    link: yarl.URL = item if isinstance(item, yarl.URL) else item.url
     error_log_msg = origin = exc_info = None
-    link_to_show: URL | str = ""
+    link_to_show: yarl.URL | str = ""
     is_segment: bool = getattr(item, "is_segment", False)
     is_downloader: bool = bool(getattr(self, "log_prefix", False))
     try:
@@ -110,13 +90,16 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL
     except CDLBaseError as e:
         error_log_msg = ErrorLogMessage(e.ui_failure, str(e))
         origin = e.origin
-        link_to_show: URL | str = getattr(e, "url", None) or link_to_show
+        link_to_show = getattr(e, "url", None) or link_to_show
     except NotImplementedError as e:
         error_log_msg = ErrorLogMessage("NotImplemented")
         exc_info = e
     except TooManyRedirects as e:
         ui_failure = "Too Many Redirects"
-        info = json.dumps({"url": e.request_info.real_url, "history": [r.real_url for r in e.history]}, indent=4)
+        info = {
+            "url": str(e.request_info.real_url),
+            "history": tuple(str(r.real_url) for r in e.history),
+        }
         error_log_msg = ErrorLogMessage(ui_failure, f"{ui_failure}\n{info}")
     except MegaNzError as e:
         if code := getattr(e, "code", None):
@@ -184,14 +167,14 @@ def error_handling_wrapper(
 
     if inspect.iscoroutinefunction(func):
 
-        @wraps(func)
+        @functools.wraps(func)
         async def async_wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return async_wrapper
 
-    @wraps(func)
+    @functools.wraps(func)
     def wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
@@ -208,17 +191,14 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
     return download_dir / scrape_item.create_download_path(domain)
 
 
-"""~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-
-def get_size(path: os.DirEntry[str]) -> int | None:
+def _get_size(path: os.DirEntry[str]) -> int | None:
     try:
         return path.stat(follow_symlinks=False).st_size
     except (OSError, ValueError):
         return
 
 
-def purge_dir_tree(dirname: Path | str) -> bool:
+def delete_empty_files_and_folders(dirname: Path | str) -> bool:
     """walks and removes in place"""
 
     has_non_empty_files = False
@@ -231,15 +211,17 @@ def purge_dir_tree(dirname: Path | str) -> bool:
             except OSError:
                 is_dir = False
             if is_dir:
-                deleted = purge_dir_tree(entry.path)
+                deleted = delete_empty_files_and_folders(entry.path)
                 if not deleted:
                     has_non_empty_subfolders = True
-            elif get_size(entry) == 0:
+            elif _get_size(entry) == 0:
+                logger.debug(f"Deleting '{entry.path}'")
                 os.unlink(entry)  # noqa: PTH108
             else:
                 has_non_empty_files = True
 
-    except (OSError, PermissionError):
+    except OSError:
+        logger.exception(f"Unknown errot while walking '{dirname}'")
         pass
 
     if has_non_empty_files or has_non_empty_subfolders:
@@ -252,14 +234,25 @@ def purge_dir_tree(dirname: Path | str) -> bool:
 
 
 def check_partials_and_empty_folders(manager: Manager) -> None:
-    """Checks for partial downloads, deletes partial files and empty folders."""
+    download_folder = manager.config.files.download_folder
+
+    _check_for_partial_files(download_folder)
     settings = manager.config_manager.settings_data.runtime_options
     if settings.delete_partial_files:
-        delete_partial_files(manager)
-    if not settings.skip_check_for_partial_files:
-        check_for_partial_files(manager)
-    if not settings.skip_check_for_empty_folders:
-        delete_empty_folders(manager)
+        logger.info("Deleting partial downloads...")
+        for file in _partial_files(download_folder):
+            logger.debug(f"Deleting '{file}'")
+            file.unlink(missing_ok=True)
+
+    if settings.skip_check_for_empty_folders:
+        return
+
+    logger.info("Deleting empty files and folders...")
+    _ = delete_empty_files_and_folders(download_folder)
+
+    sorted_folder = manager.config.sorting.sort_folder
+    if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
+        _ = delete_empty_files_and_folders(sorted_folder)
 
 
 def _partial_files(dir: Path | str) -> Generator[Path]:
@@ -273,35 +266,17 @@ def _partial_files(dir: Path | str) -> Generator[Path]:
                 pass
 
             suffix = entry.name.rpartition(".")[-1]
-            if f".{suffix}" in constants.TempExt:
+            if f".{suffix}" in TempExt:
                 yield Path(entry.path)
     except OSError:
         return
 
 
-def delete_partial_files(manager: Manager) -> None:
-    """Deletes partial download files recursively."""
-    logger.info("Deleting partial downloads...")
-    for file in _partial_files(manager.config.files.download_folder):
-        file.unlink(missing_ok=True)
-
-
-def check_for_partial_files(manager: Manager) -> None:
-    """Checks if there are partial downloads in any subdirectory and logs if found."""
+def _check_for_partial_files(path: Path) -> None:
     logger.info("Checking for partial downloads...")
-    has_partial_files = next(_partial_files(manager.config.files.download_folder), None)
+    has_partial_files = next(_partial_files(path), None)
     if has_partial_files:
         logger.warning("There are partial downloads in the downloads folder")
-
-
-def delete_empty_folders(manager: Manager) -> None:
-    """Deletes empty folders efficiently."""
-    logger.info("Checking for empty folders...")
-    purge_dir_tree(manager.config.files.download_folder)
-
-    sorted_folder = manager.config.sorting.sort_folder
-    if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
-        purge_dir_tree(sorted_folder)
 
 
 def get_text_between(original_text: str, start: str, end: str) -> str:
@@ -311,7 +286,10 @@ def get_text_between(original_text: str, start: str, end: str) -> str:
     return original_text[start_index:end_index].strip()
 
 
-def _str_to_url(link_str: str) -> URL:
+def _str_to_url(link_str: str) -> yarl.URL:
+    if not link_str:
+        raise InvalidURLError("link_str is empty", url=link_str)
+
     def fix_query_params_encoding(link: str) -> str:
         if "?" not in link:
             return link
@@ -322,19 +300,16 @@ def _str_to_url(link_str: str) -> URL:
     def fix_multiple_slashes(link_str: str) -> str:
         return re.sub(r"(?:https?)?:?(\/{3,})", "//", link_str)
 
-    if not link_str:
-        raise InvalidURLError("link_str is empty", url=link_str)
-
     try:
         clean_link_str = fix_multiple_slashes(fix_query_params_encoding(link_str))
-        return URL(clean_link_str, encoded="%" in clean_link_str)
+        return yarl.URL(clean_link_str, encoded="%" in clean_link_str)
 
     except (AttributeError, ValueError, TypeError) as e:
         raise InvalidURLError(str(e), url=link_str) from e
 
 
 def parse_url(
-    link_str: AbsoluteHttpURL | URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True
+    link_str: AbsoluteHttpURL | yarl.URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True
 ) -> AbsoluteHttpURL:
     """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
     Raises:
@@ -355,7 +330,7 @@ def parse_url(
     return remove_trailing_slash(url)
 
 
-def is_absolute_http_url(url: URL) -> TypeGuard[AbsoluteHttpURL]:
+def is_absolute_http_url(url: yarl.URL) -> TypeIs[AbsoluteHttpURL]:
     return url.absolute and url.scheme.startswith("http")
 
 
@@ -372,19 +347,6 @@ def remove_parts(
         return url
     new_parts = [p for p in url.parts[1:] if p not in parts_to_remove]
     return url.with_path("/".join(new_parts), keep_fragment=keep_fragment, keep_query=keep_query)
-
-
-def get_size_or_none(path: Path) -> int | None:
-    """Checks if this is a file and returns its size with a single system call.
-
-    Returns `None` otherwise"""
-
-    try:
-        stat = path.stat()
-        if S_ISREG(stat.st_mode):
-            return stat.st_size
-    except (OSError, ValueError):
-        return None
 
 
 @functools.cache
@@ -421,22 +383,7 @@ def get_system_information() -> dict[str, Any]:
 
 
 def is_blob_or_svg(link: str) -> bool:
-    return any(link.startswith(x) for x in _BLOB_OR_SVG)
-
-
-def unique(iterable: Iterable[_T], *, hashable: bool = True) -> Iterable[_T]:
-    """Yields unique values from iterable, keeping original order"""
-    if hashable:
-        seen: set[_T] | list[_T] = set()
-        add: Callable[[_T], None] = seen.add
-    else:
-        seen = []
-        add = seen.append
-
-    for value in iterable:
-        if value not in seen:
-            add(value)
-            yield value
+    return link.startswith(("data:", "blob:", "javascript:"))
 
 
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
