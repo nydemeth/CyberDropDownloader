@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import shutil
-from typing import TYPE_CHECKING
+from contextvars import ContextVar
+from typing import TYPE_CHECKING, Final
 
 import rich
 from rich.layout import Layout
@@ -16,9 +18,10 @@ from cyberdrop_dl.progress.scraping.files import FileStatsPanel
 from cyberdrop_dl.progress.scraping.panel import ScrapingPanel, StatusMessage
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Iterator
 
-_PANEL_PADDING = 5
+_PANEL_PADDING: Final = 5
+_STATUS: ContextVar[StatusMessage] = ContextVar("_STATUS")
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -49,6 +52,15 @@ class ScrapingUI(LiveUI):
 
     def __rich__(self) -> Screen:
         return self._screen
+
+    @contextlib.contextmanager
+    def __call__(self, *, transient: bool = False) -> Generator[None]:
+        token = _STATUS.set(self.status)
+        try:
+            with super(ScrapingUI, self).__call__(transient=transient):
+                yield
+        finally:
+            _STATUS.reset(token)
 
     def _create_screen(self) -> Screen:
         horizontal, vertical = Layout(), Layout()
@@ -109,6 +121,9 @@ class ScrapingUI(LiveUI):
         except TimeoutError:
             pass
 
+        with show_msg("final msg"):
+            await asyncio.sleep(3)
+
 
 def terminal_is_in_portrait() -> bool:
 
@@ -131,10 +146,16 @@ def terminal_is_in_portrait() -> bool:
     return False
 
 
+@contextlib.contextmanager
+def show_msg(msg: object) -> Generator[None]:
+    with _STATUS.get()(msg):
+        yield
+
+
 if __name__ == "__main__":
     scrape_tui = ScrapingUI()
     rich.print(scrape_tui._screen.horizontal.tree)
-    _ = input("press <Enter> to continue")
+    _ = input("press <ENTER> to continue")
 
     with scrape_tui(transient=False):
         asyncio.run(scrape_tui.simulate())

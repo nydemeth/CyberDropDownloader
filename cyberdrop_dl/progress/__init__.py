@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
     from rich.console import RenderableType
 
-REFRESH_RATE = ContextVar("REFRESH_RATE", default=10)
-TUI_DISABLED = ContextVar("DISABLE_TUI", default=False)
+REFRESH_RATE: ContextVar[int] = ContextVar("REFRESH_RATE", default=10)
+TUI_DISABLED: ContextVar[bool] = ContextVar("TUI_DISABLED", default=False)
 
 
 def create_test_live(renderable: RenderableType, transient: bool = False) -> Live:
