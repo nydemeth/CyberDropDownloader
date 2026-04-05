@@ -1,39 +1,44 @@
 from __future__ import annotations
 
 import contextlib
+import itertools
 import json
 import logging
+import os
 import queue
-import sys
-from functools import wraps
+from contextvars import ContextVar
+from datetime import datetime
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, ParamSpec
+from typing import TYPE_CHECKING, ParamSpec, cast
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
-from rich.containers import Lines, Renderables
 from rich.logging import RichHandler
-from rich.measure import Measurement
 from rich.padding import Padding
 from rich.text import Text, TextType
+from typing_extensions import override
 
-from cyberdrop_dl import constants, env
-from cyberdrop_dl.dependencies import browser_cookie3
-from cyberdrop_dl.exceptions import InvalidYamlError
+from cyberdrop_dl import env
+
+if TYPE_CHECKING:
+    import threading
+    from collections.abc import Generator
 
 logger = logging.getLogger("cyberdrop_dl")
-logger_debug = logging.getLogger("cyberdrop_dl_debug")
-startup_logger = logging.getLogger("cyberdrop_dl_startup")
 _DEFAULT_CONSOLE = Console()
 
-_USER_NAME = Path.home().resolve().name
+_USER_NAME = Path.home().name
 _NEW_ISSUE_URL = "https://github.com/NTFSvolume/cdl/issues/new/choose"
+_DEFAULT_CONSOLE_WIDTH = 240
+_LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
+_MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
+
+_capture_logs: ContextVar[bool] = ContextVar("_capture_logs", default=False)
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
-    from datetime import datetime
+    from collections.abc import Callable, Iterable
 
     from rich.console import ConsoleRenderable
 
@@ -46,18 +51,28 @@ if TYPE_CHECKING:
 class RedactedConsole(Console):
     """Custom console to remove username from logs"""
 
+    @override
     def _render_buffer(self, buffer) -> str:
-        output: str = super()._render_buffer(buffer)
-        return _redact_message(output)
+        return self._redact_message(super()._render_buffer(buffer))
+
+    @classmethod
+    def _redact_message(cls, message: object) -> str:
+        redacted = str(message)
+        for sep in ("\\", "\\\\", "/"):
+            as_tail = sep + _USER_NAME
+            as_part = _USER_NAME + sep
+            redacted = redacted.replace(as_tail, f"{sep}[REDACTED]").replace(as_part, f"[REDACTED]{sep}")
+        return redacted
 
 
 class JsonLogRecord(logging.LogRecord):
-    def getMessage(self) -> str:  # noqa: N802
-        """`dicts` will be logged as json, lazily"""
+    """`dicts` will be logged as json, lazily"""
 
+    @override
+    def getMessage(self) -> str:
         msg = str(self._proccess_msg(self.msg))
         if self.args:
-            args = map(self._proccess_msg, self.args)
+            args = tuple(map(self._proccess_msg, self.args))
             try:
                 return msg.format(*args)
             except Exception:
@@ -67,7 +82,8 @@ class JsonLogRecord(logging.LogRecord):
 
     @staticmethod
     def _proccess_msg(msg: object) -> object:
-        # TODO: Use our custom decoder to support more types
+        if callable(dump := getattr(msg, "model_dump_json", None)):
+            return dump()
         if isinstance(msg, dict):
             return json.dumps(msg, indent=2, ensure_ascii=False, default=str)
         return msg
@@ -77,35 +93,63 @@ logging.setLogRecordFactory(JsonLogRecord)
 
 
 class LogHandler(RichHandler):
-    """Rich Handler with default settings, automatic console creation and custom log render to remove padding in files."""
+    """Rich Handler with default settings, custom log render to remove padding in files and `color` extra"""
 
-    def __init__(
-        self, level: int = 10, file: IO[str] | None = None, width: int | None = None, debug: bool = False
-    ) -> None:
-        is_file: bool = file is not None
-        redacted: bool = is_file and not debug
-        console_cls = RedactedConsole if redacted else Console
-        if file is None and width is None:
-            console = _DEFAULT_CONSOLE
-        else:
-            console = console_cls(file=file, width=width)
-
+    def __init__(self, level: int = logging.DEBUG, console: Console | None = None) -> None:
+        self.is_file: bool = bool(console)
+        self._buffer: list[Text] = []
         super().__init__(
             level,
             console,
-            show_time=False,
-            show_path=False,
-            tracebacks_show_locals=debug,
-            locals_max_string=constants.DEFAULT_CONSOLE_WIDTH,
+            show_time=self.is_file,
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            locals_max_string=_DEFAULT_CONSOLE_WIDTH,
             tracebacks_extra_lines=2,
             locals_max_length=20,
+            show_path=False,
         )
-        if is_file:
+        if self.is_file:
             self._log_render = NoPaddingLogRender(
-                show_path=False,
                 show_level=True,
+                show_path=False,
+                level_width=10,
                 time_format=lambda dt: Text(f"[{dt.isoformat(sep=' ', timespec='milliseconds')}]", style="log.time"),
             )
+
+    @override
+    def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
+        """This is the same as the base class, just added the `color` parsing from the extras"""
+        use_markup = bool(getattr(record, "markup", self.markup))
+        color = getattr(record, "color", "")
+        message_text = Text.from_markup(message, style=color) if use_markup else Text(message, style=color)
+
+        highlighter = getattr(record, "highlighter", self.highlighter)
+        if highlighter:
+            message_text = highlighter(message_text)
+
+        if self.keywords is None:
+            self.keywords = self.KEYWORDS
+
+        if self.keywords:
+            _ = message_text.highlight_words(self.keywords, "logging.keyword")
+
+        if self.is_file and _capture_logs.get():
+            self._buffer.append(message_text)
+
+        return message_text
+
+    def export_text(self) -> Text:
+        assert self.lock is not None
+        with self.lock:
+            lines = self._buffer[:]
+            self._buffer.clear()
+
+        eof = Text("\n")
+        text = Text()
+        for line in itertools.chain.from_iterable((line, eof) for line in lines):
+            _ = text.append_text(line)
+        return text
 
 
 class BareQueueHandler(QueueHandler):
@@ -117,7 +161,7 @@ class BareQueueHandler(QueueHandler):
     This made tracebacks render improperly because when the rich handler picks the log record from the queue, it has no traceback.
     The original traceback was being formatted as normal text and included as part of the message.
 
-    Having not pickleable objects is only an issue in multi-processing operations (multiprocessing.Queue)
+    We never log from other processes so we do not need that safety check
     """
 
     def prepare(self, record: logging.LogRecord) -> logging.LogRecord:
@@ -144,11 +188,31 @@ class QueuedLogger:
         self.log_handler.close()
 
 
+@contextlib.contextmanager
+def _threaded_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
+    """Context-manager to process logs from this handler in another thread.
+
+    It starts a QueueListener and yields the QueueHandler."""
+    q: queue.Queue[logging.LogRecord] = queue.Queue()
+    q_handler: BareQueueHandler = BareQueueHandler(q)
+    listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
+    listener.start()
+    try:
+        yield q_handler
+    finally:
+        try:
+            q_handler.close()
+        finally:
+            listener.stop()
+            for handler in listener.handlers[:]:
+                handler.close()
+
+
 class NoPaddingLogRender(LogRender):
-    cdl_padding: int = 0
+    _cdl_padding: int = 0
     EXCLUDE_PATH_LOGGING_FROM: tuple[str, ...] = "logger.py", "base.py", "session.py", "cache_control.py"
 
-    def __call__(  # type: ignore[reportIncompatibleMethodOverride]
+    def __call__(  # type: ignore[reportIncompatibleMethodOverride]  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         console: Console,
         renderables: Iterable[ConsoleRenderable],
@@ -169,170 +233,112 @@ class NoPaddingLogRender(LogRender):
                 else Text(log_time.strftime(time_format), style="log.time")
             )
             if log_time_display == self._last_time and self.omit_repeated_times:
-                output.append(" " * len(log_time_display), style="log.time")
+                _ = output.append(" " * len(log_time_display), style="log.time")
                 output.pad_right(1)
             else:
-                output.append(log_time_display)
+                _ = output.append_text(log_time_display)
                 output.pad_right(1)
                 self._last_time = log_time_display
+
         if self.show_level:
-            output.append(level)
+            _ = output.append(level)
             output.pad_right(1)
 
-        if not self.cdl_padding:
-            self.cdl_padding = _get_renderable_length(output)
+        if not self._cdl_padding:
+            self._cdl_padding = console.measure(output).maximum
 
         if self.show_path and path and not any(path.startswith(p) for p in self.EXCLUDE_PATH_LOGGING_FROM):
             path_text = Text(style="log.path")
-            path_text.append(path, style=f"link file://{link_path}" if link_path else "")
+            _ = path_text.append(path, style=f"link file://{link_path}" if link_path else "")
             if line_no:
-                path_text.append(":")
-                path_text.append(
+                _ = path_text.append(":")
+                _ = path_text.append(
                     f"{line_no}",
                     style=f"link file://{link_path}#{line_no}" if link_path else "",
                 )
-            output.append(path_text)
+            _ = output.append_text(path_text)
             output.pad_right(1)
 
         padded_lines: list[ConsoleRenderable] = []
 
-        for renderable in Renderables(renderables):  # type: ignore
+        for renderable in renderables:
             if isinstance(renderable, Text):
-                renderable = _indent_text(renderable, console, self.cdl_padding)
+                renderable = _indent_text(renderable, console, self._cdl_padding)
                 renderable.stylize("log.message")
-                output.append(renderable)
+                _ = output.append_text(renderable)
                 continue
-            padded_lines.append(Padding(renderable, (0, 0, 0, self.cdl_padding), expand=False))
+
+            padded_lines.append(Padding(renderable, (0, 0, 0, self._cdl_padding), expand=False))
 
         return Group(output, *padded_lines)
 
 
-def _get_renderable_length(renderable) -> int:
-    measurement = Measurement.get(_DEFAULT_CONSOLE, _DEFAULT_CONSOLE.options, renderable)
-    return measurement.maximum
-
-
-def _indent_text(text: Text, console: Console, indent: int = 30) -> Text:
+def _indent_text(text: Text, console: Console, indent: int) -> Text:
     """Indents each line of a Text object except the first one."""
-    indent_str = Text("\n" + (" " * indent))
+    padding = Text("\n" + (" " * indent))
     new_text = Text()
-    new_width = console.width - indent
-    lines: Lines = text.wrap(console, width=new_width)
-    first_line = lines[0]
-    other_lines = lines[1:]
-    for line in other_lines:
+    first_line, *rest = text.wrap(console, width=console.width - indent)
+    for line in rest:
         line.rstrip()
-        new_text.append(indent_str + line)
+        _ = new_text.append_text(padding + line)
     first_line.rstrip()
-    return first_line.append(new_text)
+    return first_line.append_text(new_text)
 
 
-def log(message: object, level: int = 10, bug: bool = False, **kwargs) -> None:
-    """Simple logging function."""
-    log_debug(message, level, **kwargs)
-    if bug:
-        args = message, f"Please open a bug report at {_NEW_ISSUE_URL}"
-        message = "{}. {}"
-        level = 30
-    else:
-        args = ()
-    logger.log(level, message, *args, **kwargs)
-
-
-def log_debug(message: object, level: int = 10, **kwargs) -> None:
-    """Simple logging function."""
-    if env.DEBUG_VAR:
-        logger_debug.log(level, message, **kwargs)
-
-
-def log_with_color(message: Text | str, style: str, level: int = 20, show_in_stats: bool = True, **kwargs) -> None:
-    """Simple logging function with color."""
-    text = message if isinstance(message, Text) else Text(message, style=style)
-    log(text.plain, level, **kwargs)
-    if constants.CONSOLE_LEVEL >= 50 and "pytest" not in sys.modules:
-        _DEFAULT_CONSOLE.print(text)
-    if show_in_stats:
-        constants.LOG_OUTPUT_TEXT.append_text(text.append("\n"))
-
-
-def log_spacer(level: int, char: str = "-", *, log_to_console: bool = True, log_to_file: bool = True) -> None:
-    spacer = char * min(int(constants.DEFAULT_CONSOLE_WIDTH / 2), 50)
-    if log_to_file:
-        log(spacer, level)
-    if log_to_console and constants.CONSOLE_LEVEL >= 50:
-        _DEFAULT_CONSOLE.print("")
-    constants.LOG_OUTPUT_TEXT.append("\n", style="black")
-
-
-def _redact_message(message: Exception | Text | str) -> str:
-    redacted = str(message)
-    separators = ["\\", "\\\\", "/"]
-    for sep in separators:
-        as_tail = sep + _USER_NAME
-        as_part = _USER_NAME + sep
-        redacted = redacted.replace(as_tail, f"{sep}[REDACTED]").replace(as_part, f"[REDACTED]{sep}")
-    return redacted
+def log_spacer(char: str = "-") -> None:
+    logger.info(char * (_DEFAULT_CONSOLE_WIDTH // 2), stacklevel=2)
 
 
 @contextlib.contextmanager
-def _setup_startup_logger() -> Generator[None]:
-    """Context manager to add a file handler to the startup logger
-
-    It will only add it if we have an exception, to prevent creating an empty file"""
-    startup_logger.setLevel(10)
-    if "pytest" not in sys.modules:
-        console_handler = LogHandler(level=10)
-        startup_logger.addHandler(console_handler)
-    try:
-        yield
-
-    except Exception:
-        try:
-            file = Path.cwd() / "startup.log"
-            file_handler = LogHandler(
-                level=10,
-                file=file.open("w", encoding="utf8"),
-                width=constants.DEFAULT_CONSOLE_WIDTH,
+def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
+    logger.setLevel(level)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
+        _threaded_logger(LogHandler(level=level)) as console_out,
+        _threaded_logger(
+            main_logger := LogHandler(
+                level=level,
+                console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
-            startup_logger.addHandler(file_handler)
-        except OSError:
-            # We could not create the file for some reason
-            # Ignore this and just log to the console
-            pass
-        raise
-
-
-def catch_exceptions(func: Callable[_P, _ExitCode]) -> Callable[_P, _ExitCode]:
-    """Decorator to automatically log uncaught exceptions.
-
-    Exceptions will be logged to a file in the current working directory
-    because the manager setup itself may have failed, therefore we don't know
-    what the proper log file path is.
-    """
-
-    @wraps(func)
-    def catch(*args, **kwargs) -> _ExitCode | None:
+        ) as file_out,
+        _setup_debug_logger() as debug_log_file,
+    ):
+        token = _MAIN_LOGGER.set(main_logger)
+        logger.addHandler(console_out)
+        logger.addHandler(file_out)
         try:
-            with _setup_startup_logger():
-                return func(*args, **kwargs)
+            logger.info(f"Debug log file: '{debug_log_file}'")
+            yield
+        finally:
+            _MAIN_LOGGER.reset(token)
 
-        except InvalidYamlError as e:
-            startup_logger.error(e.message)
 
-        except browser_cookie3.BrowserCookieError:
-            startup_logger.exception("")
+@contextlib.contextmanager
+def _setup_debug_logger() -> Generator[Path | None]:
+    if not env.DEBUG_VAR:
+        yield
+        return
 
-        except OSError as e:
-            startup_logger.exception(str(e))
+    debug_log_file = Path(__file__).parent.parent.parent / "cyberdrop_dl_debug.log"
 
-        except KeyboardInterrupt:
-            startup_logger.info("Exiting...")
-            return
+    if env.DEBUG_LOG_FOLDER:
+        debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
 
-        except Exception:
-            msg = "An error occurred, please report this to the developer with your logs file:"
-            startup_logger.exception(msg)
+        if not debug_log_folder.is_dir():
+            msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' does not exists"
+            raise FileNotFoundError(None, msg, env.DEBUG_LOG_FOLDER)
 
-        return 1
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_log_file = debug_log_folder / f"cyberdrop_dl_debug_{now}.log"
 
-    return catch
+    debug_log_file = debug_log_file.expanduser().resolve().absolute()
+
+    with (
+        debug_log_file.open("w", encoding="utf8") as fp,
+        _threaded_logger(
+            LogHandler(level=logging.DEBUG, console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2))
+        ) as debug_handler,
+    ):
+        logger.addHandler(debug_handler)
+        yield debug_log_file
