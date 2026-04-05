@@ -57,7 +57,7 @@ class StatusMessage:
 
         async with asyncio.TaskGroup() as tg:
             for idx in range(1, 10):
-                tg.create_task(show(f"test msg {idx}"))
+                _ = tg.create_task(show(f"test msg {idx}"))
 
 
 @final

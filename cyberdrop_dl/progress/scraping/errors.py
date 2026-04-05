@@ -66,10 +66,6 @@ class _ErrorsPanel:
     def __repr__(self) -> str:
         return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors_map)!r})"
 
-    def __init_subclass__(cls, title: str | None = None) -> None:
-        if title:
-            cls.title = title
-
     def __init__(self) -> None:
         self._progress: DictProgress = DictProgress(
             "[progress.description]{task.description}",
@@ -132,10 +128,13 @@ class _ErrorsPanel:
             await asyncio.sleep(random.random() * 5)
 
 
-class DownloadErrorsPanel(_ErrorsPanel, title="Download"): ...
+class DownloadErrorsPanel(_ErrorsPanel):
+    title: ClassVar[str] = "Download"
 
 
-class ScrapeErrorsPanel(_ErrorsPanel, title="Scrape"):
+class ScrapeErrorsPanel(_ErrorsPanel):
+    title: ClassVar[str] = "Scrape"
+
     def __init__(self) -> None:
         super().__init__()
         self._unsupported: int = 0

@@ -15,6 +15,11 @@ if TYPE_CHECKING:
     from rich.progress import ProgressColumn, Task, TaskID
 
 _COLOR: str = "plum3"
+_COLOR2: str = "yellow"
+
+
+def _plural(ammount: int, unit: str) -> str:
+    return f"{unit}{'s' if ammount > 1 else ''}"
 
 
 @final
@@ -22,9 +27,10 @@ _COLOR: str = "plum3"
 class OverFlow:
     unit: str
     count: int = 0
+    queued: int = 0
 
     def __bool__(self) -> bool:
-        return self.count > 0
+        return self.count > 0 or self.queued > 0
 
     def __rich__(self) -> str:
         if self:
@@ -32,7 +38,17 @@ class OverFlow:
         return ""
 
     def __str__(self) -> str:
-        return f"[{_COLOR}]... and {self.count:,} other {self.unit}{'s' if self.count > 1 else ''}"
+        overflow = f"[{_COLOR}]... and {self.count:,} other {_plural(self.count, self.unit)}"
+        if self.count > 0 and self.queued > 0:
+            return overflow + f"[{_COLOR2}] ({self.queued:,} queued)"
+
+        if self.queued > 0:
+            return f"[{_COLOR2}] ... and {self.queued:,} {_plural(self.queued, self.unit)} queued"
+
+        if self.count > 0:
+            return overflow
+
+        return ""
 
 
 class OverflowPanel:
@@ -42,8 +58,8 @@ class OverflowPanel:
         self.max_rows: int = max_rows
         self._progress: Final[DictProgress] = DictProgress(*columns, expand=expand)
         self._overflow: Final[OverFlow] = OverFlow(self.unit)
-        self._invisible_queue: Final[deque[TaskID]] = deque()
-        self._visible_tasks: int = 0
+        self._invisible_rows: Final[deque[TaskID]] = deque()
+        self._visible_rows: int = 0
         self._panel: Final[Panel] = Panel(
             Group(self._progress, self._overflow),
             title=type(self).__name__.removesuffix("Panel"),
@@ -53,12 +69,12 @@ class OverflowPanel:
 
     @final
     def __rich__(self) -> Panel:
-        self._overflow.count = len(self._progress) - self._visible_tasks
+        self._overflow.count = len(self._progress) - self._visible_rows
         return self._panel
 
     @final
     def _add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
-        visible = self._visible_tasks < self.max_rows
+        visible = self._visible_rows < self.max_rows
         task_id = self._progress.add_task(
             f"[{_COLOR}]{escape(str(description))}",
             total=total,
@@ -66,9 +82,9 @@ class OverflowPanel:
             completed=completed,
         )
         if visible:
-            self._visible_tasks += 1
+            self._visible_rows += 1
         else:
-            self._invisible_queue.append(task_id)
+            self._invisible_rows.append(task_id)
 
         return self._progress[task_id]
 
@@ -78,7 +94,7 @@ class OverflowPanel:
         self._progress.remove_task(task.id)
 
         if was_visible:
-            self._visible_tasks -= 1
+            self._visible_rows -= 1
             try:
                 self._push_one_invisible()
             except IndexError:
@@ -87,11 +103,11 @@ class OverflowPanel:
     @final
     def _push_one_invisible(self) -> None:
         while True:
-            invisible_task_id = self._invisible_queue.popleft()
+            task_id = self._invisible_rows.popleft()
             try:
-                self._progress.update(invisible_task_id, visible=True)
+                self._progress.update(task_id, visible=True)
             except KeyError:
                 continue
             else:
-                self._visible_tasks += 1
+                self._visible_rows += 1
                 break

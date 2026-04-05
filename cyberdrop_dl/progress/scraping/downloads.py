@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import itertools
 import random
 from contextvars import ContextVar
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final, final
 
 from rich.jupyter import JupyterMixin
@@ -38,7 +40,7 @@ _HLS_TASK_FIELD_NAME: Final = "HLS"
 
 @dataclasses.dataclass(slots=True)
 class AutoWidth(JupyterMixin):
-    """Auto expands (if possible) or truncates (if not enought space) a renderable to a desired width ratio of the screen"""
+    """Expand (if possible) or truncate a renderable to a desired width ratio of the screen"""
 
     renderable: RenderableType
     ratio: float
@@ -72,7 +74,7 @@ class AutoTransferSpeedColumn(TransferSpeedColumn):
 
 
 class AutoDownloadColumn(DownloadColumn):
-    """Shows `<completed>/<total> MBs` for files and `<downloaded_bytes> MBs (<completed>/<total> segments)` for HLS downloads"""
+    """Shows `<x>/<y> MBs` for files and `<downloaded_bytes> MBs (<x>/<y> segments)` for HLS downloads"""
 
     @override
     def render(self, task: Task) -> Text:
@@ -115,7 +117,7 @@ class DownloadsPanel(OverflowPanel):
 
     @property
     def bytes_downloaded(self) -> int:
-        return self._total_amount
+        return self._total_bytes
 
     def __init__(self, max_rows: int = 6) -> None:
         super().__init__(
@@ -135,7 +137,7 @@ class DownloadsPanel(OverflowPanel):
             max_rows=max_rows,
         )
         self._hls_progress: Final[DictProgress] = DictProgress("")
-        self._total_amount = 0
+        self._total_bytes = 0
 
     @contextlib.contextmanager
     def download_hls(self, filename: str, /, segments: float | None = None) -> Generator[None]:
@@ -162,7 +164,7 @@ class DownloadsPanel(OverflowPanel):
         task = self._add_task(filename, total)
 
         def advance(amount: int = 1) -> None:
-            self._total_amount += amount
+            self._total_bytes += amount
             self._progress.advance(task.id, amount)
 
         def on_exit() -> None:
@@ -178,7 +180,7 @@ class DownloadsPanel(OverflowPanel):
         hls_task: Task = self._progress[segments_task_id].fields[_HLS_TASK_FIELD_NAME]
 
         def advance(amount: int) -> None:
-            self._total_amount += amount
+            self._total_bytes += amount
             self._hls_progress.advance(hls_task.id, amount)
 
         def on_exit() -> None:
@@ -190,8 +192,6 @@ class DownloadsPanel(OverflowPanel):
         return ProgressHook(advance, get_speed, on_exit)
 
     async def simulate(self) -> None:
-        import itertools
-        from pathlib import Path
 
         async def download(hook: ProgressHook, size: int) -> None:
             total = 0
@@ -249,7 +249,7 @@ class DownloadsPanel(OverflowPanel):
                 await asyncio.sleep(2)
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     panel = DownloadsPanel()
     with create_test_live(panel):
         asyncio.run(panel.simulate())

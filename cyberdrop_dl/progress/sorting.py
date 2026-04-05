@@ -48,17 +48,17 @@ class SortingUI(LiveUI):
         self._total: int = 0
         self._tasks_map: dict[str, TaskID] = dict(self._init_tasks())
 
-        def file_row(name: str, file: Path) -> Text:
+        def file(name: str, file: Path) -> Text:
             return Text.assemble((f"{name}: ", "green"), hyperlink(file))
 
         self._panel: Panel = Panel(
             Group(
-                file_row("Source", source),
-                file_row("Destination", dest),
+                file("Source", source),
+                file("Destination", dest),
                 "",
                 self._progress,
                 "",
-                Spinner("dots", "Sorting files....", style="green"),
+                Spinner("dots3", "Sorting files....", style="green"),
             ),
             title="Sorting Downloads ",
             border_style="green",
