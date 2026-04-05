@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import time
 from pathlib import Path
-from typing import ClassVar, Self, final
+from typing import TYPE_CHECKING, final
 
 from rich.console import Group
 from rich.panel import Panel
@@ -11,7 +11,10 @@ from rich.progress import BarColumn, Progress, TaskID
 from rich.spinner import Spinner
 from rich.text import Text
 
-from cyberdrop_dl.progress import hyperlink
+from cyberdrop_dl.progress import LiveUI, hyperlink
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 @dataclasses.dataclass(slots=True)
@@ -28,35 +31,25 @@ class SortStats:
 
 
 @final
-class SortingUI:
+class SortingUI(LiveUI):
     """Class that keeps track of sorted files."""
 
-    columns: ClassVar = (
-        "[progress.description]{task.description}",
-        BarColumn(bar_width=None),
-        "[progress.percentage]{task.percentage:>6.1f}%",
-        "━",
-        "{task.completed:,}",
-    )
-
     def __init__(self, source: Path, dest: Path) -> None:
+
+        self._progress = Progress(
+            "[progress.description]{task.description}",
+            BarColumn(bar_width=None),
+            "[progress.percentage]{task.percentage:>6.1f}%",
+            "━",
+            "{task.completed:,}",
+            expand=False,
+        )
         self._stats: SortStats = SortStats()
-        self._progress: Progress = Progress(*self.columns)
-        self._tasks_map: dict[str, TaskID] = {}
-        for name, emoji in [
-            ("audios", "musical_notes"),
-            ("videos", "movie_camera"),
-            ("images", "framed_picture"),
-            ("others", "spiral_note_pad"),
-            ("errors", "cross_mark"),
-        ]:
-            color = "red" if "errors" in name else "blue"
-            self._tasks_map[name] = self._progress.add_task(f"[{color}] {name.capitalize()} :{emoji}: ", total=None)
+        self._total: int = 0
+        self._tasks_map: dict[str, TaskID] = dict(self._init_tasks())
 
         def file_row(name: str, file: Path) -> Text:
             return Text.assemble((f"{name}: ", "green"), hyperlink(file))
-
-        self._total: int = 0
 
         self._panel: Panel = Panel(
             Group(
@@ -71,14 +64,17 @@ class SortingUI:
             border_style="green",
             padding=(1, 1),
         )
-        self._progress.live._get_renderable = self.__rich__
 
-    def __enter__(self) -> Self:
-        self._progress.start()
-        return self
-
-    def __exit__(self, *_) -> None:
-        self._progress.stop()
+    def _init_tasks(self) -> Generator[tuple[str, TaskID]]:
+        for name, emoji in [
+            ("audios", "musical_notes"),
+            ("videos", "movie_camera"),
+            ("images", "framed_picture"),
+            ("others", "spiral_note_pad"),
+            ("errors", "cross_mark"),
+        ]:
+            color = "red" if "errors" in name else "blue"
+            yield name, self._progress.add_task(f"[{color}] {name.capitalize()} :{emoji}: ", total=None)
 
     @property
     def stats(self) -> SortStats:
@@ -101,7 +97,7 @@ if __name__ == "__main__":
         Path("/folder1/cdl_downloads_sorted"),
     )
 
-    with panel:
+    with panel(transient=False):
         time.sleep(3)
         panel.stats.audios += 1
         time.sleep(1)

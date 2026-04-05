@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import contextlib
+import dataclasses
+from abc import ABC, abstractmethod
+from contextvars import ContextVar
+from typing import TYPE_CHECKING, Self
 
 from rich.live import Live
 from rich.markup import escape
@@ -8,16 +12,20 @@ from rich.progress import Progress, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
 
     from rich.console import RenderableType
 
+REFRESH_RATE = ContextVar("REFRESH_RATE", default=10)
+TUI_DISABLED = ContextVar("DISABLE_TUI", default=False)
 
-def create_live(renderable: RenderableType) -> Live:
+
+def create_test_live(renderable: RenderableType, transient: bool = False) -> Live:
     return Live(
         auto_refresh=True,
         refresh_per_second=20,
-        transient=False,
+        transient=transient,
         get_renderable=lambda: renderable,
     )
 
@@ -37,3 +45,60 @@ class DictProgress(Progress):
     def __len__(self) -> int:
         with self._lock:
             return len(self._tasks)
+
+    def sort_tasks(self, sort_fn: Callable[[Iterable[Task]], list[Task]]) -> None:
+        with self._lock:
+            sorted_tasks = sort_fn(self._tasks.values())
+            self._tasks.clear()
+            self._tasks.update((task.id, task) for task in sorted_tasks)
+
+
+@dataclasses.dataclass(slots=True)
+class ProgressHook:
+    advance: Callable[[int], None]
+    get_speed: Callable[[], float]
+    done: Callable[[], None]
+
+    _done: bool = dataclasses.field(init=False, default=False)
+
+    @property
+    def speed(self) -> float:
+        return self.get_speed()
+
+    def __enter__(self) -> Self:
+        if self._done:
+            raise RuntimeError
+        return self
+
+    def __exit__(self, *_) -> None:
+        if self._done:
+            raise RuntimeError
+        self.done()
+        self._done = True
+
+
+class LiveUI(ABC):
+    @property
+    def disabled(self) -> bool:
+        return TUI_DISABLED.get()
+
+    @disabled.setter
+    def disabled(self, value: bool) -> None:
+        _ = TUI_DISABLED.set(value)
+
+    @abstractmethod
+    def __rich__(self) -> RenderableType: ...
+
+    @contextlib.contextmanager
+    def __call__(self, *, transient: bool = False) -> Generator[None]:
+        if self.disabled:
+            yield None
+            return
+
+        with Live(
+            refresh_per_second=REFRESH_RATE.get(),
+            auto_refresh=True,
+            transient=transient,
+            get_renderable=self.__rich__,
+        ):
+            yield
