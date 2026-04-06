@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import sys
 from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
@@ -20,13 +21,12 @@ from cyberdrop_dl.utils.webhook import send_webhook_message
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cyberdrop_dl")
 
 _ = install_rich_tracebacks(width=None)
 
 
-async def _run_manager(manager: Manager) -> None:
-    """Runs the program and handles the UI."""
+async def _scrape(manager: Manager) -> None:
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
     start_time = manager.start_time
@@ -54,8 +54,6 @@ async def _run_manager(manager: Manager) -> None:
 
 
 async def _runtime(manager: Manager) -> None:
-    """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
-
     async with storage.monitor(manager.global_config.general.required_free_space):
         with manager.live_manager.get_main_live(stop=True):
             async with ScrapeMapper.managed(manager) as scrape_mapper:
@@ -79,32 +77,26 @@ async def _post_runtime(manager: Manager) -> None:
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 
-class Director:
-    """Creates a manager and runs it"""
+async def _run(manager: Manager) -> None:
+    try:
+        await _scrape(manager)
+    finally:
+        await manager.close()
 
-    def __init__(self, args: Sequence[str] | None = None) -> None:
-        manager = Manager(args)
 
-        manager.startup()
+def main(args: Sequence[str] | None = None) -> str | int | None:
+    manager = Manager(args)
+    manager.startup()
+    if not manager.parsed_args.cli_only_args.download:
+        program_ui.run(manager)
 
-        if not manager.parsed_args.cli_only_args.download:
-            program_ui.run(manager)
+    exit_code = 1
+    with contextlib.suppress(Exception):
+        aio.run(_run(manager))
+        exit_code = 0
 
-        self.manager = manager
+    return exit_code
 
-    def run(self) -> int:
-        return self._run()
 
-    async def async_run(self) -> None:
-        try:
-            await _run_manager(self.manager)
-        finally:
-            await self.manager.close()
-
-    def _run(self) -> int:
-        exit_code = 1
-        with contextlib.suppress(Exception):
-            aio.run(self.async_run())
-            exit_code = 0
-
-        return exit_code
+if __name__ == "__main__":
+    sys.exit(main())
