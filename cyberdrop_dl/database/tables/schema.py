@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import aiosqlite
-from packaging.version import Version
 
 from .definitions import create_schema_version
 
@@ -13,6 +12,16 @@ if TYPE_CHECKING:
     import aiosqlite
 
     from cyberdrop_dl.database import Database
+
+
+class Version(NamedTuple):
+    major: int
+    minor: int
+    patch: int
+
+    @staticmethod
+    def parse(string: str) -> Version:
+        return Version(*map(int, string.split(".")[:3]))
 
 
 CURRENT_APP_SCHEMA_VERSION = "8.10.0"
@@ -35,7 +44,7 @@ class SchemaVersionTable:
         cursor = await self.db_conn.execute(query)
         result = await cursor.fetchone()
         if result:
-            return Version(result["version"])
+            return Version.parse(result["version"])
 
     async def __exists(self) -> bool:
         query = "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version';"
@@ -57,7 +66,7 @@ class SchemaVersionTable:
         logger.info(f"Expected database schema version: {CURRENT_APP_SCHEMA_VERSION}")
         version = await self.get_version()
         logger.info(f"Database reports installed version: {version}")
-        if version is not None and version >= Version(CURRENT_APP_SCHEMA_VERSION):
+        if version is not None and version >= Version.parse(CURRENT_APP_SCHEMA_VERSION):
             return
 
         # TODO: on v9, raise SystemExit if db version is None or older than 8.0.0
