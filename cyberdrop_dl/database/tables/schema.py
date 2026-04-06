@@ -62,7 +62,7 @@ class SchemaVersionTable:
     async def __update_schema_version(self) -> None:
         await self.__create_if_not_exists()
         query = "INSERT INTO schema_version (version) VALUES (?)"
-        _ = self.db_conn.execute(query, (str(CURRENT_APP_SCHEMA_VERSION),))
+        _ = await self.db_conn.execute(query, (str(CURRENT_APP_SCHEMA_VERSION),))
         await self.db_conn.commit()
 
     async def create(self) -> None:
