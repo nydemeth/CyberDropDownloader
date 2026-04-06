@@ -286,7 +286,7 @@ def _indent_text(text: Text, console: Console, indent: int) -> Text:
 
 
 def log_spacer(char: str = "-") -> None:
-    logger.info(char * (_DEFAULT_CONSOLE_WIDTH // 2), stacklevel=2)
+    logger.info(char * 30, stacklevel=2)
 
 
 @contextlib.contextmanager

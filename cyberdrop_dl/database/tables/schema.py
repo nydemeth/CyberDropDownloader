@@ -23,8 +23,11 @@ class Version(NamedTuple):
     def parse(string: str) -> Version:
         return Version(*map(int, string.split(".")[:3]))
 
+    def __str__(self) -> str:
+        return ".".join(map(str, self))
 
-CURRENT_APP_SCHEMA_VERSION = "8.10.0"
+
+CURRENT_APP_SCHEMA_VERSION = Version(8, 10, 0)
 
 logger = logging.getLogger(__name__)
 
@@ -59,16 +62,16 @@ class SchemaVersionTable:
     async def __update_schema_version(self) -> None:
         await self.__create_if_not_exists()
         query = "INSERT INTO schema_version (version) VALUES (?)"
-        await self.db_conn.execute(query, (CURRENT_APP_SCHEMA_VERSION,))
+        _ = self.db_conn.execute(query, (str(CURRENT_APP_SCHEMA_VERSION),))
         await self.db_conn.commit()
 
     async def create(self) -> None:
-        logger.info(f"Expected database schema version: {CURRENT_APP_SCHEMA_VERSION}")
+        logger.info(f"Expected database schema version: {CURRENT_APP_SCHEMA_VERSION!s}")
         version = await self.get_version()
-        logger.info(f"Database reports installed version: {version}")
-        if version is not None and version >= Version.parse(CURRENT_APP_SCHEMA_VERSION):
+        logger.info(f"Database reports installed version: {version!s}")
+        if version is not None and version >= CURRENT_APP_SCHEMA_VERSION:
             return
 
         # TODO: on v9, raise SystemExit if db version is None or older than 8.0.0
-        logger.info(f"Updating database version to {CURRENT_APP_SCHEMA_VERSION}")
+        logger.info(f"Updating database version to {CURRENT_APP_SCHEMA_VERSION!s}")
         await self.__update_schema_version()

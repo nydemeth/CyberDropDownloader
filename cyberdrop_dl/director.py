@@ -67,9 +67,10 @@ async def _run_manager(manager: Manager) -> None:
 async def _runtime(manager: Manager) -> None:
     """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
 
-    with manager.live_manager.get_main_live(stop=True):
-        async with ScrapeMapper.managed(manager) as scrape_mapper:
-            await scrape_mapper.run()
+    async with storage.monitor(manager.global_config.general.required_free_space):
+        with manager.live_manager.get_main_live(stop=True):
+            async with ScrapeMapper.managed(manager) as scrape_mapper:
+                await scrape_mapper.run()
 
 
 async def _post_runtime(manager: Manager) -> None:
@@ -107,8 +108,7 @@ class Director:
 
     async def async_run(self) -> None:
         try:
-            async with storage.monitor(self.manager.global_config.general.required_free_space):
-                await _run_manager(self.manager)
+            await _run_manager(self.manager)
         finally:
             await self.manager.close()
 
