@@ -10,17 +10,16 @@ from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 from pydantic import BaseModel
 
-from cyberdrop_dl import __version__, constants, ffmpeg, yaml
+from cyberdrop_dl import __version__, ffmpeg, yaml
 from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
+from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
-from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils import filepath
-from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
@@ -30,6 +29,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+    from cyberdrop_dl.utils.logger import QueuedLogger
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,6 @@ class Manager:
         self.parsed_args: ParsedArgs = field(init=False)
         self.cache: dict[str, Any] = {}
         self.config_manager: ConfigManager = field(init=False)
-        self.hash_manager: HashManager = field(init=False)
 
         self.logs: LogManager = field(init=False)
         self.database: Database = field(init=False)
@@ -65,8 +64,7 @@ class Manager:
 
         self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
-
-        constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
+        self.hasher: Hasher = Hasher(self)
 
     @property
     def config(self):
@@ -138,7 +136,6 @@ class Manager:
             self.config.runtime_options.ignore_history,
         )
 
-        self.hash_manager = HashManager(self)
         self.live_manager = LiveManager(self)
         self.progress_manager = ProgressManager(self)
 
