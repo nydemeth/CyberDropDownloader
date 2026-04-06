@@ -12,7 +12,7 @@ from yarl import URL
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.jdownloader import JDownloader
-from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
+from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler
@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 existing_crawlers: dict[str, type[Crawler]] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
+
+REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
 
 def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
@@ -142,7 +144,7 @@ class ScrapeMapper:
             items_generator = self.load_links()
 
         async for item in items_generator:
-            item.children_limits = self.manager.config_manager.settings_data.download_options.maximum_number_of_children
+            item.children_limits = self.manager.config.download_options.maximum_number_of_children
             if self.filter_items(item):
                 if item_limit and self.count >= item_limit:
                     break
@@ -298,12 +300,12 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
-        skip_hosts = self.manager.config_manager.settings_data.ignore_options.skip_hosts
+        skip_hosts = self.manager.config.ignore_options.skip_hosts
         if skip_hosts and is_in_domain_list(scrape_item, skip_hosts):
             logger.info(f"Skipping URL by skip_hosts config: {scrape_item.url}")
             return False
 
-        only_hosts = self.manager.config_manager.settings_data.ignore_options.only_hosts
+        only_hosts = self.manager.config.ignore_options.only_hosts
         if only_hosts and not is_in_domain_list(scrape_item, only_hosts):
             logger.info(f"Skipping URL by only_hosts config: {scrape_item.url}")
             return False

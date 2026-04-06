@@ -17,7 +17,7 @@ import truststore
 from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import constants, ddos_guard, env
+from cyberdrop_dl import ddos_guard, env
 from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.clients import HTTPClient
 from cyberdrop_dl.clients.download_client import DownloadClient
@@ -46,7 +46,7 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
-
+DNS_RESOLVER: type[aiohttp.AsyncResolver] | type[aiohttp.ThreadedResolver] | None = None
 _DOWNLOAD_ERROR_ETAGS = {
     "d835884373f4d6c8f24742ceabe74946": "Imgur image has been removed",
     "65b7753c-528a": "SC Scrape Image",
@@ -210,7 +210,7 @@ class ClientManager:
 
     def is_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
-        ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ignore_options = self.manager.config.ignore_options
         ext = media_item.ext.lower()
 
         return not (
@@ -227,7 +227,7 @@ class ClientManager:
             return True
 
         item_date = datetime.date()
-        ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ignore_options = self.manager.config.ignore_options
 
         if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
             return False
@@ -245,7 +245,9 @@ class ClientManager:
                 yield domain, self.cookies.filter_cookies(AbsoluteHttpURL(f"https://{domain}"))
 
     async def startup(self) -> None:
-        await _set_dns_resolver()
+        global DNS_RESOLVER
+        if DNS_RESOLVER is None:
+            DNS_RESOLVER = await _get_dns_resolver()
 
     def new_curl_cffi_session(self) -> AsyncSession[CurlResponse]:
         # Calling code should have validated if curl is actually available
@@ -270,7 +272,7 @@ class ClientManager:
             verify=bool(self.ssl_context),
             proxy=proxy_or_none,
             timeout=self.rate_limiting_options._curl_timeout,
-            max_redirects=constants.MAX_REDIRECTS,
+            max_redirects=8,
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
@@ -290,8 +292,8 @@ class ClientManager:
         )
 
     def _new_tcp_connector(self) -> aiohttp.TCPConnector:
-        assert constants.DNS_RESOLVER is not None
-        conn = aiohttp.TCPConnector(ssl=self.ssl_context, resolver=constants.DNS_RESOLVER())
+        assert DNS_RESOLVER is not None
+        conn = aiohttp.TCPConnector(ssl=self.ssl_context, resolver=DNS_RESOLVER())
         conn._resolver_owner = True
         return conn
 
@@ -321,7 +323,7 @@ class ClientManager:
             pass
 
     async def load_cookie_files(self) -> None:
-        if self.manager.config_manager.settings_data.browser_cookies.auto_import:
+        if self.manager.config.browser_cookies.auto_import:
             assert self.manager.config.browser_cookies.browser
             cookies = await extract_cookies(self.manager.config.browser_cookies.browser)
             await export_cookies(cookies, output_path=self.manager.appdata.cookies)
@@ -448,23 +450,22 @@ class ClientManager:
             await self._flaresolverr.aclose()
 
 
-async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
-    if constants.DNS_RESOLVER is not None:
-        return
-    try:
-        await _test_async_resolver(loop)
-        constants.DNS_RESOLVER = aiohttp.AsyncResolver
-    except Exception as e:
-        constants.DNS_RESOLVER = aiohttp.ThreadedResolver
-        logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
-
-
-async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
+async def _get_dns_resolver(
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> type[aiohttp.AsyncResolver] | type[aiohttp.ThreadedResolver]:
     """Test aiodns with a DNS lookup."""
 
-    # pycares (the underlying C extension library that aiodns uses) installs successfully in most cases,
+    # pycares (the underlying C extension that aiodns uses) installs successfully in most cases,
     # but it fails to actually connect to DNS servers on some platforms (e.g., Android).
-    import aiodns
+    try:
+        import aiodns
 
-    async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
-        _ = await resolver.query_dns("github.com", "A")
+        async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
+            _ = await resolver.query_dns("github.com", "A")
+
+    except Exception as e:
+        logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
+        return aiohttp.ThreadedResolver
+
+    else:
+        return aiohttp.AsyncResolver

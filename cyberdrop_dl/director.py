@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from enum import IntEnum
-from typing import TYPE_CHECKING, ParamSpec, TypeVar
+from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
@@ -22,18 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
-P = ParamSpec("P")
-R = TypeVar("R")
 
-_ = install_rich_tracebacks()
-
-
-class ExitCode(IntEnum):
-    OK = 0
-    ERROR = 1
-
-
-_C = ExitCode
+_ = install_rich_tracebacks(width=None)
 
 
 async def _run_manager(manager: Manager) -> None:
@@ -80,13 +69,13 @@ async def _post_runtime(manager: Manager) -> None:
 
     await manager.hasher.cleanup_dupes_after_download()
 
-    if manager.config_manager.settings_data.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if manager.config.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
         sorter = Sorter.from_manager(manager)
         await sorter.run()
 
     check_partials_and_empty_folders(manager)
 
-    if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
+    if manager.config.runtime_options.update_last_forum_post:
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 
@@ -113,9 +102,9 @@ class Director:
             await self.manager.close()
 
     def _run(self) -> int:
-        exit_code = _C.ERROR
+        exit_code = 1
         with contextlib.suppress(Exception):
             aio.run(self.async_run())
-            exit_code = _C.OK
+            exit_code = 0
 
         return exit_code

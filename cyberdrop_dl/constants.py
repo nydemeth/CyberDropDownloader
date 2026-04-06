@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, final
+from typing import final
 
 from rich.text import Text
 
 from cyberdrop_dl import env
 from cyberdrop_dl.compat import CIStrEnum, Enum, StrEnum
-
-if TYPE_CHECKING:
-    from aiohttp.resolver import AsyncResolver, ThreadedResolver
 
 # TIME
 STARTUP_TIME = datetime.now()
@@ -20,31 +16,9 @@ STARTUP_TIME_UTC = datetime.now(UTC)
 LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = STARTUP_TIME.strftime(LOGS_DATETIME_FORMAT)
-STARTUP_TIME_UTC_STR = STARTUP_TIME_UTC.strftime(LOGS_DATETIME_FORMAT)
-DNS_RESOLVER: type[AsyncResolver] | type[ThreadedResolver] | None = None
-MAX_REDIRECTS: Final[int] = 8
 
-
-# logging
-CONSOLE_LEVEL = 100
-DEFAULT_CONSOLE_WIDTH = 240
 
 LOG_OUTPUT_TEXT = Text("")
-
-VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors. Read the documentation to learn what's the expected format and values: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options
-\nThis is not a bug. Do not open issues related to this"""
-
-
-CLI_VALIDATION_ERROR_FOOTER = """Please read the documentation to learn about the expected values: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options
-\nThis is not a bug. Do not open issues related to this"""
-
-# regex
-RAR_MULTIPART_PATTERN = re.compile(r"^part\d+")
-SANITIZE_FILENAME_PATTERN = re.compile(r'[<>:"/\\|?*\']')
-REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
-HTTP_REGEX_LINKS = re.compile(
-    r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
-)
 
 
 class TempExt(StrEnum):
@@ -80,7 +54,6 @@ class BlockedDomains:
 
 DEFAULT_APP_STORAGE = Path("./AppData")
 DEFAULT_DOWNLOAD_STORAGE = Path("./Downloads")
-RESERVED_CONFIG_NAMES = ["all", "default"]
 
 
 class HashType(StrEnum):
