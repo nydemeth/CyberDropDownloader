@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import contextlib
-import itertools
 import json
 import logging
-import os
 import queue
 from contextvars import ContextVar
 from datetime import datetime
+from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, ParamSpec, cast
+from typing import TYPE_CHECKING, final
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
@@ -22,28 +21,21 @@ from typing_extensions import override
 from cyberdrop_dl import env
 
 if TYPE_CHECKING:
-    import threading
     from collections.abc import Generator
 
 logger = logging.getLogger("cyberdrop_dl")
 _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().name
-_NEW_ISSUE_URL = "https://github.com/NTFSvolume/cdl/issues/new/choose"
 _DEFAULT_CONSOLE_WIDTH = 240
-_LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
-_MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
-
-_capture_logs: ContextVar[bool] = ContextVar("_capture_logs", default=False)
+_MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOGGER_LISTENER")
+_MAIN_LOG_FILE: ContextVar[Path] = ContextVar("_MAIN_LOGGER_FILE")
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from rich.console import ConsoleRenderable
-
-    _P = ParamSpec("_P")
-    _ExitCode = str | int | None
 
 
 class RedactedConsole(Console):
@@ -93,22 +85,28 @@ logging.setLogRecordFactory(JsonLogRecord)
 class LogHandler(RichHandler):
     """Rich Handler with default settings, custom log render to remove padding in files and `color` extra"""
 
-    def __init__(self, level: int = logging.DEBUG, console: Console | None = None) -> None:
-        self.is_file: bool = bool(console)
-        self._buffer: list[Text] = []
+    def __init__(
+        self,
+        level: int = logging.DEBUG,
+        console: Console | None = None,
+        *,
+        show_time: bool,
+    ) -> None:
         super().__init__(
             level,
             console,
-            show_time=self.is_file,
+            show_time=show_time,
             rich_tracebacks=True,
             tracebacks_show_locals=True,
             locals_max_string=_DEFAULT_CONSOLE_WIDTH,
             tracebacks_extra_lines=2,
             locals_max_length=20,
             show_path=False,
+            show_level=True,
         )
-        if self.is_file:
+        if show_time:
             self._log_render = NoPaddingLogRender(
+                show_time=show_time,
                 show_level=True,
                 show_path=False,
                 level_width=10,
@@ -132,22 +130,7 @@ class LogHandler(RichHandler):
         if self.keywords:
             _ = message_text.highlight_words(self.keywords, "logging.keyword")
 
-        if self.is_file and _capture_logs.get():
-            self._buffer.append(message_text)
-
         return message_text
-
-    def export_text(self) -> Text:
-        assert self.lock is not None
-        with self.lock:
-            lines = self._buffer[:]
-            self._buffer.clear()
-
-        eof = Text("\n")
-        text = Text()
-        for line in itertools.chain.from_iterable((line, eof) for line in lines):
-            _ = text.append_text(line)
-        return text
 
 
 class BareQueueHandler(QueueHandler):
@@ -167,28 +150,31 @@ class BareQueueHandler(QueueHandler):
 
 
 @contextlib.contextmanager
-def _threaded_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
-    """Context-manager to process logs from this handler in another thread.
-
-    It starts a QueueListener and yields the QueueHandler."""
+def _threaded_logger(log_handler: logging.Handler, *, is_main_log: bool = False) -> Generator[None]:
+    """Context-manager to process logs from this handler in another thread"""
     q: queue.Queue[logging.LogRecord] = queue.Queue()
     q_handler: BareQueueHandler = BareQueueHandler(q)
-    listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
-    listener.start()
+    q_listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
+    q_listener.start()
+    token = _MAIN_LOG_LISTENER.set(q_listener) if is_main_log else None
+    logger.addHandler(q_handler)
     try:
-        yield q_handler
+        yield
     finally:
+        logger.removeHandler(q_handler)
         try:
             q_handler.close()
         finally:
-            listener.stop()
-            for handler in listener.handlers[:]:
+            q_listener.stop()
+            for handler in q_listener.handlers[:]:
                 handler.close()
+            if token is not None:
+                _MAIN_LOG_LISTENER.reset(token)
 
 
+@final
 class NoPaddingLogRender(LogRender):
     _cdl_padding: int = 0
-    EXCLUDE_PATH_LOGGING_FROM: tuple[str, ...] = "logger.py", "base.py", "session.py", "cache_control.py"
 
     def __call__(  # type: ignore[reportIncompatibleMethodOverride]  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
@@ -211,21 +197,18 @@ class NoPaddingLogRender(LogRender):
                 else Text(log_time.strftime(time_format), style="log.time")
             )
             if log_time_display == self._last_time and self.omit_repeated_times:
-                _ = output.append(" " * len(log_time_display), style="log.time")
-                output.pad_right(1)
+                output.append(" " * len(log_time_display), style="log.time").pad_right(1)
             else:
-                _ = output.append_text(log_time_display)
-                output.pad_right(1)
+                output.append_text(log_time_display).pad_right(1)
                 self._last_time = log_time_display
 
         if self.show_level:
-            _ = output.append(level)
-            output.pad_right(1)
+            output.append(level).pad_right(1)
 
         if not self._cdl_padding:
             self._cdl_padding = console.measure(output).maximum
 
-        if self.show_path and path and not any(path.startswith(p) for p in self.EXCLUDE_PATH_LOGGING_FROM):
+        if self.show_path and path:
             path_text = Text(style="log.path")
             _ = path_text.append(path, style=f"link file://{link_path}" if link_path else "")
             if line_no:
@@ -234,8 +217,7 @@ class NoPaddingLogRender(LogRender):
                     f"{line_no}",
                     style=f"link file://{link_path}#{line_no}" if link_path else "",
                 )
-            _ = output.append_text(path_text)
-            output.pad_right(1)
+            output.append_text(path_text).pad_right(1)
 
         padded_lines: list[ConsoleRenderable] = []
 
@@ -272,24 +254,24 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     logger.setLevel(level)
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
-        file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
-        _threaded_logger(LogHandler(level=level)) as console_out,
-        _threaded_logger(
-            main_logger := LogHandler(
-                level=level,
-                console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
-            )
-        ) as file_out,
+        _threaded_logger(LogHandler(level, show_time=False)),
         _setup_debug_logger() as debug_log_file,
+        file.open("w", encoding="utf8") as fp,
+        _threaded_logger(
+            is_main_log=True,
+            log_handler=LogHandler(
+                level,
+                show_time=True,
+                console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
+            ),
+        ),
     ):
-        token = _MAIN_LOGGER.set(main_logger)
-        logger.addHandler(console_out)
-        logger.addHandler(file_out)
+        logger.info(f"Debug log file: '{debug_log_file}'")
+        token = _MAIN_LOG_FILE.set(file)
         try:
-            logger.info(f"Debug log file: '{debug_log_file}'")
             yield
         finally:
-            _MAIN_LOGGER.reset(token)
+            _MAIN_LOG_FILE.reset(token)
 
 
 @contextlib.contextmanager
@@ -315,8 +297,36 @@ def _setup_debug_logger() -> Generator[Path | None]:
     with (
         debug_log_file.open("w", encoding="utf8") as fp,
         _threaded_logger(
-            LogHandler(level=logging.DEBUG, console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2))
-        ) as debug_handler,
+            LogHandler(
+                logging.DEBUG,
+                console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
+                show_time=True,
+            )
+        ),
     ):
-        logger.addHandler(debug_handler)
         yield debug_log_file
+
+
+@contextlib.contextmanager
+def capture_logs() -> Generator[StringIO]:
+    in_memory_handler = logging.StreamHandler(file := StringIO())
+    logger.addHandler(in_memory_handler)
+    try:
+        yield file
+    finally:
+        logger.removeHandler(in_memory_handler)
+
+
+def export_logs(*, size_limit: int | None = None) -> bytes:
+    flush_logs()
+    log_file = _MAIN_LOG_FILE.get()
+    if size_limit and log_file.stat().st_size > size_limit:
+        raise RuntimeError(f"Logs file '{log_file}' it's too big. Max size expected: {size_limit}")
+    return log_file.read_bytes()
+
+
+def flush_logs() -> None:
+    """Wait until every record that is currently queued has been written to disk"""
+    listener = _MAIN_LOG_LISTENER.get()
+    listener.stop()
+    listener.start()
