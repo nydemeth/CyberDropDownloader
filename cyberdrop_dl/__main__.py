@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
-from cyberdrop_dl import aio, storage
+from cyberdrop_dl import aio, storage, webhook
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
@@ -16,7 +16,6 @@ from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
-from cyberdrop_dl.utils.webhook import send_webhook_message
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -41,7 +40,7 @@ async def _scrape(manager: Manager) -> None:
             await _runtime(manager)
             await _post_runtime(manager)
 
-            manager.progress_manager.print_stats(start_time)
+            stats = manager.progress_manager.print_stats(start_time)
 
             log_spacer()
             check_latest_pypi()
@@ -49,7 +48,9 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            await send_webhook_message(manager)
+            if manager.config.logs.webhook:
+                await webhook.send_notification(manager.config.logs.webhook, stats)
+
             await send_apprise_notifications(manager)
 
 
@@ -61,7 +62,7 @@ async def _runtime(manager: Manager) -> None:
 
 
 async def _post_runtime(manager: Manager) -> None:
-    """Actions to complete after main runtime, and before ui shutdown."""
+    """Actions to complete after main runtime, and before UI shutdown."""
     log_spacer()
     logger.info("Running Post-Download Processes", extra={"color": "green"})
 
@@ -92,7 +93,11 @@ def main(args: Sequence[str] | None = None) -> str | int | None:
 
     exit_code = 1
     with contextlib.suppress(Exception):
-        aio.run(_run(manager))
+        try:
+            aio.run(_run(manager))
+        except KeyboardInterrupt:
+            logger.info("Exiting (Ctrl + C) ...")
+
         exit_code = 0
 
     return exit_code
