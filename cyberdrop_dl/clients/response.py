@@ -68,12 +68,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     def __repr__(self) -> str:
         return f"<{type(self).__name__} [{self.status}] ({self.url})>"
 
-    def __str__(self) -> str:
-        me = self.__json__()
-        for key in ("content", "created_at"):
-            del me[key]
-        return json.dumps(me, indent=2, ensure_ascii=False)
-
     def __json__(self) -> dict[str, Any]:
         if content := self._text:
             if "json" in self.content_type:
