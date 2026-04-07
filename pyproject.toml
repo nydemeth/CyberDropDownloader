@@ -31,6 +31,7 @@ dependencies = [
     "pycryptodome >=3.23.0",
     "pydantic >=2.12.4",
     "pyyaml >=6.0.3",
+    "readchar >= 4.2.2",
     "rich >=14.2.0",
     "send2trash >=2.0.0",
     "truststore >=0.10.4",
