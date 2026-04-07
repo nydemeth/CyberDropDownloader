@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -11,8 +10,7 @@ from cyberdrop_dl import aio, storage, webhook
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
-from cyberdrop_dl.updates import check_latest_pypi
-from cyberdrop_dl.utils.apprise import send_apprise_notifications
+from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
@@ -43,7 +41,7 @@ async def _scrape(manager: Manager) -> None:
             stats = manager.progress_manager.print_stats(start_time)
 
             log_spacer()
-            check_latest_pypi()
+            await check_latest_pypi()
             log_spacer()
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
@@ -51,7 +49,8 @@ async def _scrape(manager: Manager) -> None:
             if manager.config.logs.webhook:
                 await webhook.send_notification(manager.config.logs.webhook, stats)
 
-            await send_apprise_notifications(manager)
+            if manager.config_manager.apprise_urls:
+                await apprise.send_notifications(manager.config_manager.apprise_urls, stats)
 
 
 async def _runtime(manager: Manager) -> None:
@@ -85,22 +84,19 @@ async def _run(manager: Manager) -> None:
         await manager.close()
 
 
-def main(args: Sequence[str] | None = None) -> str | int | None:
+def main(args: Sequence[str] | None = None) -> int:
     manager = Manager(args)
     manager.startup()
     if not manager.parsed_args.cli_only_args.download:
         program_ui.run(manager)
 
-    exit_code = 1
-    with contextlib.suppress(Exception):
-        try:
-            aio.run(_run(manager))
-        except KeyboardInterrupt:
-            logger.info("Exiting (Ctrl + C) ...")
+    try:
+        aio.run(_run(manager))
 
-        exit_code = 0
+    except KeyboardInterrupt:
+        logger.info("Exiting (Ctrl + C) ...")
 
-    return exit_code
+    return 0
 
 
 if __name__ == "__main__":
