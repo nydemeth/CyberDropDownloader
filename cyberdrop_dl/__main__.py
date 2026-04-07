@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
 from cyberdrop_dl import aio, storage, webhook
+from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
-from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 
@@ -26,16 +27,17 @@ _ = install_rich_tracebacks(width=None)
 async def _scrape(manager: Manager) -> None:
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
-    start_time = manager.start_time
+    start_time = time.monotonic()
 
-    with setup_logging(manager.config.logs.main_log):
+    with setup_file_logging(manager.config.logs.main_log):
         await manager.async_startup()
 
         log_spacer()
         async with manager.database:
-            logger.info("Starting CDL...\n")
-
+            log_spacer()
+            logger.info("Starting CDL...")
             await _runtime(manager)
+            log_spacer()
             await _post_runtime(manager)
 
             stats = manager.progress_manager.print_stats(start_time)
@@ -62,8 +64,7 @@ async def _runtime(manager: Manager) -> None:
 
 async def _post_runtime(manager: Manager) -> None:
     """Actions to complete after main runtime, and before UI shutdown."""
-    log_spacer()
-    logger.info("Running Post-Download Processes", extra={"color": "green"})
+    logger.info("Running Post-Download Processes\n ", extra={"color": "green"})
 
     await manager.hasher.cleanup_dupes_after_download()
 
@@ -85,18 +86,19 @@ async def _run(manager: Manager) -> None:
 
 
 def main(args: Sequence[str] | None = None) -> int:
-    manager = Manager(args)
-    manager.startup()
-    if not manager.parsed_args.cli_only_args.download:
-        program_ui.run(manager)
+    with setup_console_logging():
+        manager = Manager(args)
+        manager.startup()
+        if not manager.parsed_args.cli_only_args.download:
+            program_ui.run(manager)
 
-    try:
-        aio.run(_run(manager))
+        try:
+            aio.run(_run(manager))
 
-    except KeyboardInterrupt:
-        logger.info("Exiting (Ctrl + C) ...")
+        except KeyboardInterrupt:
+            logger.info("Exiting (Ctrl + C) ...")
 
-    return 0
+        return 0
 
 
 if __name__ == "__main__":

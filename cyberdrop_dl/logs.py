@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 
     from rich.console import ConsoleRenderable
 
+LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
+
 
 class RedactedConsole(Console):
     """Custom console to remove username from logs"""
@@ -73,7 +75,7 @@ class JsonLogRecord(logging.LogRecord):
     @staticmethod
     def _proccess_msg(msg: object) -> object:
         if callable(dump := getattr(msg, "model_dump_json", None)):
-            return dump()
+            return dump(indent=2, ensure_ascii=False)
         if isinstance(msg, dict):
             return json.dumps(msg, indent=2, ensure_ascii=False, default=str)
         return msg
@@ -250,11 +252,22 @@ def log_spacer(char: str = "-") -> None:
 
 
 @contextlib.contextmanager
-def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
-    logger.setLevel(level)
+def setup_console_logging(level: int = logging.DEBUG) -> Generator[None]:
+    handler = LogHandler(level, show_time=False)
+    logger.setLevel(logging.DEBUG)
+    handler.addFilter(lambda _: LOG_TO_CONSOLE.get())
+    try:
+        with _threaded_logger(handler):
+            yield
+    finally:
+        # Re add it as a normal handler to make sure uncatched exceptions show up
+        logger.addHandler(handler)
+
+
+@contextlib.contextmanager
+def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
-        _threaded_logger(LogHandler(level, show_time=False)),
         _setup_debug_logger() as debug_log_file,
         file.open("w", encoding="utf8") as fp,
         _threaded_logger(
@@ -280,10 +293,10 @@ def _setup_debug_logger() -> Generator[Path | None]:
         yield
         return
 
-    debug_log_file = Path(__file__).parent.parent.parent / "cyberdrop_dl_debug.log"
+    debug_log_file = Path(__file__).parent.parent / "cyberdrop_dl_debug.log"
 
     if env.DEBUG_LOG_FOLDER:
-        debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
+        debug_log_folder = Path(env.DEBUG_LOG_FOLDER).expanduser()
 
         if not debug_log_folder.exists():
             msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' does not exists"
@@ -296,7 +309,7 @@ def _setup_debug_logger() -> Generator[Path | None]:
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         debug_log_file = debug_log_folder / f"cyberdrop_dl_debug_{now}.log"
 
-    debug_log_file = debug_log_file.expanduser().resolve().absolute()
+    debug_log_file = debug_log_file.resolve().absolute()
 
     with (
         debug_log_file.open("w", encoding="utf8") as fp,
