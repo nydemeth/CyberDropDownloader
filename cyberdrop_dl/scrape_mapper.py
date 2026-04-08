@@ -420,9 +420,7 @@ def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawl
 
     crawlers_map: dict[str, type[Crawler]] = {}
 
-    crawlers = Registry.concrete
-    if include_generics:
-        crawlers.update(Registry.generic)
+    crawlers = Registry.concrete | Registry.generic if include_generics else Registry.concrete
 
     for crawler in sorted(crawlers, key=lambda c: c.NAME):
         register_crawler(crawlers_map, crawler)
