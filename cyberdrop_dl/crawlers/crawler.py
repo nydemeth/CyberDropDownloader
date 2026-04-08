@@ -158,6 +158,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
+    disabled: bool = False
 
     @staticmethod
     def __db_path__(url: AbsoluteHttpURL, /) -> str:
@@ -170,7 +171,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self.client: HTTPClient = dataclasses.field(init=False)
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
-        self.disabled: bool = False
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
 
@@ -185,6 +185,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     async def __async_init__(self) -> None:
+        if self._ready:
+            return
         async with self._startup_lock:
             if self._ready:
                 return
@@ -204,11 +206,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         ex: login, getting API tokens, etc..
 
         This method its called once and only if the crawler is actually going to be scrape something"""
-
-    @final
-    async def ready(self) -> None:
-        if not self._ready:
-            await self.__async_init__()
 
     def __init_subclass__(
         cls,
@@ -280,7 +277,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
-        _ = self.manager.task_group.create_task(coro)
+        _ = self.manager.scrape_mapper.create_task(coro)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -486,7 +483,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             self.manager.progress_manager.download_progress.add_skipped()
             return
 
-        self.create_task(self._download(media_item, m3u8))
+        self.manager.scrape_mapper.create_download_task(self._download(media_item, m3u8))
 
     @final
     async def check_skip_by_config(self, media_item: MediaItem) -> bool:
@@ -545,7 +542,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """Maps external links to the scraper class."""
         if reset:
             scrape_item.reset()
-        self.create_task(self.manager.scrape_mapper.filter_and_send_to_crawler(scrape_item))
+        self.create_task(self.manager.scrape_mapper.send_to_crawler(scrape_item))
 
     @final
     def get_filename_and_ext(

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import pytest
 
 from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
@@ -78,7 +77,6 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
 
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
-    scrape_mapper.existing_crawlers.clear()
     await manager.async_startup()
     async with manager.database:
         yield manager

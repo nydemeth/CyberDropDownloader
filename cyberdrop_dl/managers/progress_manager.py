@@ -23,11 +23,11 @@ from cyberdrop_dl.ui.progress.statistic_progress import DownloadStatsProgress, S
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence
-    from pathlib import Path
 
     from rich.panel import Panel
 
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.scrape_mapper import ScrapeStats
     from cyberdrop_dl.ui.progress.statistic_progress import UiFailureTotal
 
 
@@ -111,7 +111,7 @@ class ProgressManager:
             return self.vertical_layout
         return self.horizontal_layout
 
-    def print_stats(self, start_time: float) -> str:
+    def print_stats(self, stats: ScrapeStats) -> str:
         if not self.manager.parsed_args.cli_only_args.print_stats:
             return ""
 
@@ -119,26 +119,30 @@ class ProgressManager:
         logger.info("Printing Stats...\n")
 
         with capture_logs() as stream:
-            self._print_stats(start_time)
+            self._print_stats(stats)
 
         return stream.getvalue()
 
-    def _print_stats(self, start_time: float) -> None:
+    def _print_stats(self, stats: ScrapeStats) -> None:
 
-        elapsed = timedelta(seconds=int(time.monotonic() - start_time))
+        elapsed = timedelta(seconds=int(time.monotonic() - stats.start_time))
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
         config_path = self.manager.appdata.configs / self.manager.config_manager.loaded_config
-        input_file_text = get_input(self.manager)
 
         logger.info("Run Stats:", extra={"color": "cyan"})
         logger.info(f"  Config file: {config_path}")
-        logger.info(f"  Input file: {input_file_text}")
-        logger.info(f"  URLs: {self.manager.scrape_mapper.count:,}")
-        logger.info(f"  URL Groups: {self.manager.scrape_mapper.group_count:,}")
+        logger.info(f"  URLs source: {stats.source}")
+        logger.info(f"  URLs: {stats.count:,}")
+        logger.info(f"  URL groups: {len(stats.unique_groups):,}")
         logger.info(f"  Logs folder: {self.manager.config.logs.log_folder}")
         logger.info(f"  Total runtime: {elapsed}")
         logger.info(f"  Total downloaded data: {total_data_written}")
+
+        if stats.domain_stats:
+            log_spacer()
+            logger.info("URLs by domain:", extra={"color": "cyan"})
+            logger.info(" - " + "\n - ".join(map(str, stats.domain_stats.items())))
 
         log_spacer()
         logger.info("Download Stats:", extra={"color": "cyan"})
@@ -189,20 +193,8 @@ def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequen
             logger.info(f"  {'None':>{padding}}", extra={"color": "green"})
             continue
 
-        for error in scrape_errors:
+        for error in errors:
             error_code = error.code if error.code is not None else ""
             logger.info(
                 f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.total:,}", extra={"color": "red"}
             )
-
-
-def get_input(manager: Manager) -> Path | str:
-    if manager.parsed_args.cli_only_args.retry_all:
-        return "--retry-all"
-    if manager.parsed_args.cli_only_args.retry_failed:
-        return "--retry-failed"
-    if manager.parsed_args.cli_only_args.retry_maintenance:
-        return "--retry-maintenance"
-    if manager.scrape_mapper.using_input_file:
-        return manager.config.files.input_file
-    return "--links (CLI args)"

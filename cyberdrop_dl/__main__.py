@@ -1,16 +1,18 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 import logging
 import sys
-import time
 from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
-from cyberdrop_dl import aio, storage, webhook
+_ = install_rich_tracebacks(width=None)
+
+from cyberdrop_dl import aio, webhook
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.sorting import Sorter
@@ -21,13 +23,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("cyberdrop_dl")
 
-_ = install_rich_tracebacks(width=None)
-
 
 async def _scrape(manager: Manager) -> None:
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
-    start_time = time.monotonic()
 
     with setup_file_logging(manager.config.logs.main_log):
         await manager.async_startup()
@@ -36,11 +35,14 @@ async def _scrape(manager: Manager) -> None:
         async with manager.database:
             log_spacer()
             logger.info("Starting CDL...")
-            await _runtime(manager)
+            with manager.live_manager.get_main_live(stop=True):
+                async with ScrapeMapper(manager)() as scrape_mapper:
+                    stats = await scrape_mapper.run()
+
             log_spacer()
             await _post_runtime(manager)
 
-            stats = manager.progress_manager.print_stats(start_time)
+            stats_summary = manager.progress_manager.print_stats(stats)
 
             log_spacer()
             await check_latest_pypi()
@@ -49,17 +51,10 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
             if manager.config.logs.webhook:
-                await webhook.send_notification(manager.config.logs.webhook, stats)
+                await webhook.send_notification(manager.config.logs.webhook, stats_summary)
 
             if manager.config_manager.apprise_urls:
-                await apprise.send_notifications(manager.config_manager.apprise_urls, stats)
-
-
-async def _runtime(manager: Manager) -> None:
-    async with storage.monitor(manager.global_config.general.required_free_space):
-        with manager.live_manager.get_main_live(stop=True):
-            async with ScrapeMapper.managed(manager) as scrape_mapper:
-                await scrape_mapper.run()
+                await apprise.send_notifications(manager.config_manager.apprise_urls, stats_summary)
 
 
 async def _post_runtime(manager: Manager) -> None:

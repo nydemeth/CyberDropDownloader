@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from cyberdrop_dl import scrape_mapper
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.scraper import scrape_mapper
-from cyberdrop_dl.scraper.scrape_mapper import _create_item_from_row
+from cyberdrop_dl.scrape_mapper import _create_item_from_row
 from cyberdrop_dl.utils.utilities import parse_url
 
 if TYPE_CHECKING:
@@ -134,7 +134,7 @@ def test_invalid_date_format(row) -> None:
 def test_create_db_path(url: str, expected: str) -> None:
     crawlers = scrape_mapper.get_crawlers_mapping()
     url_ = parse_url(url)
-    crawler = scrape_mapper.match_url_to_crawler(crawlers, url_)
+    crawler = scrape_mapper._best_match(crawlers, url_.host)
     assert crawler
     path = crawler.__db_path__(url_)
     assert path == expected
