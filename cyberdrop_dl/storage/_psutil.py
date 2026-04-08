@@ -45,13 +45,12 @@ class _Stats:
         return str(self.__json__())
 
 
-async def _get_free_space(path: Path) -> int:
+def _disk_usage(path: Path) -> int:
     unsupported = None
     free_space = 0
 
     try:
-        usage = await asyncio.to_thread(psutil.disk_usage, str(path))
-        free_space = usage.free
+        free_space = psutil.disk_usage(str(path)).free
     except OSError as e:
         if "operation not supported" not in str(e).casefold():
             raise
@@ -68,11 +67,10 @@ async def _get_free_space(path: Path) -> int:
     return free_space
 
 
-async def has_sufficient_space(folder: Path, /, required_free_space: int) -> bool:
-    await _check_nt_network_drive(folder)
+async def get_free_space(folder: Path) -> int:
     mount = _get_mount_point(folder)
     if not mount:
-        return False
+        return 0
 
     free_space = _free_space.get(mount)
     if free_space is None:
@@ -81,11 +79,11 @@ async def has_sufficient_space(folder: Path, /, required_free_space: int) -> boo
             if free_space is None:
                 # Manually query this mount now. Next time it will be part of the loop
 
-                free_space = _free_space[mount] = await _get_free_space(mount)
+                free_space = _free_space[mount] = await asyncio.to_thread(_disk_usage, mount)
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
                 logger.info("Storage status \n%s", _Stats())
 
-    return free_space == -1 or free_space > required_free_space
+    return free_space
 
 
 def _find_partition(path: Path) -> DiskPartition | None:
@@ -134,13 +132,16 @@ def clear_cache() -> None:
 async def start_loop() -> None:
     """Infinite loop to get free space of all used mounts and update internal dict"""
 
-    async def update():
+    async def update() -> None:
         mountpoints = sorted(mount for mount, free_space in _free_space.items() if free_space != -1)
         if not mountpoints:
             return
 
-        results = await asyncio.gather(*map(_get_free_space, mountpoints))
-        _free_space.update(zip(mountpoints, results, strict=True))
+        usage = await asyncio.gather(
+            *(asyncio.to_thread(_disk_usage, mount) for mount in mountpoints),
+            return_exceptions=False,
+        )
+        _free_space.update(zip(mountpoints, usage, strict=True))
 
     last_check = -1
     while True:
