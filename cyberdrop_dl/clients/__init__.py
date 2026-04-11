@@ -71,8 +71,8 @@ class HTTPClient:
     def from_client(cls, client_manager: ClientManager) -> Self:
         return cls(
             client_manager,
-            client_manager.manager.config.files.save_pages_html,
-            client_manager.manager.config.logs.main_log.parent / "cdl_responses",
+            client_manager.manager.config.settings.files.save_pages_html,
+            client_manager.manager.config.settings.logs.main_log.parent / "cdl_responses",
         )
 
     @property
@@ -121,7 +121,7 @@ class HTTPClient:
         if method == "GET" and (data or json):
             method = "POST"
 
-        impersonate = self.client_manager.manager.parsed_args.cli_only_args.impersonate or impersonate
+        impersonate = self.client_manager.manager.cli_args.impersonate or impersonate
         if impersonate:
             self.client_manager.check_curl_cffi_is_available()
             if impersonate is True:
@@ -129,7 +129,7 @@ class HTTPClient:
             request_params["impersonate"] = impersonate
 
         else:
-            _ = headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
+            _ = headers.setdefault("User-agent", self.client_manager.manager.config.global_settings.general.user_agent)
 
         async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
             exc = None
@@ -219,7 +219,9 @@ class HTTPClient:
                 raise e from None
 
             self.client_manager.cookies.update_cookies(solution.cookies)
-            await _check_flaresolverr_resp(self.client_manager.manager.global_config.general.user_agent, solution)
+            await _check_flaresolverr_resp(
+                self.client_manager.manager.config.global_settings.general.user_agent, solution
+            )
             return AbstractResponse.create(solution)
 
 

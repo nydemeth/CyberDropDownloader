@@ -2,6 +2,7 @@
 
 from typing import ClassVar, TypedDict
 
+from cyclopts import Parameter
 from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, model_serializer, model_validator
 
 
@@ -17,11 +18,18 @@ def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str
 class AliasModel(BaseModel, populate_by_name=True, defer_build=True): ...
 
 
+class SettingsGroup(AliasModel):
+    def __init_subclass__(cls, group: str | None = None) -> None:
+        _ = Parameter(group=group or cls.__name__, name="*")(cls)
+        return super().__init_subclass__()
+
+
 class _AppriseURLDict(TypedDict):
     url: str
     tags: set[str]
 
 
+@Parameter(name="*")
 class AppriseURL(AliasModel):
     url: Secret[AnyUrl]
     tags: set[str] = set()

@@ -1,14 +1,23 @@
+# ruff: noqa: RUF012
 import re
-from collections.abc import Generator
 from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_validator
+from cyclopts import Parameter
+from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, PrivateAttr, field_validator
+from typing_extensions import override
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.constants import DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Browser, Hashing
-from cyberdrop_dl.models import AliasModel, AppriseURL
+from cyberdrop_dl.constants import (
+    DEFAULT_APP_STORAGE,
+    DEFAULT_DOWNLOAD_STORAGE,
+    LOGS_DATE_FORMAT,
+    LOGS_DATETIME_FORMAT,
+    Browser,
+    Hashing,
+)
+from cyberdrop_dl.models import AliasModel, AppriseURL, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
@@ -23,9 +32,6 @@ from cyberdrop_dl.models.validators import falsy_as, to_timedelta
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
 
-from ._common import ConfigModel
-
-ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
     "base_dir",
     "ext",
@@ -38,7 +44,7 @@ _SORTING_COMMON_FIELDS = {
 }
 
 
-class DownloadOptions(BaseModel):
+class DownloadOptions(SettingsGroup):
     block_download_sub_folders: bool = False
     disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
@@ -62,14 +68,14 @@ class DownloadOptions(BaseModel):
         return value
 
 
-class Files(AliasModel):
+class Files(SettingsGroup):
     download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
     input_file: Path = Field(default=Path("URLs.txt"), validation_alias="i")
     save_pages_html: bool = False
 
 
-class Logs(AliasModel):
+class Logs(SettingsGroup):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
@@ -78,7 +84,13 @@ class Logs(AliasModel):
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
-    webhook: AppriseURL | None = None
+    webhook: Annotated[AppriseURL | None, Parameter(show=False)] = None
+
+    _created_at: datetime = PrivateAttr(default_factory=datetime.now)
+
+    @override
+    def model_post_init(self, *_) -> None:
+        self._resolve_filenames()
 
     @field_validator("webhook", mode="before")
     @classmethod
@@ -91,42 +103,37 @@ class Logs(AliasModel):
         if value := falsy_as(input_date, None):
             return to_timedelta(value)
 
-    def _files(self) -> Generator[tuple[str, Path]]:
+    def _resolve_filenames(self) -> None:
+        object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
+        now_file_iso: str = self._created_at.strftime(LOGS_DATETIME_FORMAT)
+        now_folder_iso: str = self._created_at.strftime(LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
             if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
-            yield name, log_file
 
-    def _set_output_filenames(self, now: datetime) -> None:
-        self.log_folder = self.log_folder.resolve()
-        self.log_folder.mkdir(exist_ok=True, parents=True)
-        current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
-        current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
-        for name, log_file in self._files():
             log_file = self.log_folder / log_file
+
             if self.rotate_logs:
-                new_name = f"{log_file.stem}_{current_time_file_iso}{log_file.suffix}"
-                log_file = log_file.parent / current_time_folder_iso / new_name
+                file_name = f"{log_file.stem}_{now_file_iso}{log_file.suffix}"
+                log_file = log_file.parent / now_folder_iso / file_name
 
-            setattr(self, name, log_file)
+            object.__setattr__(self, name, log_file)
 
-    def mkdirs(self):
-        for _, log_file in self._files():
-            log_file.parent.mkdir(exist_ok=True, parents=True)
+    def delete_old_logs_and_folders(self) -> None:
+        if not self.logs_expire_after:
+            return
 
-    def _delete_old_logs_and_folders(self, now: datetime) -> None:
-        if self.logs_expire_after:
-            for file in self.log_folder.rglob("*"):
-                if file.suffix.lower() not in (".log", ".csv"):
-                    continue
+        for file in self.log_folder.rglob("*"):
+            if file.suffix.lower() not in (".log", ".csv"):
+                continue
 
-                if (now - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
-                    file.unlink()
+            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+                file.unlink()
 
-        delete_empty_files_and_folders(self.log_folder)
+        _ = delete_empty_files_and_folders(self.log_folder)
 
 
-class FileSizeLimits(BaseModel):
+class FileSizeLimits(SettingsGroup):
     maximum_image_size: ByteSizeSerilized = ByteSize(0)
     maximum_other_size: ByteSizeSerilized = ByteSize(0)
     maximum_video_size: ByteSizeSerilized = ByteSize(0)
@@ -135,7 +142,7 @@ class FileSizeLimits(BaseModel):
     minimum_video_size: ByteSizeSerilized = ByteSize(0)
 
 
-class MediaDurationLimits(BaseModel):
+class MediaDurationLimits(SettingsGroup):
     maximum_video_duration: timedelta = timedelta(seconds=0)
     maximum_audio_duration: timedelta = timedelta(seconds=0)
     minimum_video_duration: timedelta = timedelta(seconds=0)
@@ -155,7 +162,7 @@ class MediaDurationLimits(BaseModel):
         return to_timedelta(input_date)
 
 
-class IgnoreOptions(BaseModel):
+class IgnoreOptions(SettingsGroup):
     exclude_audio: bool = False
     exclude_images: bool = False
     exclude_other: bool = False
@@ -181,7 +188,7 @@ class IgnoreOptions(BaseModel):
         return value
 
 
-class RuntimeOptions(BaseModel):
+class RuntimeOptions(SettingsGroup):
     console_log_level: NonNegativeInt = 100
     deep_scrape: bool = False
     delete_partial_files: bool = False
@@ -197,7 +204,7 @@ class RuntimeOptions(BaseModel):
     update_last_forum_post: bool = True
 
 
-class Sorting(BaseModel):
+class Sorting(SettingsGroup):
     scan_folder: PathOrNone = None
     sort_downloads: bool = False
     sort_folder: Path = DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
@@ -256,12 +263,12 @@ class Sorting(BaseModel):
         return value
 
 
-class BrowserCookies(BaseModel):
+class BrowserCookies(SettingsGroup):
     auto_import: bool = False
     browser: Browser | None = Browser.firefox
 
 
-class DupeCleanup(BaseModel):
+class DupeCleanup(SettingsGroup):
     add_md5_hash: bool = False
     add_sha256_hash: bool = False
     auto_dedupe: bool = True
@@ -269,7 +276,8 @@ class DupeCleanup(BaseModel):
     send_deleted_to_trash: bool = True
 
 
-class ConfigSettings(ConfigModel):
+@Parameter(name="*")
+class ConfigSettings(AliasModel):
     browser_cookies: BrowserCookies = BrowserCookies()
     download_options: DownloadOptions = DownloadOptions()
     dupe_cleanup_options: DupeCleanup = DupeCleanup()
@@ -286,11 +294,8 @@ class ConfigSettings(ConfigModel):
         if self._resolved:
             return
 
-        now = datetime.now()
-        self.logs._set_output_filenames(now)
         self._resolve_paths(self)
-        self.logs._delete_old_logs_and_folders(now)
-        self.logs.mkdirs()
+        self.logs.delete_old_logs_and_folders()
         self._resolved = True
 
     @classmethod
@@ -300,7 +305,8 @@ class ConfigSettings(ConfigModel):
             if isinstance(value, Path):
                 if "{config}" in str(value):
                     raise RuntimeError(f"Using '{{config}}' as reference on a path is no longer support: {value}")
-                setattr(model, name, value.expanduser().resolve().absolute())
+
+                object.__setattr__(model, name, value.expanduser().resolve().absolute())
 
             elif isinstance(value, BaseModel):
                 cls._resolve_paths(value)

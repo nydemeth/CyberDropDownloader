@@ -40,9 +40,9 @@ class HashProgress:
             self._tasks[hash_type] = self._hash_progress.add_task(desc, total=None)
 
         add_hashed_task("xxh128")
-        if manager.config.dupe_cleanup_options.add_md5_hash:
+        if manager.config.settings.dupe_cleanup_options.add_md5_hash:
             add_hashed_task("md5")
-        if manager.config.dupe_cleanup_options.add_sha256_hash:
+        if manager.config.settings.dupe_cleanup_options.add_sha256_hash:
             add_hashed_task("sha256")
 
         self.prev_hashed_files_task_id = self._hash_progress.add_task("[green]Previously Hashed", total=None)
@@ -70,7 +70,7 @@ class HashProgress:
         """Returns the progress bar."""
         return Panel(
             self.hash_progress_group,
-            title=f"Config: {self.manager.config_manager.loaded_config}",
+            title="Hashing",
             border_style="green",
             padding=(1, 1),
         )

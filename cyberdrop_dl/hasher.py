@@ -17,7 +17,7 @@ from cyberdrop_dl.constants import Hashing, TempExt
 if TYPE_CHECKING:
     from yarl import URL
 
-    from cyberdrop_dl.config.config_model import DupeCleanup
+    from cyberdrop_dl.config.settings import DupeCleanup
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
 
@@ -64,7 +64,7 @@ class Hasher:
 
     @property
     def config(self) -> DupeCleanup:
-        return self.manager.config.dupe_cleanup_options
+        return self.manager.config.settings.dupe_cleanup_options
 
     async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
         file_path = self._cwd / filename
@@ -186,7 +186,7 @@ class Hasher:
             return
         if not self.config.auto_dedupe:
             return
-        if self.manager.config.runtime_options.ignore_history:
+        if self.manager.config.settings.runtime_options.ignore_history:
             return
         with self.manager.live_manager.get_hash_live(stop=True):
             file_hashes_dict = await self.get_file_hashes_dict()

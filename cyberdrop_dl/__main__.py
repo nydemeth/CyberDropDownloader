@@ -1,34 +1,34 @@
 # ruff: noqa: E402
-from __future__ import annotations
-
-import logging
-import sys
-from typing import TYPE_CHECKING
-
 from rich.traceback import install as install_rich_tracebacks
+
+from cyberdrop_dl.models.types import HttpURL
 
 _ = install_rich_tracebacks(width=None)
 
-from cyberdrop_dl import aio, webhook
+
+import logging
+import sys
+from collections.abc import Sequence
+from typing import Annotated
+
+from cyclopts import App, Parameter
+
+from cyberdrop_dl import __version__, aio, webhook
+from cyberdrop_dl.cli import CLIargs
+from cyberdrop_dl.config import Config
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
-from cyberdrop_dl.managers.manager import Manager
+from cyberdrop_dl.managers.manager import AppData, Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
 logger = logging.getLogger("cyberdrop_dl")
 
 
 async def _scrape(manager: Manager) -> None:
-    manager.config.resolve_paths()
-    manager.logs.delete_old_logs()
-
-    with setup_file_logging(manager.config.logs.main_log):
+    with setup_file_logging(manager.config.settings.logs.main_log):
         await manager.async_startup()
 
         log_spacer()
@@ -50,11 +50,11 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            if manager.config.logs.webhook:
-                await webhook.send_notification(manager.config.logs.webhook, stats_summary)
+            if manager.config.settings.logs.webhook:
+                await webhook.send_notification(manager.config.settings.logs.webhook, stats_summary)
 
-            if manager.config_manager.apprise_urls:
-                await apprise.send_notifications(manager.config_manager.apprise_urls, stats_summary)
+            if manager.config.apprise_urls:
+                await apprise.send_notifications(manager.config.apprise_urls, stats_summary)
 
 
 async def _post_runtime(manager: Manager) -> None:
@@ -63,14 +63,14 @@ async def _post_runtime(manager: Manager) -> None:
 
     await manager.hasher.cleanup_dupes_after_download()
 
-    if manager.config.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if manager.config.settings.sorting.sort_downloads and not manager.cli_args.retry_any:
         sorter = Sorter.from_manager(manager)
         await sorter.run()
 
     check_partials_and_empty_folders(manager)
 
-    if manager.config.runtime_options.update_last_forum_post:
-        await manager.logs.update_last_forum_post(manager.config.files.input_file)
+    if manager.config.settings.runtime_options.update_last_forum_post:
+        await manager.logs.update_last_forum_post(manager.config.settings.files.input_file)
 
 
 async def _run(manager: Manager) -> None:
@@ -80,20 +80,62 @@ async def _run(manager: Manager) -> None:
         await manager.close()
 
 
-def main(args: Sequence[str] | None = None) -> int:
+def _main(manager: Manager) -> None:
+    manager.resolve_paths()
+    if not manager.cli_args.download:
+        program_ui.run(manager)
+
+    try:
+        aio.run(_run(manager))
+
+    except KeyboardInterrupt:
+        logger.info("Exiting (Ctrl + C) ...")
+
+
+app = App(
+    name="cyberdrop-dl",
+    help="Bulk asynchronous downloader for multiple file hosts",
+    version=f"{__version__}.NTFS",
+    default_parameter=Parameter(negative_iterable=[]),
+    result_action="return_value",
+)
+
+
+@app.default()
+def download(
+    links: Annotated[
+        tuple[HttpURL, ...],
+        Parameter(
+            help="link(s) to content to download (passing multiple links is supported)",
+        ),
+    ] = (),
+    *,
+    cli: CLIargs | None = None,
+    config: Config | None = None,
+):
+    cli = cli or CLIargs()
+    cli.links = links
+    config = config or Config()
+    appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
+
+    config = Config.create(appdata, cli.config_file).update(config)
+    manager = Manager(cli, appdata, config)
+
+    _main(manager)
+
+
+@app.command()
+def show() -> None:
+    """Show a list of all supported sites"""
+    from cyberdrop_dl.supported_sites import get_crawlers_info_as_rich_table
+
+    table = get_crawlers_info_as_rich_table()
+    app.console.print(table)
+
+
+def main(args: Sequence[str] | None = None) -> None:
     with setup_console_logging():
-        manager = Manager(args)
-        manager.startup()
-        if not manager.parsed_args.cli_only_args.download:
-            program_ui.run(manager)
-
-        try:
-            aio.run(_run(manager))
-
-        except KeyboardInterrupt:
-            logger.info("Exiting (Ctrl + C) ...")
-
-        return 0
+        app(args)
 
 
 if __name__ == "__main__":
