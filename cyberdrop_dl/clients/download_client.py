@@ -14,7 +14,6 @@ import aiofiles
 from cyberdrop_dl import aio, constants, storage
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FileExt
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import dates
 
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
 
     import aiohttp
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.managers.client_manager import ClientManager
     from cyberdrop_dl.managers.manager import Manager
 
@@ -35,9 +34,6 @@ logger = logging.getLogger(__name__)
 
 _CONTENT_TYPES_OVERRIDES: dict[str, str] = {"text/vnd.trolltech.linguist": "video/MP2T"}
 _SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
-_CHROME_ANDROID_USER_AGENT: str = (
-    "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.180 Mobile Safari/537.36"
-)
 _FREE_SPACE_CHECK_PERIOD: int = 5  # Check every 5 chunks
 _NULL_CONTEXT: contextlib.nullcontext[None] = contextlib.nullcontext()
 _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
@@ -65,36 +61,8 @@ class DownloadClient:
         with self.client_manager.request_context(domain):
             yield
 
-    def _get_download_headers(self, domain: str, referer: AbsoluteHttpURL) -> dict[str, str]:
-        download_headers = {
-            "User-Agent": self.manager.config.global_settings.general.user_agent,
-            "Referer": str(referer),
-        }
-        auth_data = self.manager.config.auth
-        if domain == "pixeldrain" and auth_data.pixeldrain.api_key:
-            download_headers["Authorization"] = self.manager.client_manager.basic_auth(
-                "Cyberdrop-DL", auth_data.pixeldrain.api_key
-            )
-        elif domain == "gofile":
-            gofile_cookies = self.client_manager.cookies.filter_cookies(AbsoluteHttpURL("https://gofile.io"))
-            api_key = gofile_cookies.get("accountToken", "")
-            if api_key:
-                download_headers["Authorization"] = f"Bearer {api_key.value}"  # type: ignore
-        elif domain == "odnoklassniki":
-            # TODO: Add "headers" attribute to MediaItem to use custom headers for downloads
-            download_headers |= {
-                "Accept-Language": "en-gb, en;q=0.8",
-                "User-Agent": _CHROME_ANDROID_USER_AGENT,
-                "Referer": "https://m.ok.ru/",
-                "Origin": "https://m.ok.ru",
-            }
-        elif domain == "megacloud":
-            download_headers["Referer"] = "https://megacloud.blog/"
-        return download_headers
-
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
-        download_headers = self._get_download_headers(domain, media_item.referer)
         downloaded_filename = await self.manager.database.history.get_downloaded_filename(domain, media_item)
         download_dir = self.get_download_dir(media_item)
         if media_item.is_segment:
@@ -105,14 +73,14 @@ class DownloadClient:
         resume_point = 0
         if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
             resume_point = size
-            download_headers["Range"] = f"bytes={size}-"
+            media_item.headers["Range"] = f"bytes={size}-"
 
         await asyncio.sleep(self.manager.config.global_settings.rate_limiting_options.total_delay)
 
-        def process_response(resp: aiohttp.ClientResponse | AbstractResponse):
+        def process_response(resp: aiohttp.ClientResponse | AbstractResponse[Any]):
             return self._process_response(media_item, domain, resume_point, resp)
 
-        return await self._request_download(media_item, download_headers, process_response)
+        return await self._request_download(media_item, process_response)
 
     async def _process_response(
         self,
@@ -197,7 +165,6 @@ class DownloadClient:
     async def _request_download(
         self,
         media_item: MediaItem,
-        download_headers: dict[str, str],
         process_response: Callable[[aiohttp.ClientResponse | AbstractResponse], Coroutine[None, None, bool]],
     ) -> bool:
         download_url = media_item.debrid_link or media_item.url
@@ -208,7 +175,7 @@ class DownloadClient:
         while True:
             resp = None
             try:
-                async with self.__request_context(download_url, media_item.domain, download_headers) as resp:
+                async with self.__request_context(download_url, media_item.domain, media_item.headers) as resp:
                     return await process_response(resp)
             except (DownloadError, DDOSGuardError):
                 if resp is None:
