@@ -7,7 +7,6 @@ from typing import Annotated
 
 from cyclopts import Parameter
 from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, PrivateAttr, field_validator
-from typing_extensions import override
 
 from cyberdrop_dl.constants import (
     DEFAULT_APP_STORAGE,
@@ -88,10 +87,6 @@ class Logs(SettingsGroup):
 
     _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
-    @override
-    def model_post_init(self, *_) -> None:
-        self._resolve_filenames()
-
     @field_validator("webhook", mode="before")
     @classmethod
     def handle_falsy(cls, value: str) -> str | None:
@@ -103,7 +98,7 @@ class Logs(SettingsGroup):
         if value := falsy_as(input_date, None):
             return to_timedelta(value)
 
-    def _resolve_filenames(self) -> None:
+    def resolve_filenames(self) -> None:
         object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
         now_file_iso: str = self._created_at.strftime(LOGS_DATETIME_FORMAT)
         now_folder_iso: str = self._created_at.strftime(LOGS_DATE_FORMAT)
@@ -294,6 +289,7 @@ class ConfigSettings(AliasModel):
         if self._resolved:
             return
 
+        self.logs.resolve_filenames()
         self._resolve_paths(self)
         self.logs.delete_old_logs_and_folders()
         self._resolved = True
