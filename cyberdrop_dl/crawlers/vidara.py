@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
@@ -12,6 +12,14 @@ if TYPE_CHECKING:
 
 
 class VidaraCrawler(Crawler, db_path="path_qs_frag"):
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
+        "xca.cymru",
+        "vidara.to",
+        "vidara.so",
+        "streamix.so",
+        "streamix.so",
+        "stmix.io",
+    )
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Video": "/e/<video_id>"}
     DOMAIN: ClassVar[str] = "vidara"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
