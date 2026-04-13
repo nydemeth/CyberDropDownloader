@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Self, TypeVar
 
-from cyclopts import Parameter
+from cyclopts import App, Parameter
+from cyclopts.bind import normalize_tokens
 from pydantic import BaseModel, Field
 
 from cyberdrop_dl import yaml
@@ -16,9 +17,13 @@ from .auth import AuthSettings
 from .settings import ConfigSettings
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cyberdrop_dl.managers.manager import AppData, Manager
 
     _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
+
+_APP: App | None = None
 
 
 @Parameter(name="*")
@@ -54,6 +59,16 @@ class Config(BaseModel):
     def update(self, other: Self) -> Self:
         return merge_models(self, other)
 
+    @classmethod
+    def parse_args(cls, tokens: str | Iterable[str]) -> Config:
+        global _APP
+        if _APP is None:
+            _APP = App(print_error=False, exit_on_error=False)
+            _ = _APP.command(name="coerce")(_coerce)
+        fn, bound, *_ = _APP.parse_args(["coerce", *normalize_tokens(tokens)])
+        assert fn is _coerce
+        return _coerce(*bound.args, **bound.kwargs)
+
 
 def _load_config_file(file: Path, model: type[_BaseModelT]) -> _BaseModelT:
     try:
@@ -64,6 +79,12 @@ def _load_config_file(file: Path, model: type[_BaseModelT]) -> _BaseModelT:
         return default
     else:
         return model.model_validate(content)
+
+
+def _coerce(*, config: Config | None = None) -> Config:
+    if config is None:
+        return Config()
+    return config
 
 
 __all__ = ["AuthSettings", "Config", "ConfigSettings", "GlobalSettings"]

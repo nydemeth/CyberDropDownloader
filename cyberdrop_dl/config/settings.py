@@ -68,9 +68,11 @@ class DownloadOptions(SettingsGroup):
 
 
 class Files(SettingsGroup):
-    download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
-    dump_json: bool = Field(default=False, validation_alias="j")
-    input_file: Path = Field(default=Path("URLs.txt"), validation_alias="i")
+    download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = Field(
+        default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d"
+    )
+    dump_json: Annotated[bool, Parameter(alias="-j")] = Field(default=False, validation_alias="j")
+    input_file: Annotated[Path, Parameter(alias="-i")] = Field(default=Path("URLs.txt"), validation_alias="i")
     save_pages_html: bool = False
 
 
@@ -126,6 +128,19 @@ class Logs(SettingsGroup):
                 file.unlink()
 
         _ = delete_empty_files_and_folders(self.log_folder)
+
+    def __eq__(self, other: object) -> bool:
+        # Exclude _created_at from compare (AKA __pydantic_private__)
+        if not isinstance(other, BaseModel):
+            return NotImplemented
+
+        self_type = self.__pydantic_generic_metadata__["origin"] or self.__class__
+        other_type = other.__pydantic_generic_metadata__["origin"] or other.__class__
+
+        if not (self_type == other_type and self.__pydantic_extra__ == other.__pydantic_extra__):
+            return False
+
+        return self.__dict__ == other.__dict__
 
 
 class FileSizeLimits(SettingsGroup):
