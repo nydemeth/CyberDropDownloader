@@ -54,7 +54,7 @@ class ScrapingUI(LiveUI):
         return self._screen
 
     @contextlib.contextmanager
-    def __call__(self, *, transient: bool = False) -> Generator[None]:
+    def __call__(self, *, transient: bool = True) -> Generator[None]:
         token = _STATUS.set(self.status)
         try:
             with super(ScrapingUI, self).__call__(transient=transient):
