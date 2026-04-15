@@ -51,7 +51,7 @@ async def hash_directory_scanner(manager: Manager, path: Path) -> None:
     async with manager.database:
         stats = await manager.hasher.hash_directory(path)
 
-    manager.progress_manager.print_hashing_stats(stats)
+    manager.print_hashing_stats(stats)
 
 
 @dataclasses.dataclass(slots=True)
@@ -68,7 +68,7 @@ class Hasher:
     _dedupe_tui: DedupeUI = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        base_dir = self.manager.config.settings.files.download_folder
+        base_dir = self.manager.config.settings.files.download_folder.expanduser().resolve().absolute()
         self._tui = HashingUI(base_dir)
         self._dedupe_tui = DedupeUI(base_dir)
 

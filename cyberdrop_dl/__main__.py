@@ -10,14 +10,13 @@ from typing import Annotated
 
 from cyclopts import App, Parameter
 
-from cyberdrop_dl import __version__, aio, webhook
+from cyberdrop_dl import __version__, aio, program_ui, webhook
 from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import AppData, Manager
 from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
@@ -33,14 +32,13 @@ async def _scrape(manager: Manager) -> None:
         async with manager.database:
             log_spacer()
             logger.info("Starting CDL...")
-            with manager.live_manager.get_main_live(stop=True):
-                async with ScrapeMapper(manager)() as scrape_mapper:
-                    stats = await scrape_mapper.run()
+            async with ScrapeMapper(manager)() as scrape_mapper:
+                stats = await scrape_mapper.run()
 
             log_spacer()
             await _post_runtime(manager)
 
-            stats_summary = manager.progress_manager.print_stats(stats)
+            stats_summary = manager.print_stats(stats)
 
             log_spacer()
             await check_latest_pypi()

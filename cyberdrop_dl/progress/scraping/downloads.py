@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final, final
 
 from rich.jupyter import JupyterMixin
+from rich.markup import escape
 from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
@@ -140,7 +141,13 @@ class DownloadsPanel(OverFlowPanel):
         self._total_bytes = 0
 
     @contextlib.contextmanager
-    def download_hls(self, filename: str, /, segments: float | None = None) -> Generator[None]:
+    def download_hls(
+        self,
+        filename: str,
+        /,
+        domain: str,
+        segments: float,
+    ) -> Generator[None]:
         # For HLS downloads, we use 2 different tasks. One on a hidden progress to track the downloaded bytes
         # and one on the user facing progress to track the number of downloaded segments (with a known total)
         # We create both at the same time and smuggle the bytes task as a field of the segments task
@@ -148,7 +155,8 @@ class DownloadsPanel(OverFlowPanel):
 
         task_id = self._hls_progress.add_task("", total=None, visible=False)
         filename = str(filename).rsplit("/", 1)[-1]
-        segments_task = self._add_task(filename, segments)
+        desc = escape((f"({domain.upper()}) {filename}").encode().decode("ascii", errors="ignore"))
+        segments_task = self._add_task(desc, segments)
         bytes_task = self._hls_progress[task_id]
         self._progress.update(segments_task.id, HLS=bytes_task)
         token = _current_hls_task.set(segments_task.id)
@@ -159,9 +167,16 @@ class DownloadsPanel(OverFlowPanel):
             self._hls_progress.remove_task(task_id)
             _current_hls_task.reset(token)
 
-    def download_file(self, description: object, /, total: float | None = None) -> ProgressHook:
+    def download_file(
+        self,
+        description: object,
+        /,
+        domain: str,
+        total: float | None,
+    ) -> ProgressHook:
         filename = str(description).rsplit("/", 1)[-1]
-        task = self._add_task(filename, total)
+        desc = escape((f"({domain.upper()}) {filename}").encode().decode("ascii", errors="ignore"))
+        task = self._add_task(desc, total)
 
         def advance(amount: int = 1) -> None:
             self._total_bytes += amount
@@ -204,7 +219,7 @@ class DownloadsPanel(OverFlowPanel):
 
         async def download_file(filename: str) -> None:
             size = random.randint(int(1e2), int(1e9))
-            hook = self.download_file(filename, size)
+            hook = self.download_file(filename, "example.com", size)
             await download(hook, size)
 
         async def download_hls(filename: str) -> None:
@@ -219,7 +234,7 @@ class DownloadsPanel(OverFlowPanel):
                 finally:
                     segments_sem.release()
 
-            with self.download_hls(filename, n_segments):
+            with self.download_hls(filename, "example.com", n_segments):
                 async with asyncio.TaskGroup() as tg:
                     for _ in range(n_segments):
                         await segments_sem.acquire()

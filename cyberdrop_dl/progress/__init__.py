@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import sys
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Self
@@ -92,7 +93,7 @@ class LiveUI(ABC):
     def __rich__(self) -> RenderableType: ...
 
     @contextlib.contextmanager
-    def __call__(self, *, transient: bool = False) -> Generator[None]:
+    def __call__(self, *, transient: bool = True) -> Generator[None]:
         if self.disabled:
             yield None
             return
@@ -101,9 +102,10 @@ class LiveUI(ABC):
         try:
             with Live(
                 refresh_per_second=REFRESH_RATE.get(),
-                auto_refresh=True,
+                auto_refresh="pytest" not in sys.modules,
+                screen=transient,
                 transient=transient,
-                get_renderable=self.__rich__,
+                get_renderable=self.__rich__ if "pytest" not in sys.modules else None,
             ):
                 yield
         finally:

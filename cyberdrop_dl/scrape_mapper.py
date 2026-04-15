@@ -7,7 +7,6 @@ import datetime
 import logging
 import re
 import time
-from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
@@ -25,6 +24,7 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
+from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
@@ -44,8 +44,6 @@ logger = logging.getLogger(__name__)
 
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
-
-CURRENT_SCRAPE_DONE: ContextVar[asyncio.Event] = ContextVar("CURRENT_SCRAPE_DONE")
 
 
 def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
@@ -129,12 +127,24 @@ class ScrapeMapper:
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
     _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
     _factory: CrawlerFactory = dataclasses.field(init=False)
+    tui: ScrapingUI = dataclasses.field(init=False, default_factory=ScrapingUI)
+    _done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+
+    def _scrape_queue(self) -> int:
+        return sum(f.waiting_items for f in self._factory)
+
+    def _download_queue(self):
+        total = sum(f.downloader.waiting_items for f in self._factory)
+        self.tui.files.stats.queued = total
+        return total
 
     def __post_init__(self) -> None:
         self._direct_http = DirectHttpFile(self.manager)
         self._jdownloader = JDownloader.from_manager(self.manager)
         self._real_debrid = RealDebridCrawler(self.manager)
         self._factory = CrawlerFactory(self.manager)
+        self.tui.scrape.get_queue = self._scrape_queue
+        self.tui.downloads.get_queue = self._download_queue
 
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
         _ = self._task_groups.scrape.create_task(coro)
@@ -155,30 +165,29 @@ class ScrapeMapper:
 
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
+        assert not self._done.is_set()
         _ = filepath.MAX_FILE_LEN.set(self.manager.config.global_settings.general.max_file_name_length)
         _ = filepath.MAX_FOLDER_LEN.set(self.manager.config.global_settings.general.max_folder_name_length)
 
         await self.manager.client_manager.load_cookie_files()
 
         ## IMPORTANT: Order of each context matters!
-        async with (
-            self.manager.client_manager,
-            storage.monitor(self.manager.config.global_settings.general.required_free_space),
-            self.manager.logs.task_group,
-            self._task_groups.downloads,
-        ):
-            done = asyncio.Event()
-            token = CURRENT_SCRAPE_DONE.set(done)
-            try:
-                async with self._task_groups.scrape:
-                    self.manager.scrape_mapper = self
+        with self.tui():
+            async with (
+                self.manager.client_manager,
+                storage.monitor(self.manager.config.global_settings.general.required_free_space),
+                self.manager.logs.task_group,
+                self._task_groups.downloads,
+            ):
+                try:
+                    async with self._task_groups.scrape:
+                        self.manager.scrape_mapper = self
 
-                    yield self
+                        yield self
 
-            finally:
-                # The done event signals that all scraping is done, but there may still be downloads pending
-                done.set()
-                CURRENT_SCRAPE_DONE.reset(token)
+                finally:
+                    # The done event signals that all scraping is done, but there may still be downloads pending
+                    self._done.set()
 
     async def run(self) -> ScrapeStats:
         self._init_crawlers()
@@ -197,10 +206,10 @@ class ScrapeMapper:
         source_name, source = _source(self.manager)
         async with contextlib.aclosing(source) as items:
             stats = ScrapeStats(source_name)
-            done = CURRENT_SCRAPE_DONE.get()
 
             async def wait_until_scrape_is_done() -> None:
-                _ = await done.wait()
+                _ = await self._done.wait()
+                self.tui.hide_scrape_panel()
                 stats.url_count.update(
                     (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
                 )
@@ -266,12 +275,12 @@ class ScrapeMapper:
             else:
                 success = True
 
-            self.manager.progress_manager.scrape_stats_progress.add_unsupported(sent_to_jdownloader=success)
+            self.tui.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         logger.warning(f"Unsupported URL: {scrape_item.url}")
         self.manager.logs.write_unsupported(scrape_item.url, scrape_item.parents[0] if scrape_item.parents else None)
-        self.manager.progress_manager.scrape_stats_progress.add_unsupported()
+        self.tui.scrape_errors.add_unsupported()
 
     def _should_scrape(self, scrape_item: ScrapeItem) -> bool:
         if scrape_item.url in self._seen_urls:
