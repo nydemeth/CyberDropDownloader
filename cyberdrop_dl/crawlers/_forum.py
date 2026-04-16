@@ -20,18 +20,17 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, final
 from bs4 import BeautifulSoup, Tag
 
 from cyberdrop_dl.crawlers.crawler import Crawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, is_blob_or_svg
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between, is_blob_or_svg
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence
 
     from aiohttp import ClientResponse
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 
 LINK_TRASH_MAPPING = {".th.": ".", ".md.": ".", "ifr": "watch"}
 HTTP_REGEX_LINKS = re.compile(

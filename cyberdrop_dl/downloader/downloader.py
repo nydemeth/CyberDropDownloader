@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, NamedTuple
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
 from cyberdrop_dl import aio, constants, ffmpeg, storage
-from cyberdrop_dl.data_structures.url_objects import HlsSegment, MediaItem
 from cyberdrop_dl.exceptions import (
     DownloadError,
     DurationError,
@@ -22,8 +21,8 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     TooManyCrawlerErrors,
 )
-from cyberdrop_dl.utils import dates
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.url_objects import HlsSegment, MediaItem
+from cyberdrop_dl.utils import dates, error_handling_wrapper, parse_url
 
 logger = logging.getLogger(__name__)
 

@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias, TypedDict, over
 
 from multidict import CIMultiDict, CIMultiDictProxy
 
-from cyberdrop_dl.utils.utilities import DictDataclass
+from cyberdrop_dl.utils import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
 
-    from cyberdrop_dl.data_structures import AbsoluteHttpURL
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
     _CMD: TypeAlias = Iterable[str | Path]
 
@@ -378,7 +378,14 @@ class SubProcessResult:
 
     def __json__(self) -> dict[str, Any]:
         joined_command = " ".join(map(str, self.command))
-        return dataclasses.asdict(self) | {"command": joined_command}
+        me = dataclasses.asdict(self) | {"command": joined_command}
+        try:
+            stdout = json.loads(self.stdout)
+        except json.JSONDecodeError:
+            pass
+        else:
+            me["stdout"] = stdout
+        return me
 
     def __str__(self) -> str:
         return str(self.__json__())

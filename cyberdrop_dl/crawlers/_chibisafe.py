@@ -17,12 +17,12 @@ from pydantic import Field
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.models import AliasModel
+from cyberdrop_dl.utils import DictDataclass, error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 
 @dataclasses.dataclass(slots=True)

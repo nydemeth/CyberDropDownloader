@@ -12,10 +12,9 @@ import pytest
 from pydantic import TypeAdapter
 from typing_extensions import TypedDict
 
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
-from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.utils.utilities import parse_url
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
+from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import Crawler

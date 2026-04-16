@@ -9,18 +9,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
-from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import m3u8, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.mediaprops import Resolution, Subtitle
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import error_handling_wrapper, m3u8, open_graph, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 
 _find_js_redirect = re.compile(

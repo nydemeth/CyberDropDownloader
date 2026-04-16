@@ -17,18 +17,18 @@ from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.utils.utilities import get_system_information
+from cyberdrop_dl.utils import get_system_information
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from os import PathLike
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.progress.dedupe import DedupeStats
     from cyberdrop_dl.progress.hashing import HashingStats
     from cyberdrop_dl.progress.scraping.errors import Error
     from cyberdrop_dl.progress.sorting import SortStats
     from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
+    from cyberdrop_dl.url_objects import MediaItem
 
 
 logger = logging.getLogger(__name__)

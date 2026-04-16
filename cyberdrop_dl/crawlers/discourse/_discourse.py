@@ -13,16 +13,15 @@ from pydantic import BaseModel
 
 from cyberdrop_dl.crawlers._forum import MessageBoardCrawler
 from cyberdrop_dl.exceptions import MaxChildrenError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 from .models import AvailablePost, PostStream, Topic
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 
 _T = TypeVar("_T")
 _MAX_POSTS_PER_REQUEST = 50

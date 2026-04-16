@@ -5,16 +5,15 @@ import json
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 PRIMARY_URL = AbsoluteHttpURL("https://www.youjizz.com/")
 JS_SELECTOR = "div#content > script:-soup-contains('var dataEncodings')"
