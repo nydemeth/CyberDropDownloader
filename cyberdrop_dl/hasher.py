@@ -102,8 +102,9 @@ class Hasher:
 
             try:
                 self._tui = tui
-                async for file in aio.rglob(path, "*"):
-                    _ = await self.update_db_and_retrive_hash(file)
+                async with asyncio.TaskGroup() as tg:
+                    async for file in aio.rglob(path, "*"):
+                        _ = tg.create_task(self.update_db_and_retrive_hash(file))
             finally:
                 self._tui = old_tui
 
@@ -148,15 +149,17 @@ class Hasher:
         except IsADirectoryError:
             return
 
-        with self._tui.new_file(file):
-            logger.info("Computing hashes of '%s'", file)
-            hash = await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="xxh128")
-            if self.config.add_md5_hash:
-                await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="md5")
-            if self.config.add_sha256_hash:
-                await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="sha256")
+        async with self._sem:
+            with self._tui.new_file(file):
+                async with asyncio.TaskGroup() as tg:
+                    logger.info("Computing hashes of '%s'", file)
+                    hash = tg.create_task(self._update_db_and_retrive_hash(file, original_filename, referer, "xxh128"))
+                    if self.config.add_md5_hash:
+                        tg.create_task(self._update_db_and_retrive_hash(file, original_filename, referer, "md5"))
+                    if self.config.add_sha256_hash:
+                        tg.create_task(self._update_db_and_retrive_hash(file, original_filename, referer, "sha256"))
 
-            return hash
+        return hash.result()
 
     async def _update_db_and_retrive_hash(
         self,

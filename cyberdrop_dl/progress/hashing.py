@@ -79,9 +79,7 @@ class HashingUI(LiveUI):
                 self._progress.update(task_id, total=current_total, completed=getattr(self._stats, name))
             self._total = current_total
 
-        self._panel.subtitle = (
-            f"Files:  [white]{current_total:,}[/white], Hashes: [white]{self._stats.computed_hashes:,}[/white]"
-        )
+        self._panel.subtitle = f"Files:  [white]{current_total:,}[/white], New Computed Hashes: [white]{self._stats.computed_hashes:,}[/white]"
         return self._panel
 
     def new_file(self, file: Path):
@@ -94,6 +92,8 @@ class HashingUI(LiveUI):
 
     def add_completed(self, hash_type: Literal["xxh128", "md5", "sha256"]):
         setattr(self._stats, hash_type, getattr(self._stats, hash_type) + 1)
+        if hash_type == "xxh128":
+            self.stats.new_hashed += 1
 
 
 if __name__ == "__main__":
