@@ -5,7 +5,6 @@ import dataclasses
 import json
 import re
 from collections.abc import Generator
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
@@ -30,8 +29,8 @@ _REINFORCED_URL = AbsoluteHttpURL("https://get.bunkrr.su")
 
 class Selector:
     ALBUM_FILES = "script:-soup-contains('window.albumFiles = ')"
-    DOWNLOAD_BUTTON = "a.btn.ic-download-01"
-    IMAGE_PREVIEW = "img.max-h-full.w-auto.object-cover.relative"
+    DOWNLOAD_BTN = "a.btn.ic-download-01"
+    IMAGE_CONTAINER = "img.max-h-full.w-auto.object-cover.relative"
 
 
 _HOST_OPTIONS: frozenset[str] = frozenset(("bunkr.site", "bunkr.cr", "bunkr.ph"))
@@ -93,11 +92,7 @@ class File:
         if self.thumbnail.count("https://") != 1:
             return
 
-        thumb = parse_url(self.thumbnail)
-        if thumb.parts[1:2] != ("thumbs",):
-            return
-
-        src = thumb.with_path(thumb.path.replace("/thumbs/", "/")).with_suffix(Path(self.name).suffix)
+        src = parse_url(self.thumbnail).with_path(self.cdnEndpoint)
 
         if src.suffix.lower() not in FileExt.IMAGE:
             src = src.with_host(src.host.replace("i-", ""))
@@ -144,6 +139,8 @@ class BunkrrCrawler(Crawler):
                     return await self._direct_file(scrape_item, scrape_item.url)
 
                 raise ValueError
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
@@ -162,7 +159,7 @@ class BunkrrCrawler(Crawler):
 
     @auto_task_id
     @error_handling_wrapper
-    async def _album_file(self, scrape_item: ScrapeItem, file: File, results: dict[str, int]) -> None:
+    async def _album_file(self, scrape_item: ScrapeItem, file: File, results: dict[str, bool]) -> None:
         db_url = scrape_item.url.with_host(self.PRIMARY_URL.host)
         if await self.check_complete_from_referer(db_url):
             return
@@ -198,14 +195,17 @@ class BunkrrCrawler(Crawler):
 
         soup = await self._request_soup_lenient(scrape_item.url)
         src = None
-        if image := soup.select_one(Selector.IMAGE_PREVIEW):
-            src = self.parse_url(css.attr(image, "src"))
-            if len(src.parts) > 2:
-                src = None
+        try:
+            image = self.parse_url(css.select(soup, Selector.IMAGE_CONTAINER, "src"))
+        except css.SelectorError:
+            pass
+        else:
+            if len(image.parts) == 2:
+                src = image
 
-        if not src or self.deep_scrape:
-            dl_link = css.select(soup, Selector.DOWNLOAD_BUTTON, "href")
-            file_id = self.parse_url(dl_link).name
+        if self.deep_scrape or not src:
+            reinforced_url = css.select(soup, Selector.DOWNLOAD_BTN, "href")
+            file_id = self.parse_url(reinforced_url).name
             src = await self._request_download(file_id)
 
         await self._direct_file(scrape_item, src, open_graph.title(soup))
