@@ -80,7 +80,7 @@ class PatreonCrawler(Crawler):
         name = asset.name
         if not name:
             async with self.request(asset.url) as resp:
-                name = resp.filename
+                name = resp.content_disposition.filename
 
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(asset.url, scrape_item, filename, ext)
