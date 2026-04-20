@@ -1,128 +1,229 @@
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import json
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict, cast
+
+from bs4 import BeautifulSoup
+from typing_extensions import ReadOnly
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, next_js
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
-
-    from bs4 import BeautifulSoup
+    from collections.abc import AsyncIterator, Generator
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
 @dataclasses.dataclass(slots=True)
-class Asset:
+class Media:
+    id: str
     name: str | None
     url: AbsoluteHttpURL
-    props: dict[str, Any]
+    attributes: dict[str, Any]
+
+
+class Asset(TypedDict):
+    id: str
+    type: str
+    attributes: ReadOnly[NotRequired[dict[str, Any]]]
+    relationships: ReadOnly[NotRequired[dict[str, Any]]]
+
+
+class Included(Asset):
+    attributes: dict[str, Any]
+
+
+class Post(Included):
+    relationships: dict[str, Any]
+
+    current_user_can_view: bool
+    campaign_id: str
+    published_at: str
+    title: str
+    url: str
 
 
 class PatreonCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Post": "/posts/<slug>",
+        "Creator": (
+            "/<creator>",
+            "/cw/<creator>",
+        ),
     }
 
     DOMAIN: ClassVar[str] = "patreon"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com")
+    DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date:%Y-%m-%d} - {title}"
+
+    @property
+    def separate_posts(self) -> bool:
+        return True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["posts", _]:
                 return await self.post(scrape_item)
+            case [creator] | ["cw", creator]:
+                return await self.creator(scrape_item, creator)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
     async def post(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        bootstrap = _extract_bootstrap(soup)
-        post = _flatten_post(bootstrap["post"])
-        title = self.create_title(post["title"])
-        scrape_item.setup_as_album(title)
-        scrape_item.uploaded_at = self.parse_iso_date(post["published_at"])
-        await self._post(scrape_item, post)
-
-    async def _post(self, scrape_item: ScrapeItem, post: dict[str, Any]):
-        hashes: set[str] = set()
-
-        def process_asset(item: ScrapeItem, asset: Asset) -> None:
-            hash = _md5(asset.url)
-            if hash:
-                if hash in hashes:
-                    return
-                hashes.add(hash)
-            self.create_task(self._asset(item, asset))
-            scrape_item.add_children()
-
-        for name, get_assets in (("images", self._images), ("postfile", self._post_file)):
-            new_item = scrape_item.copy()
-            new_item.add_to_parent_title(name)
-            for asset in get_assets(post):
-                process_asset(new_item, asset)
-
-        new_item = scrape_item.copy()
-        new_item.add_to_parent_title("attachments")
-        async for asset in self._attachments(post):
-            process_asset(new_item, asset)
+        post: dict[str, Any] = _extract_bootstrap(soup)["post"]
+        self._post(
+            scrape_item,
+            post=_flatten_post(post["data"]),
+            included=_flatten_included(post["included"]),
+        )
 
     @error_handling_wrapper
-    async def _asset(self, scrape_item: ScrapeItem, asset: Asset):
-        if asset.url.suffix == ".m3u8":
-            return await self._m3u8_asset(scrape_item, asset)
+    def _post(self, scrape_item: ScrapeItem, post: Post, included: dict[str, Included]):
+        if not post["current_user_can_view"]:
+            raise ScrapeError(402, "You do not have access to this post")
 
-        name = asset.name
+        campaign_name: str = included[post["campaign_id"]]["attributes"]["name"]
+        title = self.create_title(campaign_name)
+        scrape_item.setup_as_album(title)
+
+        scrape_item.uploaded_at = date = self.parse_iso_date(post["published_at"])
+        post_title = self.create_separate_post_title(post["title"], post["id"], date)
+        scrape_item.add_to_parent_title(post_title)
+
+        self.create_task(self.write_metadata(scrape_item, f"post_{post['id']}", post))
+        for media in self._parse_media(post, included):
+            self.create_task(self._media(scrape_item, media))
+            self.create_task(self.write_metadata(scrape_item, f"media_{media.id}", media))
+            scrape_item.add_children()
+
+        if embed := post.get("embed"):
+            new_item = scrape_item.create_child(self.parse_url(embed["url"]))
+            self.handle_embed(new_item)
+            self.create_task(self.write_metadata(scrape_item, f"embed_{post['id']}", embed))
+            scrape_item.add_children()
+
+    @error_handling_wrapper
+    async def _media(self, scrape_item: ScrapeItem, media: Media):
+        if media.url.suffix == ".m3u8":
+            return await self._m3u8_media(scrape_item, media)
+
+        name = media.name
         if not name:
-            async with self.request(asset.url) as resp:
+            async with self.request(media.url) as resp:
                 name = resp.content_disposition.filename
 
-        filename, ext = self.get_filename_and_ext(name)
-        await self.handle_file(asset.url, scrape_item, filename, ext)
+        try:
+            filename, ext = self.get_filename_and_ext(name)
+        except NoExtensionError:
+            name = media.url.name
+            filename, ext = self.get_filename_and_ext(name)
 
-    async def _m3u8_asset(self, scrape_item: ScrapeItem, asset: Asset):
-        m3u8, info = await self.request_m3u8_playlist(asset.url)
+        await self.handle_file(media.url, scrape_item, name, ext, custom_filename=filename)
+
+    async def _m3u8_media(self, scrape_item: ScrapeItem, media: Media):
+        m3u8, info = await self.request_m3u8_playlist(media.url)
         filename = self.create_custom_filename(
-            asset.url.name.removesuffix(".m3u8"),
+            media.url.name.removesuffix(".m3u8"),
             ext := ".mp4",
             resolution=info.resolution,
             video_codec=info.codecs.video,
             audio_codec=info.codecs.audio,
         )
-        await self.handle_file(asset.url, scrape_item, filename, ext, m3u8=m3u8)
+        await self.handle_file(media.url, scrape_item, filename, ext, m3u8=m3u8)
 
-    def _images(self, post: dict[str, Any]) -> Generator[Asset]:
-        for image in post["images"]:
-            if url := image.get("download_url"):
-                yield Asset(image.get("file_name"), self.parse_url(url), image)
+    def _parse_media(self, post: Post, included: dict[str, Included]) -> Generator[Media]:
+        media_ids: set[str] = set()
+        if post_file := post.get("post_file"):
+            media_id = str(post_file["media_id"])
+            media_ids.add(media_id)
+            url = self.parse_url(post_file["url"])
+            yield Media(media_id, post_file.get("name"), url, post_file)
 
-    def _post_file(self, post: dict[str, Any]) -> Generator[Asset]:
-        if postfile := post.get("post_file"):
-            url = self.parse_url(postfile["url"])
-            yield Asset(postfile.get("name"), url, postfile)
+        for media_id in _get_post_media(post):
+            media = included[media_id]
+            attributes = media["attributes"]
 
-    async def _attachments(self, post: dict[str, Any]) -> AsyncGenerator[Asset]:
-        for fut in asyncio.as_completed(tuple(map(self._resolve_attachment, post["attachments"]))):
-            result = await fut
-            if result is not None:
-                yield result
+            if media["type"] == "media" and (url := attributes.get("download_url")) and media_id not in media_ids:
+                media_ids.add(media_id)
+                yield Media(media_id, attributes.get("file_name"), self.parse_url(url), attributes)
 
-        for attachment in post["attachments_media"]:
-            if url := attachment.get("download_url"):
-                yield Asset(attachment["file_name"], self.parse_url(url), attachment)
+        return
+        # TODO: convert tiptap JSON to HTML or extract media ids from tiptap
+        if not post["content"]:
+            return
+        soup = BeautifulSoup(post["content"], "html.parser")
+        for media_id in css.iselect(soup, "[data-media-id]", "data-media-id"):
+            if media_id in media_ids:
+                continue
+            self.log.warning("Found extra media id %s", media_id)
+            media_ids.add(media_id)
 
-    async def _resolve_attachment(self, attachment: dict[str, str]) -> Asset | None:
+    @error_handling_wrapper
+    async def creator(self, scrape_item: ScrapeItem, creator: str) -> None:
+        campaign_id = await self._get_campaign_id(creator)
+        await self.campaign(scrape_item, campaign_id)
+
+    @error_handling_wrapper
+    async def campaign(self, scrape_item: ScrapeItem, campaign_id: str) -> None:
+        scrape_item.setup_as_profile("")
+        api_url = (
+            (self.PRIMARY_URL / "api/posts")
+            .with_query(_CAMPAIGN_API_PARAMS)
+            .extend_query(
+                {
+                    "filter[campaign_id]": campaign_id,
+                }
+            )
+        )
+        async for resp in self._api_pager(api_url):
+            included = _flatten_included(resp["included"])
+            for post in resp["data"]:
+                post = _flatten_post(post)
+                new_item = scrape_item.create_child(self.parse_url(post["url"]))
+                self._post(new_item, post, included)
+                scrape_item.add_children()
+
+    async def _api_pager(self, api_url: AbsoluteHttpURL) -> AsyncIterator[dict[str, Any]]:
+        while True:
+            resp = await self.request_json(api_url, impersonate=True)
+            yield resp
+
+            try:
+                cursor = resp["meta"]["pagination"]["cursors"]["next"]
+            except LookupError:
+                break
+            if not cursor:
+                break
+            api_url = api_url.update_query({"page[cursor]": cursor})
+
+    async def _get_campaign_id(self, creator: str) -> str:
+        soup = await self.request_soup(self.PRIMARY_URL / creator, impersonate=True)
         try:
-            url = await self._get_redirect_url(self.parse_url(attachment["url"]))
-        except Exception:
-            self.log.exception(f"Unable to resolve {attachment = }")
+            bootstrap = _extract_bootstrap(soup)
+        except css.SelectorError:
+            # TODO: fix next_js chunk parsing
+            return _extract_campaign_id(soup)
         else:
-            return Asset(attachment["name"], url, attachment)
+            return bootstrap["campaign"]["data"]["id"]
+
+
+def _extract_campaign_id(soup: BeautifulSoup):
+    return get_text_between(str(soup), r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\"")
+
+
+def _extract_campaign_id_next_js(soup: BeautifulSoup) -> str:
+    included = next_js.ifind(next_js.extract(soup), "id", "type", "attributes")
+    return next(incl["id"] for incl in included if incl["type"] == "campaign")
+
+
+def _flatten_included(included: list[Included]) -> dict[str, Included]:
+    return {incl["id"]: incl for incl in included}
 
 
 def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
@@ -131,42 +232,11 @@ def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
     return envelope.get("pageBootstrap") or envelope["bootstrap"]
 
 
-def _flatten_included(included: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    flatten = {}
-    for asset in included:
-        flatten.setdefault(asset["type"], {})[asset["id"]] = asset["attributes"]
-    return flatten
-
-
 def _parse_post(post: dict[str, Any]) -> Generator[tuple[str, Any]]:
-    included = _flatten_included(post["included"])
-    post_data = post["data"]
-    relationships = post_data["relationships"]
-    campaign_id = relationships["campaign"]["data"]["id"]
-
-    yield "id", int(post_data["id"])
-    yield from _parse_attributes(post_data["attributes"])
-
-    yield "campaign", included["campaign"].pop(campaign_id)
-    yield from _parse_files(relationships, included)
-    yield "relationships", relationships
-    yield "included", included
-
-
-def _parse_files(
-    relationships: dict[str, dict[str, Any]], included: dict[str, dict[str, Any]]
-) -> Generator[tuple[str, Any]]:
-    def extract_files(files: dict[str, list[dict[str, str]]]):
-        for file in files.get("data") or ():
-            yield included[file["type"]].pop(file["id"])
-
-    for key in (
-        "images",
-        "attachments",
-        "attachments_media",
-    ):
-        files = relationships.pop(key, {})
-        yield key, tuple(extract_files(files))
+    yield "id", str(post["id"])
+    yield from _parse_attributes(post["attributes"])
+    yield "relationships", post["relationships"]
+    yield "campaign_id", post["relationships"]["campaign"]["data"]["id"]
 
 
 def _parse_attributes(attributes: dict[str, Any]) -> Generator[tuple[str, Any]]:
@@ -174,21 +244,114 @@ def _parse_attributes(attributes: dict[str, Any]) -> Generator[tuple[str, Any]]:
     json_keys = tuple(key for key in attributes if key.endswith(json_string))
 
     for json_key in json_keys:
-        value = attributes.pop(json_key.removesuffix(json_string), None)
+        name = json_key.removesuffix(json_string)
+        value = attributes.pop(name, None)
         json_value = attributes.pop(json_key, None)
+        # TODO: convert to html
         if not value and json_value:
             value = json.loads(json_value)
 
-        yield json_key, value
+        yield name, value
 
     yield from attributes.items()
 
 
-def _flatten_post(post: dict[str, Any]) -> dict[str, Any]:
-    return dict(sorted(_parse_post(post)))
+def _flatten_post(post: dict[str, Any]) -> Post:
+    return cast("Post", dict(sorted(_parse_post(post))))  # pyright: ignore[reportInvalidCast]
 
 
-def _md5(url: AbsoluteHttpURL) -> str | None:
-    for part in reversed(url.parts):
-        if len(part) == 32:
-            return part
+def _get_post_media(post: Post) -> Generator[str]:
+    for name in ("media", "video", "audio", "images", "attachments", "attachments_media"):
+        relationships = post["relationships"].get(name, {}).get("data")
+        if not relationships:
+            continue
+
+        if type(relationships) is not list:
+            relationships = [relationships]
+
+        for asset in relationships:
+            yield asset["id"]
+
+
+_CAMPAIGN_API_PARAMS = (
+    (
+        "include",
+        ",".join(
+            (
+                "campaign",
+                "attachments",
+                "attachments_media",
+                "audio",
+                "video",
+                "images",
+                "media",
+                "native_video_insights",
+                "user",
+            )
+        ),
+    ),
+    (
+        "fields[campaign]",
+        ",".join(
+            (
+                "currency",
+                "show_audio_post_download_links",
+                "avatar_photo_url",
+                "avatar_photo_image_urls",
+                "is_nsfw",
+                "is_monthly",
+                "name",
+                "url",
+            )
+        ),
+    ),
+    (
+        "fields[post]",
+        ",".join(
+            (
+                "content",
+                "content_json_string",
+                "current_user_can_view",
+                "embed",
+                "image",
+                "is_paid",
+                "meta_image_url",
+                "post_file",
+                "post_metadata",
+                "published_at",
+                "post_type",
+                "thumbnail",
+                "thumbnail_url",
+                "teaser_text",
+                "title",
+                "url",
+                "moderation_status",
+            )
+        ),
+    ),
+    (
+        "fields[user]",
+        ",".join(
+            (
+                "image_url",
+                "full_name",
+                "url",
+            )
+        ),
+    ),
+    (
+        "fields[media]",
+        ",".join(
+            (
+                "id",
+                "image_urls",
+                "download_url",
+                "metadata",
+                "file_name",
+            )
+        ),
+    ),
+    ("sort", "-published_at"),
+    ("filter[is_draft]", "false"),
+    ("json-api-version", "1.0"),
+)
