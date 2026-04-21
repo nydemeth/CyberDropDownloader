@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, ClassVar, Final, Self
 import rich
 from rich.console import Group
 from rich.panel import Panel
-from rich.progress import BarColumn, TaskID
+from rich.progress import BarColumn, TaskID, TextColumn
 
 from cyberdrop_dl.progress import DictProgress, create_test_live
 from cyberdrop_dl.progress.overflow import OverFlow
@@ -40,7 +40,7 @@ def _capitalize_words(text: str) -> str:
 
 
 @dataclasses.dataclass(slots=True, order=True)
-class Error:
+class UIError:
     msg: str
     count: int
     code: int | None = None
@@ -71,8 +71,8 @@ class _ErrorsPanel:
             "[progress.description]{task.description}",
             BarColumn(bar_width=None),
             "[progress.percentage]{task.percentage:>6.2f}%",
-            "━",
-            "{task.completed:,}",
+            "•",
+            TextColumn("{task.completed:,}", justify="right"),
         )
         self._overflow: OverFlow = OverFlow("kind of error")
         self._errors_map: dict[str, TaskID] = {}
@@ -117,9 +117,9 @@ class _ErrorsPanel:
             lambda tasks: sorted(tasks, key=lambda x: x.completed, reverse=True),
         )
 
-    def __iter__(self) -> Iterator[Error]:
+    def __iter__(self) -> Iterator[UIError]:
         tasks = {task.id: task for task in self._progress.tasks}
-        return iter((Error.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors_map.items()))
+        return iter((UIError.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors_map.items()))
 
     async def simulate(self) -> None:
         self.add("404 not found")
