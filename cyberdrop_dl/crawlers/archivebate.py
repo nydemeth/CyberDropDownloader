@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, open_graph
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
@@ -44,7 +44,7 @@ class ArchiveBateCrawler(Crawler):
         if "This video has been deleted" in soup.get_text():
             raise ScrapeError(410)
 
-        upload_date = get_text_between(open_graph.description(soup), "show on", " - ").strip()
+        upload_date = extr_text(open_graph.description(soup), "show on", " - ").strip()
         user_name = css.select_text(soup, Selector.USER_NAME)
         site_name = css.select_text(soup, Selector.SITE_NAME)
         scrape_item.setup_as_profile(self.create_title(f"{user_name} [{site_name}]"))

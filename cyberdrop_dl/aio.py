@@ -8,30 +8,15 @@ import dataclasses
 import shutil
 import sys
 import tempfile
-from abc import ABC, abstractmethod
 from pathlib import Path
 from stat import S_ISREG
-from typing import (
-    IO,
-    TYPE_CHECKING,
-    Any,
-    AnyStr,
-    Generic,
-    ParamSpec,
-    Self,
-    TypeVar,
-    TypeVarTuple,
-    cast,
-    final,
-    overload,
-)
+from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, TypeVarTuple, cast, overload
 from weakref import WeakValueDictionary
 
 from typing_extensions import Sentinel
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
-    from types import TracebackType
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
@@ -114,38 +99,6 @@ class AsyncIteratorWrapper(Generic[_T]):
             raise StopAsyncIteration from None
 
         return cast("_T", value)
-
-
-class AsyncContextManagerMixin(ABC):
-    __stack: contextlib.AsyncExitStack | None = None
-
-    @final
-    @property
-    def _stack(self) -> contextlib.AsyncExitStack[bool | None]:
-        if self.__stack is None:
-            raise RuntimeError(f"{type(self).__name__} can only be used as a context manager")
-        return self.__stack
-
-    @final
-    async def __aenter__(self) -> Self:
-        if self.__stack is not None:
-            raise RuntimeError(f"{type(self).__name__} does not allow reentrance")
-        self.__stack = contextlib.AsyncExitStack()
-        _ = await self.__stack.__aenter__()
-        await self._async_ctx_()
-        return self
-
-    @final
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> bool | None:
-        return await self._stack.__aexit__(exc_type, exc_val, exc_tb)
-
-    @abstractmethod
-    async def _async_ctx_(self) -> None: ...
 
 
 async def gather(*coros: Awaitable[_T]) -> list[_T]:

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -96,7 +96,7 @@ class DoodStreamCrawler(Crawler):
 
 def _md5_pass(soup: BeautifulSoup) -> str:
     js_text = css.select_text(soup, Selector.MD5_JS)
-    return get_text_between(js_text, "/pass_md5/", "'")
+    return extr_text(js_text, "/pass_md5/", "'")
 
 
 def _file_id(soup: BeautifulSoup) -> str:

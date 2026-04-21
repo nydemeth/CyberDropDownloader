@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, open_graph
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -54,7 +54,7 @@ class FilesterCrawler(Crawler):
                 scrape_item.setup_as_album(title, album_id=album_id)
 
             for on_click in css.iselect(soup, Selector.FILES, "onclick"):
-                web_url = self.parse_url(get_text_between(on_click, "'", "'"))
+                web_url = self.parse_url(extr_text(on_click, "'", "'"))
                 new_scrape_item = scrape_item.create_child(web_url)
                 self.create_task(self.run(new_scrape_item))
                 scrape_item.add_children()

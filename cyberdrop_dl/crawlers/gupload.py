@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_wrapper, get_text_between, xor_decrypt
+from cyberdrop_dl.utils import error_handling_wrapper, extr_text, xor_decrypt
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -61,5 +61,5 @@ class GUploadCrawler(Crawler):
 
     async def _request_video_config(self, url: AbsoluteHttpURL) -> dict[str, Any]:
         html = await self.request_text(url, impersonate=True)
-        config_text = get_text_between(html, "var _cfg = ", "');").partition("('")[-1]
+        config_text = extr_text(html, "var _cfg = ", "');").partition("('")[-1]
         return _decode_config(config_text)

@@ -7,7 +7,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, json
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -158,13 +158,13 @@ def _parse_video(soup: BeautifulSoup, display_id: str) -> Video:
 
     title_tag = css.select(soup, "div#video h1")
     stream_js_text = css.select_text(soup, Selector.STREAM_DATA)
-    stream_data = get_text_between(stream_js_text, "stream_data = ", ";")
+    stream_data = extr_text(stream_js_text, "stream_data = ", ";")
     res, url = max(_parse_formats(stream_data))
     return Video(
         id=display_id,
         resolution=res,
         url=url,
-        stream_id=get_text_between(stream_js_text, "ana_video_id = ", ";").strip("'"),
+        stream_id=extr_text(stream_js_text, "ana_video_id = ", ";").strip("'"),
         stream_key=css.select(soup, "[data-streamkey]", "data-streamkey"),
         title=css.attr_or_none(title_tag, "title") or css.text(title_tag),
     )

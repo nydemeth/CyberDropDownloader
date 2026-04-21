@@ -7,7 +7,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, json
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -80,7 +80,7 @@ class OdnoklassnikiCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url, headers=_HEADERS)
 
         channel_id = channel_str.removeprefix("c")
-        gwt_hash = get_text_between(css.select_text(soup, Selector.CHANNEL_HASH), 'gwtHash:"', '",')
+        gwt_hash = extr_text(css.select_text(soup, Selector.CHANNEL_HASH), 'gwtHash:"', '",')
 
         try:
             last_element_id = css.select(soup, *Selector.CHANNEL_LAST_ELEMENT)

@@ -9,7 +9,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, parse_url
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -109,7 +109,7 @@ def _parse_video(soup: BeautifulSoup) -> Video:
     except css.SelectorError:
         raise ScrapeError(404) from None
 
-    playlist = json.loads(get_text_between(playlist_js, "window.playlist = ", ";\nwindow.ads"))
+    playlist = json.loads(extr_text(playlist_js, "window.playlist = ", ";\nwindow.ads"))
 
     resolution, src = max(_parse_sources(playlist["sources"]))
     content_url = parse_url(json_ld["contentUrl"])

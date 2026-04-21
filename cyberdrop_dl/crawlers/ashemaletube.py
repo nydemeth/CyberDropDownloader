@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, m3u8
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, m3u8
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
@@ -151,7 +151,7 @@ class AShemaleTubeCrawler(Crawler):
             link_str: str = css.attr(image, "src")
         else:
             style: str = css.select(img_tag, "a", "style")
-            link_str = get_text_between(style, "url('", "');")
+            link_str = extr_text(style, "url('", "');")
         url = self.parse_url(link_str).with_query(None)
         filename, ext = self.get_filename_and_ext(url.name)
         custom_filename = self.create_custom_filename(filename, ext, file_id=css.attr(img_tag, "data-image-id"))
@@ -190,7 +190,7 @@ class AShemaleTubeCrawler(Crawler):
         )
 
     async def parse_player_info(self, script_text: str) -> tuple[Resolution, AbsoluteHttpURL, m3u8.Rendition]:
-        sources = get_text_between(script_text, "sources: ", "aspectRatio").strip().strip(",")
+        sources = extr_text(script_text, "sources: ", "aspectRatio").strip().strip(",")
         sources_data = json.loads(sources)
         url = self.parse_url(sources_data["hlsAuto"])
 

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -34,7 +34,7 @@ class FuckingFastCrawler(Crawler):
 
         soup = await self.request_soup(scrape_item.url)
         name = css.page_title(soup)
-        dl_link = get_text_between(str(soup), 'window.open("https:', ")").strip('"')
+        dl_link = extr_text(str(soup), 'window.open("https:', ")").strip('"')
         link = self.parse_url(f"https:{dl_link}")
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(scrape_item.url, scrape_item, name, ext, debrid_link=link, custom_filename=filename)

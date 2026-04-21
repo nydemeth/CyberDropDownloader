@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -120,7 +120,7 @@ class XVideosCrawler(Crawler):
         title = css.page_title(soup, self.DOMAIN)
         scrape_item.uploaded_at = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         script = css.select_text(soup, Selectors.HLS_VIDEO_JS)
-        m3u8_url = self.parse_url(get_text_between(script, "setVideoHLS('", "')"))
+        m3u8_url = self.parse_url(extr_text(script, "setVideoHLS('", "')"))
         m3u8, info = await self.request_m3u8_playlist(m3u8_url)
         custom_filename = self.create_custom_filename(title, ".mp4", file_id=encoded_id, resolution=info.resolution)
         # Remove url slug to prevent duplicates in database. It's language specific and not required.
@@ -135,14 +135,14 @@ class XVideosCrawler(Crawler):
 
         soup = await self._get_soup(scrape_item.url)
         script = css.select_text(soup, Selectors.ACCOUNT_INFO_JS)
-        display_name = get_text_between(script, '"display":"', '",')
+        display_name = extr_text(script, '"display":"', '",')
         scrape_item.setup_as_profile(self.create_title(f"{display_name} [{name}]"))
 
         frag = scrape_item.url.fragment
         part = "photos" if "profiles" in scrape_item.url.parts else "post"
         if not frag or "_tabPhotos" in frag:
             galleries: dict[str, Any] | list[str] = json.loads(
-                get_text_between(script, '"galleries":', '"visitor":').removesuffix(",")
+                extr_text(script, '"galleries":', '"visitor":').removesuffix(",")
             )
 
             if isinstance(galleries, dict):
@@ -158,11 +158,11 @@ class XVideosCrawler(Crawler):
             await self._iter_api_pages(scrape_item, scrape_item.url / "videos/new", "videos")
 
         if not frag or "quickies" in frag:
-            has_quickies = get_text_between(script, '"has_quickies":', ",").strip()
+            has_quickies = extr_text(script, '"has_quickies":', ",").strip()
             if has_quickies == "false":
                 return
 
-            user_id = get_text_between(script, '"id_user":', ",").strip()
+            user_id = extr_text(script, '"id_user":', ",").strip()
             quickies_api = scrape_item.url.origin() / "quickies-api/profilevideos/all/none/N" / user_id
             await self._iter_api_pages(scrape_item, quickies_api, "quickies")
 

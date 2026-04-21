@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup, Tag
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, is_blob_or_svg
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, is_blob_or_svg
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
 
 if TYPE_CHECKING:
@@ -535,7 +535,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
     def _lazy_load_embeds(self, post: ForumPostProtocol) -> Iterable[str]:
         selector = self.SELECTORS.posts.lazy_load_embeds
         for lazy_media in css.iselect(post.content, selector.element):
-            yield get_text_between(css.attr(lazy_media, selector.attribute), "loadMedia(this, '", "')")
+            yield extr_text(css.attr(lazy_media, selector.attribute), "loadMedia(this, '", "')")
 
     async def thread_pager(self, scrape_item: ScrapeItem) -> AsyncGenerator[BeautifulSoup]:
         async for soup in self.web_pager(scrape_item.url, self.get_next_page):

@@ -11,7 +11,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph, parse_url
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, open_graph, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -190,7 +190,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         soup = await self.request_soup(scrape_item.url)
         if not album_id:
             js_text = css.select_text(soup, Selector.ALBUM_ID)
-            album_id = get_text_between(js_text, "params['album_id'] =", ";")
+            album_id = extr_text(js_text, "params['album_id'] =", ";")
 
         results = await self.get_album_results(album_id)
         title = css.select_text(soup, Selector.ALBUM_NAME)

@@ -12,7 +12,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_wrapper, get_text_between, parse_url, xor_decrypt
+from cyberdrop_dl.utils import error_handling_wrapper, extr_text, parse_url, xor_decrypt
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -238,7 +238,7 @@ class XhamsterCrawler(Crawler):
     async def _get_window_initials(self, url: AbsoluteHttpURL) -> dict[str, Any]:
         self._disable_ai_title_translations(url)
         content = await self.request_text(url)
-        initials = get_text_between(content, "window.initials=", ";</script>")
+        initials = extr_text(content, "window.initials=", ";</script>")
         return json.loads(initials)
 
 

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_context, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import error_handling_context, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -106,7 +106,7 @@ class FlickrAPI:
             self._crawler.disable_on_error("Unable to get public API key"),
         ):
             text = await self._crawler.request_text(prints)
-            self.api_key = get_text_between(text, 'flickr.api.site_key = "', '"')
+            self.api_key = extr_text(text, 'flickr.api.site_key = "', '"')
 
     async def _request(self, method: str, **params: Any) -> dict[str, Any]:
         api_url = self.API_ENDPOINT.with_query(

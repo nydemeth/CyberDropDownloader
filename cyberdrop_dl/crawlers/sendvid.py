@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, remove_parts
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -67,7 +67,7 @@ class SendVidCrawler(Crawler):
             return PRIMARY_URL.with_path(video_id)
 
         if "embed" in url.parts:
-            return remove_parts(url, "embed")
+            return url.with_path(url.path.replace("/embed/", "/"), keep_query=True, keep_fragment=True)
         return url
 
 

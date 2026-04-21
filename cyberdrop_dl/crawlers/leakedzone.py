@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.compat import IntEnum
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -75,7 +75,7 @@ class LeakedZoneCrawler(Crawler):
     @classmethod
     def get_encoded_video_url(cls, soup: BeautifulSoup) -> str:
         js_text = css.select_text(soup, _SELECTORS.JW_PLAYER)
-        return get_text_between(js_text, 'file: f("', '"),')
+        return extr_text(js_text, 'file: f("', '"),')
 
     @error_handling_wrapper
     async def model(self, scrape_item: ScrapeItem) -> None:

@@ -17,7 +17,7 @@ from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, remove_parts
+from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
 
 if TYPE_CHECKING:
@@ -622,7 +622,7 @@ class KemonoCrawler(KemonoBaseCrawler):
 
 
 def _thumbnail_to_src(og_url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-    url = remove_parts(og_url, "thumbnails", "thumbnail").with_query(None)
+    url = og_url.with_path(og_url.path.replace("/thumbnails/", "/").replace("/thumbnail/", "/"))
     if name := og_url.query.get("f"):
         return url.with_query(f=name)
     return url

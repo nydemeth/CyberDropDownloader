@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, TypedDict
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -301,12 +301,12 @@ class PornHubCrawler(Crawler):
 
 def get_upload_date_str(soup: BeautifulSoup) -> str:
     date_text = css.select_text(soup, _SELECTORS.DATE)
-    return get_text_between(date_text, 'uploadDate": "', '",')
+    return extr_text(date_text, 'uploadDate": "', '",')
 
 
 def get_media_list(soup: BeautifulSoup) -> list[Media]:
     flashvars: str = css.select(soup, _SELECTORS.JS_VIDEO_INFO).text
-    media_text = get_text_between(flashvars, '"mediaDefinitions":', '"isVertical"').strip().removesuffix(",")
+    media_text = extr_text(flashvars, '"mediaDefinitions":', '"isVertical"').strip().removesuffix(",")
     return json.loads(media_text)
 
 

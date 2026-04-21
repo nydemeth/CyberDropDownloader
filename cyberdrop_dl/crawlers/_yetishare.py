@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import DDOSGuardError, PasswordProtectedError, ScrapeError
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -80,7 +80,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
         else:
             # ex:  loadImages('folder', '12345', 1, 0, '', {'searchTerm': "", 'filterUploadedDateRange': ""});
             page_type = "folder"
-            load_images = get_text_between(soup.select(Selector.LOAD_IMAGES)[-1].text, "loadImages(", ");")
+            load_images = extr_text(soup.select(Selector.LOAD_IMAGES)[-1].text, "loadImages(", ");")
             node_id = load_images.replace("'", "").split(",")[1].strip()
 
         page = 1
@@ -135,7 +135,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
         _check_is_available(soup)
 
         content_id = int(
-            get_text_between(
+            extr_text(
                 css.select_text(soup, Selector.FILE_INFO),
                 "showFileInformation(",
                 ");",
@@ -156,7 +156,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
 
         # Manually parse link. Some URLs are invalid. ex: https://cyberfile.me/7cfu
         # For the download URL, the slug does not actually matter. It can be anything
-        raw_link = get_text_between(css.attr(download_tag, "onclick"), "('", "');")
+        raw_link = extr_text(css.attr(download_tag, "onclick"), "('", "');")
         token = raw_link.rpartition("?download_token=")[-1]
         link = self.parse_url(raw_link).with_query(download_token=token)
 

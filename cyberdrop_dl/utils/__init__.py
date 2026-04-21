@@ -279,11 +279,11 @@ def _check_for_partial_files(path: Path) -> None:
         logger.warning("There are partial downloads in the downloads folder")
 
 
-def get_text_between(original_text: str, start: str, end: str) -> str:
+def extr_text(text: str, /, start: str, end: str) -> str:
     """Extracts the text between two strings in a larger text. Result will be stripped"""
-    start_index = original_text.index(start) + len(start)
-    end_index = original_text.index(end, start_index)
-    return original_text[start_index:end_index].strip()
+    start_index = text.index(start) + len(start)
+    end_index = text.index(end, start_index)
+    return text[start_index:end_index].strip()
 
 
 def _str_to_url(link_str: str) -> yarl.URL:
@@ -338,15 +338,6 @@ def remove_trailing_slash(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     if url.name or url.path == "/":
         return url
     return url.parent.with_fragment(url.fragment).with_query(url.query)
-
-
-def remove_parts(
-    url: AbsoluteHttpURL, *parts_to_remove: str, keep_query: bool = True, keep_fragment: bool = True
-) -> AbsoluteHttpURL:
-    if not parts_to_remove:
-        return url
-    new_parts = [p for p in url.parts[1:] if p not in parts_to_remove]
-    return url.with_path("/".join(new_parts), keep_fragment=keep_fragment, keep_query=keep_query)
 
 
 @functools.cache

@@ -9,7 +9,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
@@ -218,7 +218,7 @@ def _parse_video(soup: BeautifulSoup) -> Video:
     formats = [VideoSource.parse(tag) for tag in soup.select(Selector.FORMATS)]
 
     return Video(
-        title=get_text_between(ld_json, 'name": "', '",'),
-        date=get_text_between(ld_json, 'uploadDate": "', '"'),
+        title=extr_text(ld_json, 'name": "', '",'),
+        date=extr_text(ld_json, 'uploadDate": "', '"'),
         best_src=max(formats),
     )

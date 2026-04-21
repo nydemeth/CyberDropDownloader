@@ -10,7 +10,7 @@ from typing_extensions import ReadOnly
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, next_js
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, next_js
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Generator
@@ -214,7 +214,7 @@ class PatreonCrawler(Crawler):
 
 
 def _extract_campaign_id(soup: BeautifulSoup):
-    return get_text_between(str(soup), r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\"")
+    return extr_text(str(soup), r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\"")
 
 
 def _extract_campaign_id_next_js(soup: BeautifulSoup) -> str:

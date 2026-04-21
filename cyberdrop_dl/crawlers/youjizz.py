@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
+from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, open_graph
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -76,7 +76,7 @@ class YouJizzCrawler(Crawler):
 
 def _parse_video(soup: BeautifulSoup) -> Video:
     js_text = css.select_text(soup, JS_SELECTOR)
-    encodings_text = get_text_between(js_text, "var dataEncodings =", "var encodings").strip().removesuffix(";")
+    encodings_text = extr_text(js_text, "var dataEncodings =", "var encodings").strip().removesuffix(";")
     data_encodings = json.loads(encodings_text)
     return Video(
         title=open_graph.title(soup),
