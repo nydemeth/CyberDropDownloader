@@ -22,6 +22,28 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.4.0] - 2026-04-23
+
+### Added
+
+- ImageVenue support
+- Photo search support (Anysex)
+- Photo search and Tags support (ePorner)
+
+### Changed
+
+- Log CDL enviroment vars
+- Always use threads to resolve DNS queries on Windows
+
+### Removed
+
+- InfluencerBitches support (No longer exists)
+
+### Fixed
+
+- Ignore errors while checking for updates
+- `RuntimeError` when downloads reach 99% due to incorrect MAC integrity check (MegaNZ)
+
 ## [9.3.1] - 2026-04-21
 
 ### Fixed
