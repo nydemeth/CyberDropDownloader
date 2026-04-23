@@ -9,7 +9,7 @@ from datetime import datetime
 from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, ClassVar, final
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
@@ -24,7 +24,9 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 logger = logging.getLogger("cyberdrop_dl")
-_DEFAULT_CONSOLE = Console()
+for noisy_package in ("aiosqlite",):
+    logging.getLogger(noisy_package).setLevel(logging.ERROR)
+
 
 _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
@@ -89,6 +91,16 @@ class JsonLogRecord(logging.LogRecord):
 logging.setLogRecordFactory(JsonLogRecord)
 
 
+class CDLFormater(logging.Formatter):
+    _CDL_FORMAT: ClassVar[logging.PercentStyle] = logging.PercentStyle("%(message)s")
+
+    def formatMessage(self, record: logging.LogRecord) -> str:  # noqa: N802
+        if record.name.startswith("cyberdrop_dl"):
+            return self._CDL_FORMAT.format(record)
+
+        return self._style.format(record)
+
+
 class LogHandler(RichHandler):
     """Rich Handler with default settings, custom log render to remove padding in files and `color` extra"""
 
@@ -119,6 +131,8 @@ class LogHandler(RichHandler):
                 level_width=10,
                 time_format=lambda dt: Text(f"[{dt.isoformat(sep=' ', timespec='milliseconds')}]", style="log.time"),
             )
+
+        self.setFormatter(CDLFormater("[%(name)s]: %(message)s"))
 
     @override
     def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
@@ -164,11 +178,11 @@ def _threaded_logger(log_handler: logging.Handler, *, is_main_log: bool = False)
     q_listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
     q_listener.start()
     token = _MAIN_LOG_LISTENER.set(q_listener) if is_main_log else None
-    logger.addHandler(q_handler)
+    logging.getLogger().addHandler(q_handler)
     try:
         yield
     finally:
-        logger.removeHandler(q_handler)
+        logging.getLogger().removeHandler(q_handler)
         try:
             q_handler.close()
         finally:
@@ -259,14 +273,14 @@ def log_spacer(char: str = "-") -> None:
 @contextlib.contextmanager
 def setup_console_logging(level: int = logging.INFO) -> Generator[None]:
     handler = LogHandler(level, show_time=False)
-    logger.setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.DEBUG)
     handler.addFilter(lambda _: LOG_TO_CONSOLE.get())
     try:
         with _threaded_logger(handler):
             yield
     finally:
         # Re add it as a normal handler to make sure uncatched exceptions show up
-        logger.addHandler(handler)
+        logging.getLogger().addHandler(handler)
 
 
 @contextlib.contextmanager
@@ -294,7 +308,7 @@ def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[N
 
 @contextlib.contextmanager
 def _setup_debug_logger() -> Generator[Path | None]:
-    if not env.DEBUG_VAR:
+    if not env.DEBUG_MODE:
         yield
         return
 
@@ -308,7 +322,9 @@ def _setup_debug_logger() -> Generator[Path | None]:
             raise FileNotFoundError(None, msg, env.DEBUG_LOG_FOLDER)
 
         if not debug_log_folder.is_dir():
-            msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' should a directory"
+            msg = (
+                f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' should a be directory"
+            )
             raise NotADirectoryError(None, msg, env.DEBUG_LOG_FOLDER)
 
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -332,11 +348,11 @@ def _setup_debug_logger() -> Generator[Path | None]:
 @contextlib.contextmanager
 def capture_logs() -> Generator[StringIO]:
     in_memory_handler = logging.StreamHandler(file := StringIO())
-    logger.addHandler(in_memory_handler)
+    logging.getLogger().addHandler(in_memory_handler)
     try:
         yield file
     finally:
-        logger.removeHandler(in_memory_handler)
+        logging.getLogger().removeHandler(in_memory_handler)
 
 
 def export_logs(*, size_limit: float | None = None) -> bytes:
@@ -358,25 +374,12 @@ def flush_logs() -> None:
 def borrow_logger(name: str, level: int = logging.INFO) -> Generator[None]:
     """Context manager to temporarily add our log handlers to a third party logger"""
     _3p_logger = logging.getLogger(name)
-    _3p_level = _3p_logger.level
-    _3p_propagate = _3p_logger.propagate
-    _3p_handlers = _3p_logger.handlers.copy()
-
-    def replace_handlers_with(*new_handlers: logging.Handler) -> None:
-        for handler in _3p_logger.handlers[:]:
-            _3p_logger.removeHandler(handler)
-
-        for handler in new_handlers:
-            _3p_logger.addHandler(handler)
-
-    replace_handlers_with(*logger.handlers)
-
+    og_level = _3p_logger.level
+    og_propagate = _3p_logger.propagate
     _3p_logger.propagate = False
     _3p_logger.setLevel(level)
-
     try:
         yield
     finally:
-        replace_handlers_with(*_3p_handlers)
-        _3p_logger.propagate = _3p_propagate
-        _3p_logger.setLevel(_3p_level)
+        _3p_logger.propagate = og_propagate
+        _3p_logger.setLevel(og_level)

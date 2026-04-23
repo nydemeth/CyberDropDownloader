@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from pydantic.types import ByteSize
 
-from cyberdrop_dl import __version__, ffmpeg, yaml
+from cyberdrop_dl import __version__, env, ffmpeg, yaml
 from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
@@ -102,18 +102,28 @@ class Manager:
 
         logger.info(f"Running cyberdrop-dl v{__version__}")
 
-        args_info = {
-            "System": get_system_information(),
-            "Config File": self.config.source,
-            "Input File": self.config.settings.files.input_file,
-            "Download Folder": self.config.settings.files.download_folder,
-            "Database File": self.appdata.db_file,
-            "CLI only options": self.cli_args.model_dump(mode="json"),
-            "Auth": auth,
-            "Settings": config_settings.model_dump(mode="json"),
-            "Global Settings": self.config.global_settings.model_dump(mode="json"),
-        }
-        logger.debug(args_info)
+        logger.debug(
+            {
+                "System": get_system_information(),
+                "Config file": self.config.source,
+                "URLs file": self.config.settings.files.input_file,
+                "Download folder": self.config.settings.files.download_folder,
+                "Database file": self.appdata.db_file,
+                "CLI options": self.cli_args.model_dump(mode="json"),
+                "Auth": auth,
+                "Settings": config_settings.model_dump(mode="json"),
+                "Global Settings": self.config.global_settings.model_dump(mode="json"),
+                "Enviroment": env.ALL_VARS,
+                "Enviroment resolved": env.ALL_VARS_RESOLVED,
+            }
+        )
+
+        try:
+            db_size = self.appdata.db_file.stat().st_size
+        except FileNotFoundError:
+            db_size = 0
+
+        logger.debug("Database size: %s", ByteSize(db_size).human_readable(decimal=True))
         logger.debug("ffmpeg version: %s", ffmpeg.get_ffmpeg_version())
         logger.debug("ffprobe version: %s", ffmpeg.get_ffprobe_version())
 
@@ -147,8 +157,13 @@ class Manager:
 
         if stats.domain_stats:
             log_spacer()
-            logger.info("URLs by domain:", extra={"color": "cyan"})
-            logger.info(" - " + "\n - ".join(map(str, stats.domain_stats.items())))
+            logger.info("URLs by domain (includes children):", extra={"color": "cyan"})
+
+            def lines():
+                for domain, count in stats.domain_stats.items():
+                    yield f" - {domain}: {count:,}"
+
+            logger.info("\n".join(lines()))
 
         log_spacer()
         logger.info("Download Stats:", extra={"color": "cyan"})
