@@ -53,15 +53,10 @@ def _make_album_parser() -> Callable[[str], Generator[File]]:
     def translate(text: str) -> str:
         return pattern.sub(lambda m: translation_map[m.group(0)], text.replace("\\'", "'")).strip()
 
-    def fix_unicode(value: object) -> Any:
-        if type(value) is str:
-            return value.encode("raw_unicode_escape").decode("utf-8")
-        return value
-
     def decode(content: str) -> Generator[File]:
         file: dict[str, Any]
         for file in json.loads(content):
-            yield File(**{name: fix_unicode(value) for name, value in file.items()})
+            yield File(**file)
 
     def parse(album_js: str) -> Generator[File]:
         content = translate(album_js[album_js.find("=") + 1 : album_js.rfind("];")])
