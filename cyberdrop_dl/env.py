@@ -5,7 +5,7 @@ ALL_VARS: dict[str, str | None] = {}
 os.environ["PYDANTIC_ERRORS_INCLUDE_URL"] = "0"
 
 
-def _env(name: str, *, censor: bool = True) -> str | None:
+def _env(name: str, *, censor: bool = False) -> str | None:
     full_name = "CDL_" + name
     value = os.getenv(full_name)
     if censor and value:
