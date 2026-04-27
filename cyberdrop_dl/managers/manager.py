@@ -44,10 +44,9 @@ class Manager:
         config: Config | None = None,
     ) -> None:
         self.cache: dict[str, Any] = {}
-
-        self.appdata: AppData = appdata or AppData.default()
+        self._appdata: AppData | None = appdata
         self.cli_args: CLIargs = cli_args or CLIargs()
-        self.config: Config = config or Config.from_manager(self)
+        self._config: Config | None = config
 
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
@@ -55,6 +54,18 @@ class Manager:
         self.scrape_mapper: ScrapeMapper
         self.database: Database
         self.client_manager: ClientManager
+
+    @property
+    def appdata(self) -> AppData:
+        if self._appdata is None:
+            self._appdata = AppData.default()
+        return self._appdata
+
+    @property
+    def config(self) -> Config:
+        if self._config is None:
+            self._config = Config.from_manager(self)
+        return self._config
 
     def resolve_paths(self) -> None:
         self.appdata.mkdirs()
@@ -261,9 +272,30 @@ class AppData:
     def default(cls) -> Self:
         return cls.from_path(Path.cwd())
 
+    @staticmethod
+    def _resolve_win_path(path: Path) -> Path:
+        # Detect the real path when running in sandboxed interpreter (ex: UWP Python)
+        # https://github.com/Cyberdrop-DL/cyberdrop-dl/issues/1700#issuecomment-4317561031
+        # https://learn.microsoft.com/en-us/windows/msix/desktop/flexible-virtualization#default-msix-behavior
+        anchor = path / "cyberdrop_dl.anchor"
+        path.mkdir(parents=True, exist_ok=True)
+        anchor.touch()
+        real_path = anchor.resolve().parent
+        if path != real_path:
+            logger.warning("Windows virtualized path detected at '%s'. Real destination: '%s'", path, real_path)
+        anchor.unlink()
+        try:
+            real_path.rmdir()
+        except OSError:
+            pass
+        return real_path
+
     @classmethod
     def from_path(cls, path: Path) -> Self:
         path = path.expanduser().resolve().absolute() / "AppData"
+        if os.name == "nt":
+            path = cls._resolve_win_path(path)
+
         cache = path / "Cache"
         configs = path / "Configs"
         return cls(
