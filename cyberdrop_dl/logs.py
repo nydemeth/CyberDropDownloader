@@ -117,6 +117,7 @@ class LogHandler(RichHandler):
             show_time=show_time,
             rich_tracebacks=True,
             tracebacks_show_locals=True,
+            tracebacks_max_frames=3,
             locals_max_string=_DEFAULT_CONSOLE_WIDTH,
             tracebacks_extra_lines=2,
             locals_max_length=20,
@@ -297,13 +298,14 @@ def setup_console_logging(level: int = logging.INFO) -> Generator[None]:
 @contextlib.contextmanager
 def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
-    from mega.api import LOG_HTTP_TRAFFIC
+    import mega
 
     with (
         _setup_debug_logger() as debug_log_file,
         file.open("w", encoding="utf8") as fp,
         _enter_context(MAIN_LOG_FILE, file),
-        _enter_context(LOG_HTTP_TRAFFIC, True),
+        _enter_context(mega.LOG_HTTP_TRAFFIC, True),
+        _enter_context(mega.LOG_FILE_PROGRESS, False),
         _threaded_logger(
             log_handler=LogHandler(
                 level,
