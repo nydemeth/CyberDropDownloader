@@ -117,7 +117,7 @@ class LogHandler(RichHandler):
             show_time=show_time,
             rich_tracebacks=True,
             tracebacks_show_locals=True,
-            tracebacks_max_frames=3,
+            tracebacks_max_frames=30,
             locals_max_string=_DEFAULT_CONSOLE_WIDTH,
             locals_max_length=20,
             show_path=False,
@@ -315,7 +315,12 @@ def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[N
         ),
     ):
         logger.info(f"Debug log file: {debug_log_file}")
-        yield
+        try:
+            yield
+        except Exception:
+            with _enter_context(_LOG_TO_CONSOLE, False):
+                logger.critical("Unrecoverable error", exc_info=True)
+            raise
 
 
 @contextlib.contextmanager
