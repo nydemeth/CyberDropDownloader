@@ -125,12 +125,26 @@ class Manager:
                 "CLI options": self.cli_args.model_dump(mode="json"),
                 "Auth": auth,
                 "Settings": config_settings.model_dump(mode="json"),
-                "Global Settings": self.config.global_settings.model_dump(mode="json"),
+                "Global settings": self.config.global_settings.model_dump(mode="json"),
                 "Enviroment": env.ALL_VARS,
                 "Enviroment resolved": env.ALL_VARS_RESOLVED,
                 "argv": tuple(sys.argv[1:]),
             }
         )
+
+        if ffmpeg.is_installed():
+            logger.debug(
+                {
+                    "ffmpeg": {
+                        "binary": ffmpeg.which_ffmpeg(),
+                        "version": ffmpeg.version(),
+                    },
+                    "ffprobe": {
+                        "binary": ffmpeg.which_ffprobe(),
+                        "version": ffmpeg.ffprobe_version(),
+                    },
+                }
+            )
 
         try:
             db_size = self.appdata.db_file.stat().st_size
@@ -139,11 +153,7 @@ class Manager:
 
         logger.debug("Database size: %s", ByteSize(db_size).human_readable(decimal=True))
 
-        if ffmpeg.version():
-            logger.debug("ffmpeg version: %s", ffmpeg.version())
-            logger.debug("ffprobe version: %s", ffmpeg.ffprobe_version())
-
-        else:
+        if not ffmpeg.is_installed():
             msg = "ffmpeg is not installed. HLS downloads will fail"
             if os.name == "nt":
                 msg += ". Get it from: https://www.gyan.dev/ffmpeg/builds/"
