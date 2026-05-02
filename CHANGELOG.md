@@ -22,11 +22,59 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.0] - 2026-05-02
+
+### Changed
+
+- `--log-level` and `--console-log-level` now accept level names as valid values, ex: `INFO` or `WARNING`
+- An empty or null value for `--console-log-level` will use the same level as `--log-level`
+- For `--console-log-level`, values higger than 50 (`CRITICAL`) will be reset to `None`
+
+### Deprecated
+
+Several config options:
+
+CLI Only options:
+
+- `--completed-after`
+- `--completed-before`
+- `--download`, `--retry-all`, `--retry-failed`, `--retry-maintenance` options wll be removed and replaced with dedicated subcommands
+
+Download Options:
+
+- `--disable-download-attempt-limit`
+- `--remove-generated-id-from-filenames`
+- `--scrape-single-forum-post`
+
+Logs
+
+- `--last-forum-post`
+
+RuntimeOptions:
+
+- `--update-last-forum-post`
+- Support for integers values with `--log-level` and `--console-log-level` will be removed on v10. They will only accept log level names
+
+Authentication entries for:
+
+- `Imgur.client_id` (no longer required)
+- `Kemono.session` (can be supplied by cookies)
+- `Coomer.session` (can be supplied by cookies)
+
+DupeCleanup:
+
+- `--add-md5-hash` and `--add-sha256-hash` will removed and merged into a single config option as a list of hashes to enable
+
+### Fixed
+
+- `--log-level` and `--console-log-level` being ignored
+- Skip empty files removal if the root folder no longer exists
+
 ## [9.4.3] - 2026-05-01
 
 ### Fixed
 
-- CRITICAL errors not being logged to the main log file
+- `CRITICAL` errors not being logged to the main log file
 
 ## [9.4.2] - 2026-04-30
 
