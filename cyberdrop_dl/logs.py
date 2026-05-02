@@ -7,6 +7,7 @@ import queue
 import sys
 from contextvars import ContextVar
 from datetime import datetime
+from enum import StrEnum
 from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger("cyberdrop_dl")
-for noisy_package in ("aiosqlite",):
+for noisy_package in ("aiosqlite", "markdown_it"):
     logging.getLogger(noisy_package).setLevel(logging.ERROR)
 
 _T = TypeVar("_T")
@@ -39,6 +40,12 @@ _CONSOLE_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_CONSOLE_LOG_LIST
 _LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
 
 MAIN_LOG_FILE: ContextVar[Path] = ContextVar("MAIN_LOG_FILE")
+
+
+class HandlerName(StrEnum):
+    CONSOLE = "cdl-console"
+    MAIN_LOG = "cdl-main-log-file"
+    DEBUG_LOG = "cdl-debug-log-file"
 
 
 class RedactedConsole(Console):
@@ -172,7 +179,9 @@ class BareQueueHandler(QueueHandler):
 
 @contextlib.contextmanager
 def _threaded_logger(
-    log_handler: logging.Handler, *, context_var: ContextVar[QueueListener] | None = None
+    log_handler: logging.Handler,
+    *,
+    context_var: ContextVar[QueueListener] | None = None,
 ) -> Generator[BareQueueHandler]:
     """Context-manager to process logs from this handler in another thread"""
     q: queue.Queue[logging.LogRecord] = queue.Queue()
@@ -280,12 +289,24 @@ def log_spacer(char: str = "-") -> None:
     logger.info(char * 30, stacklevel=2)
 
 
+def _get_handler(name: str) -> logging.Handler:
+    for handler in logging.getLogger().handlers:
+        if handler.get_name() == name:
+            return handler
+    raise LookupError(name)
+
+
+def set_console_level(level: int) -> None:
+    _get_handler(HandlerName.CONSOLE).setLevel(level)
+
+
 @contextlib.contextmanager
-def setup_console_logging(level: int = logging.INFO) -> Generator[None]:
-    handler = LogHandler(level, show_time=False)
+def setup_console_logging() -> Generator[None]:
+    handler = LogHandler(logging.DEBUG, show_time=False)
     logging.getLogger().setLevel(logging.DEBUG)
     try:
         with _threaded_logger(handler, context_var=_CONSOLE_LOG_LISTENER) as q_handler:
+            q_handler.set_name(HandlerName.CONSOLE)
             q_handler.addFilter(lambda _: _LOG_TO_CONSOLE.get())
             yield
     finally:
@@ -295,9 +316,12 @@ def setup_console_logging(level: int = logging.INFO) -> Generator[None]:
 
 
 @contextlib.contextmanager
-def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
+def setup_file_logging(file: Path, /, *, level: int = logging.DEBUG) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
     import mega
+
+    if "pytest" not in sys.modules:
+        logging.captureWarnings(True)
 
     with (
         _setup_debug_logger() as debug_log_file,
@@ -307,13 +331,15 @@ def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[N
         _enter_context(mega.LOG_FILE_PROGRESS, False),
         _threaded_logger(
             log_handler=LogHandler(
-                level,
+                level=logging.DEBUG,
                 show_time=True,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             ),
             context_var=_MAIN_LOG_LISTENER,
-        ),
+        ) as handler,
     ):
+        handler.setLevel(level)
+        handler.set_name(HandlerName.MAIN_LOG)
         logger.info(f"Debug log file: {debug_log_file}")
         try:
             yield
@@ -353,12 +379,13 @@ def _setup_debug_logger() -> Generator[Path | None]:
         debug_log_file.open("w", encoding="utf8") as fp,
         _threaded_logger(
             LogHandler(
-                logging.DEBUG,
+                level=logging.NOTSET + 1,
                 console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
                 show_time=True,
-            )
-        ),
+            ),
+        ) as handler,
     ):
+        handler.set_name(HandlerName.DEBUG_LOG)
         yield debug_log_file
 
 
