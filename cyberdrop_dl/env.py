@@ -29,9 +29,7 @@ DEBUG_MODE = bool(
     or os.getenv("PYCHARM_HOSTED")
     or os.getenv("TERM_PROGRAM") in ("vscode", "zed")
 )
-ENABLE_DEBUG_CRAWLERS = (
-    _env("ENABLE_DEBUG_CRAWLERS", censor=True) == "d396ab8c85fcb1fecd22c8d9b58acf944a44e6d35014e9dd39e42c9a64091eda"
-)
+ENABLE_DEBUG_CRAWLERS = True
 
 NO_PLUGINS = bool(_env("NO_PLUGINS"))
 EDITOR = os.getenv("EDITOR")
