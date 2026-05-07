@@ -55,11 +55,6 @@ class DownloadClient:
 
         return self._server_locks[server]
 
-    @contextlib.asynccontextmanager
-    async def _track_errors(self, domain: str):
-        with self.client_manager.request_context(domain):
-            yield
-
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
         downloaded_filename = await self.manager.database.history.get_downloaded_filename(domain, media_item)
@@ -99,7 +94,7 @@ class DownloadClient:
         media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
         if not media_item.path:
             proceed, skip = await self.get_final_file_info(media_item, domain)
-            self.client_manager.check_content_length(resp.headers)
+            _check_content_length(resp.headers)
             if skip:
                 self.manager.scrape_mapper.tui.files.stats.skipped += 1
                 return False
@@ -154,9 +149,9 @@ class DownloadClient:
     @contextlib.asynccontextmanager
     async def __request_context(
         self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
-    ) -> AsyncGenerator[AbstractResponse | aiohttp.ClientResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any] | aiohttp.ClientResponse]:
         if domain in _USE_IMPERSONATION:
-            resp = await self.client_manager._curl_session.get(str(url), stream=True, headers=headers)
+            resp = await self.client_manager.curl_session.get(str(url), stream=True, headers=headers)
             try:
                 yield AbstractResponse.create(resp)
             finally:
@@ -265,8 +260,7 @@ class DownloadClient:
             await self.process_completed(media_item, domain)
             return False
 
-        async with self._track_errors(domain):
-            downloaded = await self._download(domain, media_item)
+        downloaded = await self._download(domain, media_item)
 
         if downloaded:
             await aio.move(media_item.partial_file, media_item.path)
@@ -510,3 +504,13 @@ def _fallback_generator(media_item: MediaItem):
     gen = gen_fallback()
     _ = next(gen)
     return gen
+
+
+def _check_content_length(headers: Mapping[str, Any]) -> None:
+    content_length, content_type = headers.get("Content-Length"), headers.get("Content-Type")
+    if content_length is None or content_type is None:
+        return
+    if content_length == "322509" and content_type == "video/mp4":
+        raise DownloadError(status="Bunkr Maintenance", message="Bunkr under maintenance")
+    if content_length == "73003" and content_type == "video/mp4":
+        raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
