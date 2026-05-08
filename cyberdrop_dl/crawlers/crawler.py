@@ -21,7 +21,7 @@ from aiolimiter import AsyncLimiter
 from typing_extensions import deprecated
 
 from cyberdrop_dl import env
-from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
+from cyberdrop_dl.clients.client import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.crawlers._hls import HLSParser
 from cyberdrop_dl.downloader.http import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
@@ -191,7 +191,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @property
     def client(self) -> HTTPClient:
-        return self.manager.client_manager.scraper_client
+        return self.manager.http_client
 
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
@@ -205,7 +205,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         async with self._startup_lock:
             if self._ready:
                 return
-            self.manager.client_manager.rate_limits[self.DOMAIN] = AsyncLimiter(*self._RATE_LIMIT)
+            self.manager.http_client.rate_limits[self.DOMAIN] = AsyncLimiter(*self._RATE_LIMIT)
 
             await self.__async_post_init__()
             self._ready = True
@@ -659,7 +659,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     def get_cookie_value(self, name: str) -> str | None:
-        if morsel := self.client.client_manager.cookies.filter_cookies(self.PRIMARY_URL).get(name):
+        if morsel := self.client.cookies.filter_cookies(self.PRIMARY_URL).get(name):
             return morsel.value
 
     @final
@@ -669,7 +669,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         If `url` is `None`, defaults to `self.PRIMARY_URL`
         """
         response_url = url or self.PRIMARY_URL
-        self.client.client_manager.cookies.update_cookies(cookies, response_url)
+        self.client.cookies.update_cookies(cookies, response_url)
 
     @final
     def iter_tags(

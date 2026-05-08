@@ -7,7 +7,7 @@ from mega.chunker import MegaChunker, get_chunks
 from typing_extensions import override
 
 from cyberdrop_dl import aio, storage
-from cyberdrop_dl.clients.download_client import DownloadClient
+from cyberdrop_dl.clients.download_client import DownloadClient, make_speed_checker
 from cyberdrop_dl.downloader.http import Downloader
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 @final
 class MegaDownloadClient(DownloadClient):
     def __init__(self, manager: Manager) -> None:
-        super().__init__(manager, manager.client_manager)
+        super().__init__(manager, manager.http_client)
         self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
         self._supports_ranges = False
 
@@ -31,7 +31,7 @@ class MegaDownloadClient(DownloadClient):
         """Appends content to a file."""
 
         check_free_space = storage.create_free_space_checker(media_item)
-        check_download_speed = self.make_speed_checker(media_item, hook)
+        check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
         await check_free_space()
         await self._pre_download_check(media_item)
 
@@ -45,7 +45,7 @@ class MegaDownloadClient(DownloadClient):
                 await check_free_space()
                 chunk_size = len(chunk)
 
-                await self.client_manager.speed_limiter.acquire(chunk_size)
+                await self.client.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
                 hook.advance(chunk_size)
                 check_download_speed()

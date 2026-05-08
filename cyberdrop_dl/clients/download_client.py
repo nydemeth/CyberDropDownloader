@@ -5,25 +5,25 @@ import contextlib
 import itertools
 import logging
 import time
-from collections.abc import Generator
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
-from cyberdrop_dl import aio, constants, storage
+from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FileExt
-from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
+from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import dates
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Mapping
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping
     from pathlib import Path
     from typing import Any
 
     import aiohttp
 
+    from cyberdrop_dl.clients.client import HTTPClient
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.managers.client_manager import ClientManager
     from cyberdrop_dl.progress import ProgressHook
     from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 
@@ -40,9 +40,9 @@ _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
 class DownloadClient:
     """Low level class that performs the actual HTTP download operations"""
 
-    def __init__(self, manager: Manager, client_manager: ClientManager) -> None:
+    def __init__(self, manager: Manager, client: HTTPClient) -> None:
         self.manager = manager
-        self.client_manager = client_manager
+        self.client = client
         self.download_speed_threshold = self.manager.config.settings.runtime_options.slow_download_speed
         self._supports_ranges: bool = True
 
@@ -77,7 +77,7 @@ class DownloadClient:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
             await aio.unlink(media_item.partial_file)
 
-        await self.client_manager.check_http_status(resp, download=True)
+        await self.client.check_http_status(resp, download=True)
 
         if not media_item.is_segment:
             _ = get_content_type(media_item.ext, resp.headers)
@@ -142,14 +142,14 @@ class DownloadClient:
         self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
     ) -> AsyncGenerator[AbstractResponse[Any] | aiohttp.ClientResponse]:
         if domain in _USE_IMPERSONATION:
-            resp = await self.client_manager.curl_session.get(str(url), stream=True, headers=headers)
+            resp = await self.client.curl_session.get(str(url), stream=True, headers=headers)
             try:
                 yield AbstractResponse.create(resp)
             finally:
                 await resp.aclose()
             return
 
-        async with self.client_manager._download_session.get(url, headers=headers) as resp:
+        async with self.client._download_session.get(url, headers=headers) as resp:
             yield resp
 
     async def _request_download(
@@ -157,37 +157,8 @@ class DownloadClient:
         media_item: MediaItem,
         process_response: Callable[[aiohttp.ClientResponse | AbstractResponse[Any]], Coroutine[None, None, bool]],
     ) -> bool:
-        download_url = media_item.debrid_link or media_item.url
-
-        fallback_url_generator = _fallback_generator(media_item)
-        fallback_count = 0
-
-        while True:
-            resp = None
-            try:
-                async with self.__request_context(download_url, media_item.domain, media_item.headers) as resp:
-                    return await process_response(resp)
-            except (DownloadError, DDOSGuardError):
-                if resp is None:
-                    raise
-                try:
-                    next_download_url = fallback_url_generator.send(resp)
-                except StopIteration:
-                    pass
-                else:
-                    if not next_download_url:
-                        raise
-                    if media_item.debrid_link and media_item.debrid_link == download_url:
-                        msg = f" with debrid URL {download_url} failed, retrying with fallback URL: "
-                    elif media_item.url == download_url:
-                        msg = " failed, retrying with fallback URL: "
-                    else:
-                        fallback_count += 1
-                        msg = f" with fallback URL #{fallback_count} {download_url} failed, retrying with new fallback URL: "
-                    logger.error(f"Download of {media_item.url}{msg}{next_download_url}")
-                    download_url = next_download_url
-                    continue
-                raise
+        async with self.__request_context(media_item.real_url, media_item.domain, media_item.headers) as resp:
+            return await process_response(resp)
 
     async def _append_content(
         self,
@@ -198,15 +169,15 @@ class DownloadClient:
         """Appends content to a file."""
 
         check_free_space = storage.create_free_space_checker(media_item)
-        check_download_speed = self.make_speed_checker(media_item, hook)
+        check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
         await check_free_space()
         await self._pre_download_check(media_item)
 
         async with aio.open(media_item.partial_file, mode="ab") as f:
-            async for chunk in content.iter_chunked(self.client_manager.speed_limiter.chunk_size):
+            async for chunk in content.iter_chunked(self.client.chunk_size):
                 await check_free_space()
                 chunk_size = len(chunk)
-                await self.client_manager.speed_limiter.acquire(chunk_size)
+                await self.client.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
                 hook.advance(chunk_size)
                 check_download_speed()
@@ -224,24 +195,6 @@ class DownloadClient:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, message="File is empty")
 
-    def make_speed_checker(self, media_item: MediaItem, hook: ProgressHook) -> Callable[[], None]:
-        last_slow_speed_read = None
-
-        def check_download_speed() -> None:
-            nonlocal last_slow_speed_read
-            if not self.download_speed_threshold:
-                return
-
-            speed = hook.get_speed()
-            if speed > self.download_speed_threshold:
-                last_slow_speed_read = None
-            elif not last_slow_speed_read:
-                last_slow_speed_read = time.perf_counter()
-            elif time.perf_counter() - last_slow_speed_read > _SLOW_DOWNLOAD_PERIOD:
-                raise SlowDownloadError(origin=media_item)
-
-        return check_download_speed
-
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
         if self.manager.config.settings.download_options.skip_download_mark_completed and not media_item.is_segment:
@@ -256,7 +209,7 @@ class DownloadClient:
         if downloaded:
             await aio.move(media_item.partial_file, media_item.path)
             if not media_item.is_segment:
-                proceed = await self.client_manager.check_file_duration(media_item)
+                proceed = not filter_by_duration(media_item, self.manager.config)
                 await self.manager.database.history.add_duration(domain, media_item)
                 if not proceed:
                     logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
@@ -421,23 +374,15 @@ class DownloadClient:
 
     def check_filesize_limits(self, media: MediaItem) -> bool:
         """Checks if the file size is within the limits."""
-        file_size_limits = self.manager.config.settings.file_size_limits
-        max_video_filesize = file_size_limits.maximum_video_size or float("inf")
-        min_video_filesize = file_size_limits.minimum_video_size
-        max_image_filesize = file_size_limits.maximum_image_size or float("inf")
-        min_image_filesize = file_size_limits.minimum_image_size
-        max_other_filesize = file_size_limits.maximum_other_size or float("inf")
-        min_other_filesize = file_size_limits.minimum_other_size
+        limits = self.manager.config.settings.file_size_limits.ranges
 
         assert media.filesize is not None
         if media.ext in FileExt.IMAGE:
-            proceed = min_image_filesize < media.filesize < max_image_filesize
-        elif media.ext in FileExt.VIDEO:
-            proceed = min_video_filesize < media.filesize < max_video_filesize
-        else:
-            proceed = min_other_filesize < media.filesize < max_other_filesize
+            return media.filesize in limits.image
+        if media.ext in FileExt.VIDEO:
+            return media.filesize in limits.video
 
-        return proceed
+        return media.filesize in limits.other
 
 
 def get_content_type(ext: str, headers: Mapping[str, str]) -> str | None:
@@ -471,32 +416,6 @@ def is_html_or_text(content_type: str) -> bool:
     return any(s in content_type for s in ("html", "text"))
 
 
-def _fallback_generator(media_item: MediaItem):
-    fallbacks = media_item.fallbacks
-
-    def gen_fallback() -> Generator[AbsoluteHttpURL | None, aiohttp.ClientResponse, None]:
-        response = yield
-        if fallbacks is None:
-            return
-
-        if callable(fallbacks):
-            for retry in itertools.count(1):
-                if not response:
-                    return
-                url = fallbacks(response, retry)
-                if not url:
-                    return
-                response = yield url
-
-        else:
-            for fall in fallbacks:  # noqa: UP028
-                yield fall
-
-    gen = gen_fallback()
-    _ = next(gen)
-    return gen
-
-
 def _check_content_length(headers: Mapping[str, Any]) -> None:
     content_length, content_type = headers.get("Content-Length"), headers.get("Content-Type")
     if content_length is None or content_type is None:
@@ -505,3 +424,62 @@ def _check_content_length(headers: Mapping[str, Any]) -> None:
         raise DownloadError(status="Bunkr Maintenance", message="Bunkr under maintenance")
     if content_length == "73003" and content_type == "video/mp4":
         raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
+
+
+async def filter_by_duration(media_item: MediaItem, config: Config) -> bool:
+    if media_item.is_segment:
+        return False
+
+    is_video = media_item.ext.lower() in FileExt.VIDEO
+    is_audio = media_item.ext.lower() in FileExt.AUDIO
+    if not (is_video or is_audio):
+        return False
+
+    duration_limits = config.settings.media_duration_limits.ranges
+    duration: float | None = await _probe_duration(media_item)
+    media_item.duration = duration
+
+    if duration is None:
+        return False
+
+    if is_video:
+        return duration not in duration_limits.video
+
+    return duration not in duration_limits.audio
+
+
+async def _probe_duration(media_item: MediaItem) -> float | None:
+    if media_item.duration:
+        return media_item.duration
+
+    if media_item.downloaded:
+        properties = await ffmpeg.probe(media_item.path)
+
+    else:
+        properties = await ffmpeg.probe(media_item.url, headers=media_item.headers)
+
+    if properties.format.duration:
+        return properties.format.duration
+    if properties.video:
+        return properties.video.duration
+    if properties.audio:
+        return properties.audio.duration
+
+
+def make_speed_checker(media_item: MediaItem, hook: ProgressHook, speed_threshold: int) -> Callable[[], None]:
+    last_slow_speed_read = None
+
+    def check_download_speed() -> None:
+        nonlocal last_slow_speed_read
+        if not speed_threshold:
+            return
+
+        speed = hook.get_speed()
+        if speed > speed_threshold:
+            last_slow_speed_read = None
+        elif not last_slow_speed_read:
+            last_slow_speed_read = time.perf_counter()
+        elif time.perf_counter() - last_slow_speed_read > _SLOW_DOWNLOAD_PERIOD:
+            raise SlowDownloadError(origin=media_item)
+
+    return check_download_speed
