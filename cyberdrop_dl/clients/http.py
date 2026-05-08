@@ -225,20 +225,18 @@ class HTTPClient:
         else:
             _ = headers.setdefault("User-Agent", self.manager.config.global_settings.general.user_agent)
 
-        async with self._request(url, method, request_params, impersonate=bool(impersonate)) as resp:
-            exc = None
-            try:
+        yielded: bool = False
+        try:
+            async with self._request(url, method, request_params, impersonate=bool(impersonate)) as resp:
                 if check:
-                    yield await self._check_response(resp, url)
-                else:
-                    yield resp
-            except Exception as e:
-                exc = e
+                    await self.check_http_status(resp)
+                yielded = True
+                yield resp
+        except DDOSGuardError:
+            if yielded or not self.flaresolverr:
                 raise
-            finally:
-                if self._responses_folder:
-                    self.manager.logs.write_response(self._responses_folder, url, resp, exc)
-                exc = None
+
+            yield await self._flaresolverr_request(url, data)
 
     def __sync_session_cookies(self, url: AbsoluteHttpURL) -> None:
         """
@@ -270,10 +268,16 @@ class HTTPClient:
             url,
             _LazyRequestLog(request_params),
         )
-
+        exc = None
         async with self.__request(url, method, request_params, impersonate=impersonate) as resp:
             logger.debug("Finished %s request [id=%s]\n%s", method, request_id, _LazyResponseLog(resp))
-            yield resp
+            try:
+                yield resp
+            finally:
+                if self._responses_folder:
+                    self.manager.logs.write_response(self._responses_folder, url, resp, exc)
+                del exc
+                del resp
 
     @contextlib.asynccontextmanager
     async def __request(
@@ -297,25 +301,21 @@ class HTTPClient:
         async with self._session.request(method, url, **request_params) as aio_resp:
             yield AbstractResponse.create(aio_resp)
 
-    async def _check_response(self, abs_resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None):
+    async def _flaresolverr_request(
+        self,
+        url: AbsoluteHttpURL,
+        data: Any | None = None,
+    ):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page."""
-        try:
-            await self.check_http_status(abs_resp)
-            return abs_resp
-        except DDOSGuardError as e:
-            if not (flare := self.flaresolverr):
-                raise
 
-            try:
-                solution = await flare.request(url, data)
-            except RuntimeError:
-                raise e from None
+        assert self.flaresolverr
 
-            self.cookies.update_cookies(solution.cookies)
-            await flaresolverr.check_solution(self.manager.config.global_settings.general.user_agent, solution)
-            return AbstractResponse.create(solution)
+        solution = await self.flaresolverr.request(url, data)
+        self.cookies.update_cookies(solution.cookies)
+        flaresolverr.verify_solution(self.manager.config.global_settings.general.user_agent, solution)
+        return AbstractResponse.create(solution)
 
 
 async def _check_json(response: AbstractResponse[Any]) -> None:
