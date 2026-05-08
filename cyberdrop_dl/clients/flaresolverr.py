@@ -198,7 +198,7 @@ class Client:
 
     async def _destroy_session(self) -> None:
         if self._session_id:
-            _ = await self._request(Command.DESTROY_SESSION)
+            _ = await self._request(Command.DESTROY_SESSION, session=self._session_id)
             self._session_id = ""
 
 
