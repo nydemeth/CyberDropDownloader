@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import os
-from dataclasses import field
 from typing import TYPE_CHECKING, NamedTuple
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
@@ -13,7 +13,6 @@ from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.exceptions import (
     DownloadError,
     DurationError,
-    ErrorLogMessage,
     InsufficientFreeSpaceError,
     InvalidContentTypeError,
     RestrictedDateRangeError,
@@ -25,7 +24,7 @@ from cyberdrop_dl.utils import dates, error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Generator
+    from collections.abc import AsyncGenerator, Generator
     from pathlib import Path
 
     from cyberdrop_dl.clients.download_client import DownloadClient
@@ -52,22 +51,63 @@ _KNOWN_BAD_URLS = {
 
 
 _GENERIC_CRAWLERS = ".", "no_crawler"
+_FILE_LOCKS: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
+_NULL_CONTEXT: contextlib.nullcontext[None] = contextlib.nullcontext()
 
 
+@contextlib.asynccontextmanager
+async def _exclusive_lock(media_item: MediaItem) -> AsyncGenerator[None]:
+    async with _FILE_LOCKS[media_item.filename]:
+        logger.debug(f"Lock for '{media_item.filename}' acquired")
+        try:
+            yield
+        finally:
+            logger.debug(f"Lock for '{media_item.filename}' released")
+
+
+@dataclasses.dataclass(slots=True)
 class Downloader:
-    def __init__(self, manager: Manager, domain: str) -> None:
-        self.manager: Manager = manager
-        self.domain: str = domain
+    """Hight level class that handles limiters, database checks, skip by config checks and retries"""
 
-        self.client: DownloadClient = field(init=False)
-        self._log_prefix = "Download attempt (unsupported domain)" if domain in _GENERIC_CRAWLERS else "Download"
-        self._processed_items: set[str] = set()
-        self.waiting_items = 0
+    manager: Manager
+    domain: str
+    log_prefix: str = "Download"
+    download_slots: int | None = None
+    use_server_lock: bool = False
 
-        self._current_attempt_filesize: dict[str, int] = {}
-        self._file_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
-        self._ignore_history: bool = manager.config.settings.runtime_options.ignore_history
-        self._semaphore: asyncio.Semaphore = field(init=False)
+    waiting_items: int = dataclasses.field(init=False, default=0)
+
+    _processed_items: set[str] = dataclasses.field(init=False, default_factory=set)
+    _current_attempt_filesize: dict[str, int] = dataclasses.field(init=False, default_factory=dict)
+    _semaphore: asyncio.Semaphore = dataclasses.field(init=False)
+    _server_locks: aio.WeakAsyncLocks[str] = dataclasses.field(init=False, default_factory=aio.WeakAsyncLocks)
+
+    def __post_init__(self) -> None:
+        upper_limit = self.config.global_settings.rate_limiting_options.max_simultaneous_downloads_per_domain
+        self._semaphore = asyncio.Semaphore(min(self.download_slots or upper_limit, upper_limit))
+
+    @property
+    def client(self) -> DownloadClient:
+        return self.manager.client_manager.download_client
+
+    @property
+    def config(self) -> Config:
+        return self.manager.config
+
+    @property
+    def _ignore_history(self) -> bool:
+        return self.manager.config.settings.runtime_options.ignore_history
+
+    @property
+    def max_attempts(self) -> int:
+        if self.config.settings.download_options.disable_download_attempt_limit:
+            return 1
+        return self.config.global_settings.rate_limiting_options.download_attempts
+
+    def _server_lock(self, server: str) -> asyncio.Lock | contextlib.nullcontext[None]:
+        if self.use_server_lock:
+            return self._server_locks[server]
+        return _NULL_CONTEXT
 
     @error_handling_wrapper
     async def download(self, media_item: MediaItem) -> bool:
@@ -82,28 +122,13 @@ class Downloader:
                 if e.status != 999:
                     media_item.attempts += 1
 
-                logger.error(f"{self._log_prefix} failed: {media_item.url} with error: {e!s}")
+                logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
                 if media_item.attempts >= self.max_attempts:
                     raise
 
                 logger.info(
-                    f"Retrying {self._log_prefix.lower()}: {media_item.url}, retry attempt: {media_item.attempts + 1}"
+                    f"Retrying {self.log_prefix.lower()}: {media_item.url}, retry attempt: {media_item.attempts + 1}"
                 )
-
-    @property
-    def max_attempts(self) -> int:
-        if self.manager.config.settings.download_options.disable_download_attempt_limit:
-            return 1
-        return self.manager.config.global_settings.rate_limiting_options.download_attempts
-
-    def startup(self) -> None:
-        """Starts the downloader."""
-        self.client = self.manager.client_manager.download_client
-        self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
-
-        self.manager.config.settings.files.download_folder.mkdir(parents=True, exist_ok=True)
-        if self.manager.config.settings.sorting.sort_downloads:
-            self.manager.config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem):
@@ -117,13 +142,11 @@ class Downloader:
         self.waiting_items += 1
 
         server = (media_item.debrid_link or media_item.url).host
-        server_limit, domain_limit, global_limit = (
-            self.client.server_limiter(media_item.domain, server),
+        async with (
+            self._server_lock(server),
             self._semaphore,
-            self.manager.client_manager.global_download_slots,
-        )
-
-        async with server_limit, domain_limit, global_limit:
+            self.manager.client_manager.global_download_limiter,
+        ):
             self._processed_items.add(media_item.db_path)
             self.waiting_items -= 1
             yield
@@ -295,11 +318,11 @@ class Downloader:
         """Checks if the file can be downloaded."""
         if not await storage.has_sufficient_space(media_item.download_folder):
             raise InsufficientFreeSpaceError(media_item)
-        if not _is_allowed_filetype(media_item, self.manager.config):
+        if not _is_allowed_filetype(media_item, self.config):
             raise RestrictedFiletypeError(origin=media_item)
         if not await self.manager.client_manager.check_file_duration(media_item):
             raise DurationError(origin=media_item)
-        if not _is_allowed_date_range(media_item, self.manager.config):
+        if not _is_allowed_date_range(media_item, self.config):
             raise RestrictedDateRangeError(origin=media_item)
 
     async def set_file_datetime(self, media_item: MediaItem, complete_file: Path) -> None:
@@ -307,7 +330,7 @@ class Downloader:
         if media_item.is_segment:
             return
 
-        if self.manager.config.settings.download_options.disable_file_timestamps:
+        if self.config.settings.download_options.disable_file_timestamps:
             return
         if not media_item.uploaded_at:
             logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
@@ -322,18 +345,12 @@ class Downloader:
         except OSError:
             pass
 
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
     async def start_download(self, media_item: MediaItem) -> bool:
         if not media_item.is_segment:
-            logger.info(f"{self._log_prefix} starting: {media_item.url}")
+            logger.info(f"{self.log_prefix} starting: {media_item.url}")
 
-        async with self._file_locks[media_item.filename]:
-            logger.debug(f"Lock for '{media_item.filename}' acquired")
-            try:
-                return bool(await self.download(media_item))
-            finally:
-                logger.debug(f"Lock for '{media_item.filename}' released")
+        async with _exclusive_lock(media_item):
+            return bool(await self.download(media_item))
 
     async def _download(self, media_item: MediaItem) -> bool | None:
         """Downloads the media item."""
@@ -373,27 +390,13 @@ class Downloader:
             ui_message = getattr(e, "status", type(e).__name__)
             if media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
                 if self._current_attempt_filesize.get(media_item.filename, 0) >= size:
-                    raise DownloadError(ui_message, message=f"{self._log_prefix} failed", retry=True) from None
+                    raise DownloadError(ui_message, message=f"{self.log_prefix} failed", retry=True) from None
 
                 self._current_attempt_filesize[media_item.filename] = size
                 raise DownloadError(status=999, message="Download timeout reached, retrying", retry=True) from None
 
             message = str(e)
             raise DownloadError(ui_message, message, retry=True) from e
-
-    def write_download_error(
-        self,
-        media_item: MediaItem,
-        error_log_msg: ErrorLogMessage,
-        exc_info: Exception | None = None,
-    ) -> None:
-        logger.error(
-            f"{self._log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}",
-            exc_info=exc_info,
-        )
-        self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
-        self.manager.scrape_mapper.tui.files.stats.failed += 1
-        self.manager.scrape_mapper.tui.download_errors.add(error_log_msg.ui_failure)
 
 
 def _is_allowed_filetype(media_item: MediaItem, config: Config) -> bool:

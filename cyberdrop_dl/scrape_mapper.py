@@ -166,6 +166,10 @@ class ScrapeMapper:
         _ = filepath.MAX_FILE_LEN.set(self.manager.config.global_settings.general.max_file_name_length)
         _ = filepath.MAX_FOLDER_LEN.set(self.manager.config.global_settings.general.max_folder_name_length)
 
+        self.manager.config.settings.files.download_folder.mkdir(parents=True, exist_ok=True)
+        if self.manager.config.settings.sorting.sort_downloads:
+            self.manager.config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
+
         await self.manager.client_manager.load_cookie_files()
         self.tui.mode = self.manager.cli_args.ui
         ## IMPORTANT: Order of each context matters!
@@ -194,7 +198,7 @@ class ScrapeMapper:
             logger.exception("Failed to connect to jDownloader")
 
         await self._real_debrid.__async_init__()
-        self._direct_http.__init_downloader__()
+        await self._direct_http.__async_post_init__()
 
         item_limit = 0
         if self.manager.cli_args.retry_any and self.manager.cli_args.max_items_retry:

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import asyncio
+import dataclasses
 from typing import TYPE_CHECKING, final
 
 from mega.chunker import MegaChunker, get_chunks
+from typing_extensions import override
 
 from cyberdrop_dl import aio, storage
 from cyberdrop_dl.clients.download_client import DownloadClient
-from cyberdrop_dl.downloader.downloader import Downloader
+from cyberdrop_dl.downloader.http import Downloader
 
 if TYPE_CHECKING:
     import aiohttp
@@ -59,17 +60,22 @@ class MegaDownloadClient(DownloadClient):
         media_item.partial_file.touch()
 
 
+@dataclasses.dataclass(slots=True)
 class MegaDownloader(Downloader):
-    client: MegaDownloadClient
+    _client: MegaDownloadClient = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        super(MegaDownloader, self).__post_init__()
+        self._client = MegaDownloadClient(self.manager)
+
+    @override
+    @property
+    def client(self) -> MegaDownloadClient:
+        return self._client
 
     @property
     def max_attempts(self):
         return 1
-
-    def startup(self) -> None:
-        """Starts the downloader."""
-        self.client = MegaDownloadClient(self.manager)  # type: ignore[reportIncompatibleVariableOverride]
-        self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
 
     def register(self, url: URL, crypto: Crypto, file_size: int) -> None:
         self.client._decrypt_mapping[url] = crypto, file_size
