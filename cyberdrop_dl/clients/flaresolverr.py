@@ -12,9 +12,11 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from multidict import CIMultiDict, CIMultiDictProxy
 
+from cyberdrop_dl import ddos_guard
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.progress.scraping import show_msg
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import truncated_preview
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -72,8 +74,27 @@ class Response:
         )
 
 
+class _LazyResponseLog:
+    def __init__(self, response: dict[str, Any]) -> None:
+        self.resp = response
+
+    def __json__(self) -> dict[str, Any]:
+        try:
+            html = self.resp["solution"]["response"]
+        except LookupError:
+            pass
+        else:
+            if type(html) is str:
+                self.resp["solution"]["response"] = truncated_preview(html)
+
+        return self.resp
+
+    def __str__(self) -> str:
+        return str(self.__json__())
+
+
 @dataclasses.dataclass(slots=True)
-class FlareSolverrClient:
+class Client:
     """Class that handles communication with flaresolverr."""
 
     url: AbsoluteHttpURL
@@ -92,7 +113,7 @@ class FlareSolverrClient:
         try:
             await self._destroy_session()
         except Exception as e:
-            logger.error(f"Unable to destroy flaresolver session ({e})")
+            logger.error(f"Unable to destroy flaresolver session ({e}!r)")
 
     async def _ensure_session(self) -> None:
         msg = "Unable to create Flaresolverr session"
@@ -142,7 +163,7 @@ class FlareSolverrClient:
             timeout.update(timeout=aiohttp.ClientTimeout(total=5 * 60, connect=60))  # 5 minutes to create session
 
         #  timeout in milliseconds (60s)
-        params = {"cmd": command, "maxTimeout": 60_000} | params
+        params = {"cmd": str(command), "maxTimeout": 60_000} | params
 
         if data:
             assert command is Command.POST_REQUEST
@@ -156,9 +177,11 @@ class FlareSolverrClient:
                 else f"Waiting for flaresolverr [{request_id}]"
             )
             with show_msg(msg):
-                logger.debug(f"Making FlareSolverr request #{request_id} with {params = }")
+                logger.debug("Making FlareSolverr request [id=%s]\n%s", request_id, params)
                 async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
-                    return Response.from_dict(await response.json())
+                    resp = await response.json()
+                    logger.debug("Finished FlareSolverr request [id=%s]\n%s", request_id, _LazyResponseLog(resp))
+                    return Response.from_dict(resp)
 
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"
@@ -191,3 +214,20 @@ def _parse_cookies(cookies: Iterable[Mapping[str, Any]]) -> SimpleCookie:
         if expires := cookie.get("expiry") or cookie.get("expires"):
             morsel["max-age"] = str(max(0, int(expires) - int(now)))
     return simple_cookie
+
+
+async def check_solution(cdl_user_agent: str, solution: Solution) -> None:
+    mismatch_ua_msg = (
+        "Config user_agent and flaresolverr user_agent do not match:"
+        f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
+        f"\n  Flaresolverr: '{solution.user_agent}'"
+    )
+
+    try:
+        ddos_guard.check_html(solution.content)
+    except DDOSGuardError:
+        if solution.user_agent != cdl_user_agent:
+            raise DDOSGuardError(mismatch_ua_msg) from None
+
+    if solution.user_agent != cdl_user_agent:
+        logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
