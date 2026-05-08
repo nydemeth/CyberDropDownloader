@@ -11,13 +11,11 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, cast, final
 
 import aiohttp
-from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 from multidict import CIMultiDict
 
 from cyberdrop_dl import cookies, ddos_guard, signature
 from cyberdrop_dl.clients import flaresolverr, tcp
-from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
@@ -35,6 +33,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
+_JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("_JSON_CHECK", default=None)
 
 logger = logging.getLogger(__name__)
 
@@ -61,27 +60,12 @@ class _LazyResponseLog:
     def __json__(self) -> dict[str, Any]:
         resp = self.response.__json__()
         del resp["created_at"]
-        if type(content := resp["content"]) is str:
-            resp["content"] = truncated_preview(content)
+        if type(resp["content"]) is str:
+            resp["content"] = truncated_preview(resp["content"])
         return resp
 
     def __str__(self) -> str:
         return str(self.__json__())
-
-
-_JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("_JSON_CHECK", default=None)
-
-
-class DownloadSpeedLimiter(AsyncLimiter):
-    __slots__ = ()
-
-    def __init__(self, speed_limit: int) -> None:
-        super().__init__(speed_limit, 1)
-
-    async def acquire(self, amount: float = 1) -> None:
-        if self.max_rate <= 0:
-            return
-        await super().acquire(amount)
 
 
 @final
@@ -89,22 +73,20 @@ class HTTPClient:
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
         self.ssl_context = tcp.create_ssl_context(self.manager.config.global_settings.general.ssl_context)
-        self._cookies: aiohttp.CookieJar | None = None
         self.rate_limits: dict[str, AsyncLimiter] = {}
-        self.global_rate_limiter = AsyncLimiter(self.manager.config.global_settings.rate_limiting_options.rate_limit, 1)
+        self.global_rate_limiter = AsyncLimiter(
+            self.manager.config.global_settings.rate_limiting_options.rate_limit, time_period=1
+        )
         self.global_download_limiter = asyncio.Semaphore(
             self.manager.config.global_settings.rate_limiting_options.max_simultaneous_downloads
         )
 
-        speed_limit = self.manager.config.global_settings.rate_limiting_options.download_speed_limit
-        self.speed_limiter = DownloadSpeedLimiter(speed_limit)
-        self.chunk_size: int = 1024 * 1024 * 10  # 10MB
-        if speed_limit:
-            self.chunk_size = min(self.chunk_size, speed_limit)
-
-        self.download_client = DownloadClient(manager, self)
-        self._save_responses_to_disk = manager.config.settings.files.save_pages_html
-        self._responses_folder = manager.config.settings.logs.main_log.parent / "cdl_responses"
+        self._cookies: aiohttp.CookieJar | None = None
+        self._responses_folder: Path | None = (
+            manager.config.settings.logs.main_log.parent / "cdl_responses"
+            if manager.config.settings.files.save_pages_html
+            else None
+        )
 
         self._flaresolverr: flaresolverr.Client | None = None
         self._curl_session: AsyncSession[CurlResponse] | None = None
@@ -181,8 +163,8 @@ class HTTPClient:
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
-    def create_aiohttp_session(self) -> ClientSession:
-        return ClientSession(
+    def create_aiohttp_session(self) -> aiohttp.ClientSession:
+        return aiohttp.ClientSession(
             headers={"User-Agent": self.manager.config.global_settings.general.user_agent},
             raise_for_status=False,
             cookie_jar=self.cookies,
@@ -199,7 +181,7 @@ class HTTPClient:
         async for cookie in cookies.read_netscape_files(cookie_files):
             self.cookies.update_cookies(cookie)
 
-    async def check_http_status(self, response: ClientResponse | CurlResponse | AbstractResponse[Any]) -> None:
+    async def check_http_status(self, response: aiohttp.ClientResponse | CurlResponse | AbstractResponse[Any]) -> None:
         """Checks the HTTP status code and raises an exception if it's not acceptable."""
         if not isinstance(response, AbstractResponse):
             response = AbstractResponse.create(response)
@@ -223,6 +205,7 @@ class HTTPClient:
         impersonate: str | bool | None = None,
         data: Any = None,
         json: Any = None,
+        check: bool = True,
         **request_params: Any,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
         self = cast("HTTPClient", self)
@@ -242,16 +225,18 @@ class HTTPClient:
         else:
             _ = headers.setdefault("User-Agent", self.manager.config.global_settings.general.user_agent)
 
-        async with self._request(url, method, request_params, impersonate=bool(impersonate)) as resp:
-            exc = None
-            try:
-                yield await self._check_response(resp, url)
-            except Exception as e:
-                exc = e
+        yielded: bool = False
+        try:
+            async with self._request(url, method, request_params, impersonate=bool(impersonate)) as resp:
+                if check:
+                    await self.check_http_status(resp)
+                yielded = True
+                yield resp
+        except DDOSGuardError:
+            if yielded or not self.flaresolverr:
                 raise
-            finally:
-                if self._save_responses_to_disk:
-                    self.manager.logs.write_response(self._responses_folder, url, resp, exc)
+
+            yield await self._flaresolverr_request(url, data)
 
     def __sync_session_cookies(self, url: AbsoluteHttpURL) -> None:
         """
@@ -283,10 +268,16 @@ class HTTPClient:
             url,
             _LazyRequestLog(request_params),
         )
-
+        exc = None
         async with self.__request(url, method, request_params, impersonate=impersonate) as resp:
             logger.debug("Finished %s request [id=%s]\n%s", method, request_id, _LazyResponseLog(resp))
-            yield resp
+            try:
+                yield resp
+            finally:
+                if self._responses_folder:
+                    self.manager.logs.write_response(self._responses_folder, url, resp, exc)
+                del exc
+                del resp
 
     @contextlib.asynccontextmanager
     async def __request(
@@ -310,25 +301,21 @@ class HTTPClient:
         async with self._session.request(method, url, **request_params) as aio_resp:
             yield AbstractResponse.create(aio_resp)
 
-    async def _check_response(self, abs_resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None):
+    async def _flaresolverr_request(
+        self,
+        url: AbsoluteHttpURL,
+        data: Any | None = None,
+    ):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page."""
-        try:
-            await self.check_http_status(abs_resp)
-            return abs_resp
-        except DDOSGuardError as e:
-            if not (flare := self.flaresolverr):
-                raise
 
-            try:
-                solution = await flare.request(url, data)
-            except RuntimeError:
-                raise e from None
+        assert self.flaresolverr
 
-            self.cookies.update_cookies(solution.cookies)
-            await flaresolverr.check_solution(self.manager.config.global_settings.general.user_agent, solution)
-            return AbstractResponse.create(solution)
+        solution = await self.flaresolverr.request(url, data)
+        self.cookies.update_cookies(solution.cookies)
+        flaresolverr.verify_solution(self.manager.config.global_settings.general.user_agent, solution)
+        return AbstractResponse.create(solution)
 
 
 async def _check_json(response: AbstractResponse[Any]) -> None:

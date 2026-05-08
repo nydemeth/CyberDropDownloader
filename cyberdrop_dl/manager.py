@@ -15,7 +15,8 @@ from pydantic.types import ByteSize
 
 from cyberdrop_dl import __version__, cookies, env, ffmpeg, stats, yaml
 from cyberdrop_dl.cli import CLIargs
-from cyberdrop_dl.clients.client import HTTPClient
+from cyberdrop_dl.clients.downloads import DownloadClient
+from cyberdrop_dl.clients.http import HTTPClient
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.csv_logs import CSVLogsManager
 from cyberdrop_dl.database import Database
@@ -52,9 +53,11 @@ class Manager:
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
         self.logs: CSVLogsManager = CSVLogsManager.from_manager(self)
+        self.http_client: HTTPClient = HTTPClient(self)
+        self.download_client: DownloadClient = DownloadClient(self)
+
         self.scrape_mapper: ScrapeMapper
         self.database: Database
-        self.http_client: HTTPClient
         self.deduper: Czkawka
         self.sorter: Sorter
 
@@ -85,13 +88,16 @@ class Manager:
         )
         self.deduper = Czkawka.from_manager(self)
         self.sorter = Sorter.from_manager(self)
-        self.http_client = HTTPClient(self)
         with (
             _cache_context(self.appdata.cache_file, self.cache),
             _enter_context(REFRESH_RATE, self.config.global_settings.ui_options.refresh_rate),
             _enter_context(TUI_DISABLED, self.cli_args.ui.is_disabled),
         ):
-            yield self
+            try:
+                yield self
+            finally:
+                del self.deduper
+                del self.sorter
 
     def add_completed(self, media_item: MediaItem) -> None:
         if media_item.is_segment:

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
 
-from cyberdrop_dl.clients.client import HTTPClient
+from cyberdrop_dl.clients.http import HTTPClient
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.dedupe import Czkawka
@@ -48,7 +48,7 @@ def test_manager_context() -> None:
     config = Config.parse_args(["--refresh-rate", "40"])
     manager = Manager(config=config)
 
-    for attr in ("database", "deduper", "sorter", "http_client"):
+    for attr in ("database", "deduper", "sorter"):
         with pytest.raises(AttributeError):
             getattr(manager, attr)
 
