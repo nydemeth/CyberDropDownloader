@@ -31,8 +31,6 @@ else:
     class CurlResponse: ...
 
 
-__all__ = ["AbstractResponse"]
-
 _ResponseT = TypeVar(
     "_ResponseT",
     bound=ClientResponse | CurlResponse | FlaresolverrSolution,
@@ -92,6 +90,9 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
             elif "html" in self.content_type:
                 content = BeautifulSoup(content, "html.parser").prettify(formatter="html")
 
+        elif not ("json" in self.content_type or "html" in self.content_type):
+            content = f"<{self.content_type} payload>"
+
         return {
             "url": str(self.url),
             "status_code": self.status,
@@ -136,9 +137,12 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         filename = aiohttp.multipart.content_disposition_filename(params)
         return ContentDisposition(disposition_type, params, filename)
 
+    @final
     @property
-    def consumed(self) -> bool:
-        return bool(self._text)
+    def aiohttp_resp(self) -> ClientResponse:
+        if type(self._resp) is ClientResponse:
+            return self._resp
+        raise RuntimeError(f"Unexpected response type: {type(self._resp)!r}")
 
     @property
     def ok(self) -> bool:
@@ -190,7 +194,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
     @final
     def create_report(self, exc: Exception | None = None, **extras: Any) -> str:
-        assert self.consumed
 
         me = self.__json__()
         if exc:

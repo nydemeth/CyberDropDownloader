@@ -1,32 +1,31 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import itertools
 import logging
 import time
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, final
+
+from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients import etag
-from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import dates
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping
+    from collections.abc import Callable, Mapping
     from pathlib import Path
     from typing import Any
 
-    import aiohttp
-
     from cyberdrop_dl.clients.client import HTTPClient
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.progress import ProgressHook
-    from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
+    from cyberdrop_dl.url_objects import MediaItem
 
 
 logger = logging.getLogger(__name__)
@@ -38,14 +37,32 @@ _FREE_SPACE_CHECK_PERIOD: int = 5  # Check every 5 chunks
 _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
 
 
+class DownloadSpeedLimiter(AsyncLimiter):
+    __slots__ = ()
+
+    async def acquire(self, amount: float = 1) -> None:
+        if self.max_rate <= 0:
+            return
+        await super().acquire(amount)
+
+
+@final
 class DownloadClient:
     """Low level class that performs the actual HTTP download operations"""
 
-    def __init__(self, manager: Manager, client: HTTPClient) -> None:
+    def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.client = client
         self.download_speed_threshold = self.manager.config.settings.runtime_options.slow_download_speed
         self._supports_ranges: bool = True
+        speed_limit = self.manager.config.global_settings.rate_limiting_options.download_speed_limit
+        self.speed_limiter = DownloadSpeedLimiter(speed_limit, time_period=1)
+        self.chunk_size: int = 1024 * 1024 * 10  # 10MB
+        if speed_limit:
+            self.chunk_size = min(self.chunk_size, speed_limit)
+
+    @property
+    def http_client(self) -> HTTPClient:
+        return self.manager.http_client
 
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
@@ -63,26 +80,29 @@ class DownloadClient:
 
         await asyncio.sleep(self.manager.config.global_settings.rate_limiting_options.total_delay)
 
-        def process_response(resp: aiohttp.ClientResponse | AbstractResponse[Any]):
-            return self._process_response(media_item, domain, resume_point, resp)
-
-        return await self._request_download(media_item, process_response)
+        async with self.http_client.request(
+            media_item.real_url,
+            headers=media_item.headers,
+            impersonate=media_item.domain in _USE_IMPERSONATION,
+            check=False,
+        ) as resp:
+            return await self._process_response(media_item, domain, resume_point, resp)
 
     async def _process_response(
         self,
         media_item: MediaItem,
         domain: str,
         resume_point: int,
-        resp: aiohttp.ClientResponse | AbstractResponse[Any],
+        resp: AbstractResponse[Any],
     ) -> bool:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
             await aio.unlink(media_item.partial_file)
 
         etag.check(resp.headers)
-        await self.client.check_http_status(resp)
+        await self.http_client.check_http_status(resp)
 
         if not media_item.is_segment:
-            _ = get_content_type(media_item.ext, resp.headers)
+            _check_content_type(_get_content_type(resp.headers), media_item.ext)
 
         media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
         if not media_item.path:
@@ -129,57 +149,20 @@ class DownloadClient:
             hook.advance(resume_point)
 
         with hook:
-            await self._append_content(media_item, hook, self._get_resp_reader(resp))
+            await self._append_content(media_item, hook, resp)
         return True
 
-    def _get_resp_reader(
-        self, resp: aiohttp.ClientResponse | AbstractResponse[Any]
-    ) -> AbstractResponse[Any] | aiohttp.StreamReader:
-        if isinstance(resp, AbstractResponse):
-            return resp
-        return resp.content
-
-    @contextlib.asynccontextmanager
-    async def __request_context(
-        self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
-    ) -> AsyncGenerator[AbstractResponse[Any] | aiohttp.ClientResponse]:
-        if domain in _USE_IMPERSONATION:
-            resp = await self.client.curl_session.get(str(url), stream=True, headers=headers)
-            try:
-                yield AbstractResponse.create(resp)
-            finally:
-                await resp.aclose()
-            return
-
-        async with self.client._download_session.get(url, headers=headers) as resp:
-            yield resp
-
-    async def _request_download(
-        self,
-        media_item: MediaItem,
-        process_response: Callable[[aiohttp.ClientResponse | AbstractResponse[Any]], Coroutine[None, None, bool]],
-    ) -> bool:
-        async with self.__request_context(media_item.real_url, media_item.domain, media_item.headers) as resp:
-            return await process_response(resp)
-
-    async def _append_content(
-        self,
-        media_item: MediaItem,
-        hook: ProgressHook,
-        content: aiohttp.StreamReader | AbstractResponse[Any],
-    ) -> None:
-        """Appends content to a file."""
-
+    async def _append_content(self, media_item: MediaItem, hook: ProgressHook, resp: AbstractResponse[Any]) -> None:
         check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
         await check_free_space()
         await self._pre_download_check(media_item)
 
         async with aio.open(media_item.partial_file, mode="ab") as f:
-            async for chunk in content.iter_chunked(self.client.chunk_size):
+            async for chunk in resp.iter_chunked(self.chunk_size):
                 await check_free_space()
                 chunk_size = len(chunk)
-                await self.client.speed_limiter.acquire(chunk_size)
+                await self.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
                 hook.advance(chunk_size)
                 check_download_speed()
@@ -387,26 +370,20 @@ class DownloadClient:
         return media.filesize in limits.other
 
 
-def get_content_type(ext: str, headers: Mapping[str, str]) -> str | None:
-    content_type: str = headers.get("Content-Type", "")
-    content_length = headers.get("Content-Length")
-    if not content_type and not content_length:
+def _check_content_type(content_type: str, ext: str) -> str | None:
+    if _is_html_or_text(content_type) and ext.lower() not in FileExt.TEXT:
+        msg = f"Received '{content_type}', was expecting binary payload"
+        raise InvalidContentTypeError(message=msg)
+
+
+def _get_content_type(headers: Mapping[str, str]) -> str:
+    content_type = headers.get("Content-Type")
+    if not content_type:
         msg = "No content type in response headers"
         raise InvalidContentTypeError(message=msg)
 
-    if not content_type:
-        return None
-
     override_key = next((name for name in _CONTENT_TYPES_OVERRIDES if name in content_type), "<NO_OVERRIDE>")
-    override: str | None = _CONTENT_TYPES_OVERRIDES.get(override_key)
-    content_type = override or content_type
-    content_type = content_type.lower()
-
-    if is_html_or_text(content_type) and ext.lower() not in FileExt.TEXT:
-        msg = f"Received '{content_type}', was expecting other"
-        raise InvalidContentTypeError(message=msg)
-
-    return content_type
+    return _CONTENT_TYPES_OVERRIDES.get(override_key) or content_type
 
 
 def get_last_modified(headers: Mapping[str, str]) -> int | None:
@@ -414,7 +391,7 @@ def get_last_modified(headers: Mapping[str, str]) -> int | None:
         return dates.parse_http(date_str)
 
 
-def is_html_or_text(content_type: str) -> bool:
+def _is_html_or_text(content_type: str) -> bool:
     return any(s in content_type for s in ("html", "text"))
 
 
