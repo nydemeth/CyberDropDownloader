@@ -120,12 +120,6 @@ CURRENT_URL: ContextVar[AbsoluteHttpURL] = ContextVar("_CURRENT_URL")
 logger = logging.getLogger(__name__)
 
 
-class HlsSegment(NamedTuple):
-    part: str
-    name: str
-    url: AbsoluteHttpURL
-
-
 @dataclass(slots=True, kw_only=True)
 class MediaItem:
     url: AbsoluteHttpURL
@@ -133,7 +127,7 @@ class MediaItem:
     referer: AbsoluteHttpURL
     download_folder: Path
     filename: str
-    original_filename: str
+    original_filename: str = ""
     download_filename: str | None = None
     filesize: int | None = None
     ext: str
@@ -168,6 +162,7 @@ class MediaItem:
 
     def __post_init__(self) -> None:
         self.id = self.domain, self.db_path
+        self.original_filename = self.original_filename or self.filename
         if self.url.scheme == "metadata":
             self.db_path = ""
             self.id = *self.id, "metadata"

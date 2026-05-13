@@ -11,6 +11,7 @@ from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
 from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients.downloads import filter_by_duration
+from cyberdrop_dl.downloader import hls
 from cyberdrop_dl.exceptions import (
     DownloadError,
     DurationError,
@@ -20,18 +21,18 @@ from cyberdrop_dl.exceptions import (
     RestrictedFiletypeError,
     SkipDownloadError,
 )
-from cyberdrop_dl.url_objects import HlsSegment, MediaItem
-from cyberdrop_dl.utils import dates, error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import dates, error_handling_wrapper
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator
     from pathlib import Path
 
     from cyberdrop_dl.clients.downloads import DownloadClient
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.utils.m3u8 import M3U8, Rendition
+    from cyberdrop_dl.url_objects import MediaItem
+    from cyberdrop_dl.utils.m3u8 import Rendition
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +177,7 @@ class Downloader:
         async with self._download_context(media_item):
             await self._start_hls_download(media_item, m3u8_group)
 
-    async def _start_hls_download(self, media_item: MediaItem, m3u8_group: Rendition) -> None:
+    async def _start_hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
         media_item.path = media_item.download_folder / media_item.filename
         # TODO: register database duration from m3u8 info
         # TODO: compute approx size for UI from the m3u8 info
@@ -186,125 +187,27 @@ class Downloader:
         with self.manager.scrape_mapper.tui.downloads.download_hls(
             media_item.filename,
             media_item.domain,
-            segments=sum(len(m.segments) for m in m3u8_group if m is not None),
+            segments=sum(len(m.segments) for m in rendition if m is not None),
         ):
-            video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
-            if not audio:
-                await aio.move(video, media_item.path)
-            else:
-                # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
-                # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
-                # so we leave them as independent files for now
-                ffmpeg_result = await ffmpeg.merge((video, audio), media_item.path)
+            await self._hls_download(media_item, rendition)
 
-                if not ffmpeg_result.success:
-                    raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
+    async def _hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
+        streams = await hls.download(media_item, rendition, self.start_download)
+        if not streams.audio:
+            await aio.move(streams.video, media_item.path)
 
-            await self.client.process_completed(media_item, self.domain)
-            await self.client.handle_media_item_completion(media_item, downloaded=True)
-            await self.finalize_download(media_item, downloaded=True)
+        else:
+            # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
+            # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
+            # so we leave them as independent files for now
+            ffmpeg_result = await ffmpeg.merge((streams.video, streams.audio), media_item.path)
 
-    async def _download_rendition_group(
-        self, media_item: MediaItem, m3u8_group: Rendition
-    ) -> tuple[Path, Path | None, Path | None]:
+            if not ffmpeg_result.success:
+                raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
 
-        temp_dir = media_item.path.with_suffix(constants.TempExt.HLS)
-
-        async def download(m3u8: M3U8):
-            assert m3u8.media_type
-            if not m3u8.segments:
-                raise DownloadError(204, f"{m3u8.media_type} m3u8 manifest ({m3u8.base_uri}) has no valid segments")
-
-            download_folder = temp_dir / m3u8.media_type
-
-            n_segmets = len(m3u8.segments)
-            real_ext = parse_url(m3u8.segments[0].absolute_uri).suffix
-            if n_segmets > 1:
-                if m3u8.media_type == "subtitle":
-                    suffix = f".{m3u8.media_type}{real_ext}"
-                else:
-                    suffix = f".{m3u8.media_type}.ts"
-            else:
-                suffix = media_item.path.suffix + real_ext
-
-            output = media_item.path.with_suffix(suffix)
-            if await aio.is_file(output):
-                return output
-
-            tasks_results = await self._download_segments(media_item, m3u8, download_folder)
-
-            n_successful = sum(1 for result in tasks_results if result.downloaded)
-
-            if n_successful != n_segmets:
-                msg = f"Download of some segments failed. Successful: {n_successful:,}/{n_segmets:,} "
-                raise DownloadError("HLS Seg Error", msg, media_item)
-
-            seg_paths = [result.item.path for result in tasks_results]
-
-            if n_segmets > 1:
-                if m3u8.media_type == "subtitle":
-                    await ffmpeg.merge_subs(seg_paths, output)
-                else:
-                    ffmpeg_result = await ffmpeg.concat(seg_paths, output, same_folder=False)
-                    if not ffmpeg_result.success:
-                        raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
-            else:
-                _ = await asyncio.to_thread(seg_paths[0].rename, output)
-            return output
-
-        audio = subtitles = None
-        if m3u8_group.subtitle:
-            try:
-                subtitles = await download(m3u8_group.subtitle)
-            except Exception as e:
-                logger.exception(f"Unable to download subtitles for {media_item.url}, Skipping. {e!r}")
-            else:
-                logger.warning(
-                    f"Found subtitles for {media_item.url}, but CDL is currently unable to merge them. Subtitle were saved at {subtitles} "
-                )
-
-        if m3u8_group.audio:
-            audio = await download(m3u8_group.audio)
-        video = await download(m3u8_group.video)
-        try:
-            await aio.rmdir(temp_dir)
-        except OSError:
-            pass
-        return video, audio, subtitles
-
-    def _download_segments(self, media_item: MediaItem, m3u8: M3U8, download_folder: Path):
-        padding = max(5, len(str(len(m3u8.segments))))
-
-        def create_segments() -> Generator[HlsSegment]:
-            for index, segment in enumerate(m3u8.segments, 1):
-                assert segment.uri
-                name = f"{index:0{padding}d}{constants.TempExt.HLS}"
-                yield HlsSegment(segment.title, name, parse_url(segment.absolute_uri))
-
-        async def download_segment(segment: HlsSegment):
-            # TODO: segments download should bypass the downloads slots limits.
-            # They count as a single download
-            seg_media_item = MediaItem.from_item(
-                media_item,
-                segment.url,
-                media_item.domain,
-                db_path=media_item.db_path,
-                download_folder=download_folder,
-                filename=segment.name,
-                ext=media_item.ext,
-            )
-            seg_media_item.is_segment = True
-            seg_media_item.headers = media_item.headers.copy()
-            return SegmentDownloadResult(
-                seg_media_item,
-                await self.start_download(seg_media_item),
-            )
-
-        return aio.map(
-            download_segment,
-            create_segments(),
-            task_limit=10 if m3u8.media_type == "video" else 50,
-        )
+        await self.client.process_completed(media_item, self.domain)
+        await self.client.handle_media_item_completion(media_item, downloaded=True)
+        await self.finalize_download(media_item, downloaded=True)
 
     async def finalize_download(self, media_item: MediaItem, downloaded: bool) -> None:
         if downloaded:
