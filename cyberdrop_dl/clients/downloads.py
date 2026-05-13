@@ -44,7 +44,7 @@ class DownloadClient:
         self.download_speed_threshold = self.manager.config.settings.runtime_options.slow_download_speed
         self._supports_ranges: bool = True
         speed_limit = self.manager.config.global_settings.rate_limiting_options.download_speed_limit
-        self.speed_limiter = aio.RateLimiter.w_no_burst(speed_limit)
+        self.speed_limiter = aio.RateLimiter(speed_limit, time_period=1)
         self.chunk_size: int = 1024 * 1024 * 10  # 10MB
         if speed_limit:
             self.chunk_size = min(self.chunk_size, speed_limit)
@@ -89,8 +89,8 @@ class DownloadClient:
         etag.check(resp.headers)
         await self.http_client.check_http_status(resp)
 
-        if not media_item.is_segment:
-            _check_content_type(_get_content_type(resp.headers), media_item.ext)
+        if not media_item.is_segment and (content_type := _get_content_type(resp.headers)):
+            _check_content_type(content_type, media_item.ext)
 
         media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
         if not media_item.path:
@@ -364,11 +364,10 @@ def _check_content_type(content_type: str, ext: str) -> str | None:
         raise InvalidContentTypeError(message=msg)
 
 
-def _get_content_type(headers: Mapping[str, str]) -> str:
+def _get_content_type(headers: Mapping[str, str]) -> str | None:
     content_type = headers.get("Content-Type")
     if not content_type:
-        msg = "No content type in response headers"
-        raise InvalidContentTypeError(message=msg)
+        return
 
     override_key = next((name for name in _CONTENT_TYPES_OVERRIDES if name in content_type), "<NO_OVERRIDE>")
     return _CONTENT_TYPES_OVERRIDES.get(override_key) or content_type
@@ -397,34 +396,38 @@ async def filter_by_duration(media_item: MediaItem, config: Config) -> bool:
     if media_item.is_segment:
         return False
 
-    is_video = media_item.ext.lower() in FileExt.VIDEO
-    is_audio = media_item.ext.lower() in FileExt.AUDIO
-    if not (is_video or is_audio):
-        return False
-
     duration_limits = config.settings.media_duration_limits.ranges
-    duration: float | None = await _probe_duration(media_item)
-    media_item.duration = duration
-
-    if duration is None:
+    if media_item.ext.lower() in FileExt.VIDEO:
+        limits = duration_limits.video
+    elif media_item.ext.lower() in FileExt.AUDIO:
+        limits = duration_limits.audio
+    else:
         return False
 
-    if is_video:
-        return duration not in duration_limits.video
+    if limits is None:
+        return False
 
-    return duration not in duration_limits.audio
+    if media_item.duration is None:
+        media_item.duration = _get_duration(await _probe_item(media_item, config))
+    if media_item.duration is None:
+        return False
+
+    return media_item.duration not in limits
 
 
-async def _probe_duration(media_item: MediaItem) -> float | None:
-    if media_item.duration:
-        return media_item.duration
-
+async def _probe_item(media_item: MediaItem, config: Config) -> ffmpeg.FFprobeResult:
     if media_item.downloaded:
-        properties = await ffmpeg.probe(media_item.path)
+        return await ffmpeg.probe(media_item.path)
 
-    else:
-        properties = await ffmpeg.probe(media_item.url, headers=media_item.headers)
+    return await ffmpeg.probe_url(
+        media_item.url,
+        headers=media_item.headers,
+        proxy=config.global_settings.general.proxy,
+        verify=bool(config.global_settings.general.ssl_context),
+    )
 
+
+def _get_duration(properties: ffmpeg.FFprobeResult) -> float | None:
     if properties.format.duration:
         return properties.format.duration
     if properties.video:

@@ -5,13 +5,12 @@ import dataclasses
 import sys
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Self
+from enum import auto
+from typing import TYPE_CHECKING, Any, Protocol, Self
 
-from rich.live import Live
-from rich.markup import escape
 from rich.progress import Progress, Task, TaskID
-from rich.text import Text
 
+from cyberdrop_dl.compat import CIStrEnum
 from cyberdrop_dl.logs import disable_console_logging
 
 if TYPE_CHECKING:
@@ -19,21 +18,54 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from rich.console import RenderableType
+    from rich.live import Live
+    from rich.text import Text
 
 REFRESH_RATE: ContextVar[float] = ContextVar("REFRESH_RATE", default=10.0)
 TUI_DISABLED: ContextVar[bool] = ContextVar("TUI_DISABLED", default=False)
 
 
-def create_test_live(renderable: RenderableType, transient: bool = False) -> Live:
+class UIOptions(CIStrEnum):
+    DISABLED = auto()
+    ACTIVITY = auto()
+    SIMPLE = auto()
+    FULLSCREEN = auto()
+
+    @property
+    def is_disabled(self) -> bool:
+        return self is UIOptions.DISABLED
+
+
+class JsonableRenderableType(Protocol):
+    def __rich__(self) -> RenderableType: ...
+
+    def __json__(self) -> Any: ...
+
+
+def create_test_live(renderable: JsonableRenderableType, transient: bool = False, json: bool = True) -> Live:
+    from rich.json import JSON
+    from rich.live import Live
+
+    if json:
+
+        def get_renderable() -> RenderableType:
+            return JSON.from_data(renderable.__json__())
+
+    else:
+        get_renderable = renderable.__rich__
+
     return Live(
         auto_refresh=True,
         refresh_per_second=20,
         transient=transient,
-        get_renderable=lambda: renderable,
+        get_renderable=get_renderable,
     )
 
 
 def hyperlink(file_path: Path, text: str | None = None) -> Text:
+    from rich.markup import escape
+    from rich.text import Text
+
     text = escape(text or str(file_path))
     return Text.from_markup(f"[link={file_path.as_uri()}]{text}[/link]", style="blue")
 
@@ -94,6 +126,8 @@ class LiveUI(ABC):
 
     @contextlib.contextmanager
     def __call__(self, *, transient: bool = True, force: bool = False) -> Generator[None]:
+        from rich.live import Live
+
         if self.disabled and not force:
             yield
             return
@@ -109,5 +143,23 @@ class LiveUI(ABC):
                 screen=transient,
                 transient=transient,
                 get_renderable=self.__rich__,
+                redirect_stderr=False,
             ):
                 yield
+
+
+def strip_markup(text: str) -> str:
+    from rich.markup import _parse
+
+    def parse():
+        for _position, plain_text, _tag in _parse(text):
+            if plain_text is not None:
+                yield plain_text.replace("\\[", "[")
+
+    return "".join(parse())
+
+
+def truncate_float(value: float | int | None, precision: int = 3) -> float | None:
+    if value is None:
+        return None
+    return round(value, precision)

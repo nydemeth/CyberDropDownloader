@@ -32,6 +32,7 @@ DEBUG_MODE = bool(
 ENABLE_DEBUG_CRAWLERS = True
 
 NO_PLUGINS = bool(_env("NO_PLUGINS"))
+WRITE_JSON_UI = int(_env("WRITE_JSON_UI") or 0) or None
 EDITOR = os.getenv("EDITOR")
 
 # CRAWLERS

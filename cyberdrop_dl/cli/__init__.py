@@ -1,25 +1,15 @@
 import datetime
 from collections.abc import Iterable
-from enum import auto
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
 from cyclopts import Parameter
+from cyclopts.core import App
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from cyberdrop_dl.compat import CIStrEnum
+from cyberdrop_dl import __version__
 from cyberdrop_dl.models.types import HttpURL
-
-
-class UIOptions(CIStrEnum):
-    DISABLED = auto()
-    ACTIVITY = auto()
-    SIMPLE = auto()
-    FULLSCREEN = auto()
-
-    @property
-    def is_disabled(self) -> bool:
-        return self is UIOptions.DISABLED
+from cyberdrop_dl.progress import UIOptions
 
 
 @Parameter(name="*")
@@ -129,3 +119,27 @@ class CLIargs(BaseModel):
 def _check_mutually_exclusive(group: Iterable[Any], msg: str) -> None:
     if sum(1 for value in group if value) >= 2:
         raise ValueError(msg)
+
+
+app = App(
+    name="cyberdrop-dl",
+    help="Bulk asynchronous downloader for multiple file hosts",
+    version=__version__,
+    default_parameter=Parameter(negative_iterable=[], json_dict=False, json_list=False),
+    result_action="return_value",
+)
+
+
+def register_commands() -> None:
+    from cyberdrop_dl.cli.clean_up import app as cleanup
+    from cyberdrop_dl.cli.database import app as database
+    from cyberdrop_dl.cli.download import download
+    from cyberdrop_dl.cli.show import show
+
+    app.command(database)
+    app.command(show)
+    app.default(download)
+    app.command(cleanup)
+
+
+register_commands()
