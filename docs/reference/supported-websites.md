@@ -1,8 +1,8 @@
 ---
-
 description: These are the websites supported by Cyberdrop-DL
 icon: globe-pointer
 ---
+
 <!-- markdownlint-disable MD033 MD034 MD041 -->
 
 # Supported Websites
@@ -35,9 +35,11 @@ Supported domains via Real-Debrid include `rapidgator`, `4shared.com`, `fikper.c
 CDL will only use Real-Debrid for unsupported sites. To use it for a site that CDL supports, ex: `mega.nz`, you have to disable the `mega.nz` crawler. See: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options/global-settings/general#disable_crawlers
 {% endhint %}
 
+<!-- START_SUPPORTED_SITES -->
+
 ## Supported sites
 
-List of sites supported by cyberdrop-dl-patched as of version 9.8.0
+List of sites supported by cyberdrop-dl-patched as of version 9.9.0
 
 ### 4chan
 
@@ -2974,4 +2976,5 @@ ex: To only download categories from a date range: ,
   - `/videos/embed/<video_id>`
 
 
-<!-- END_SUPPORTED_SITES-->
+
+<!-- END_SUPPORTED_SITES -->
