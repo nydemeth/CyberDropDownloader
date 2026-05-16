@@ -232,7 +232,7 @@ class HTTPClient:
             json=json,
             params=request_params or {},
             headers=prepare_headers(headers),
-            impersonate=normalize_impersonation(impersonate),
+            impersonate=normalize_impersonation(self.manager.cli_args.impersonate or impersonate),
         )
 
         if not request.impersonate:
