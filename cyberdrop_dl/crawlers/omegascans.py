@@ -1,57 +1,72 @@
 from __future__ import annotations
 
+import dataclasses
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, next_js
 
 if TYPE_CHECKING:
+    from bs4 import BeautifulSoup
+
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-DATE_SELECTOR = 'h2[class="font-semibold font-sans text-muted-foreground text-xs"]'
-API_ENTRYPOINT = AbsoluteHttpURL("https://api.omegascans.org/chapter/query")
-JS_SELECTOR = "script:-soup-contains('series_id')"
-DATE_JS_SELECTOR = "script:-soup-contains('created')"
-IMAGE_SELECTOR = "p[class*=flex] img"
+_API_ENTRYPOINT = AbsoluteHttpURL("https://api.omegascans.org/chapter/query")
 
-PRIMARY_URL = AbsoluteHttpURL("https://omegascans.org")
+
+class Selector:
+    SERIES_ID = "script:-soup-contains('series_id')"
+    IMAGE = "#content  img.h-auto.object-contain"
+
+
+@dataclasses.dataclass(slots=True)
+class Chapter:
+    name: str
+    slug: str
+    created_at: str
+
+
+@dataclasses.dataclass(slots=True)
+class Series:
+    title: str
+    thumbnail: str
+    slug: str
 
 
 class OmegaScansCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Chapter": "/series/.../...",
-        "Series": "/series/...",
-        "Direct links": "",
+        "Chapter": "/series/<series_name>/<slug>",
+        "Series": "/series/<series_name>",
+        "Direct links": "/file/....",
     }
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://omegascans.org")
     DOMAIN: ClassVar[str] = "omegascans"
     FOLDER_DOMAIN: ClassVar[str] = "OmegaScans"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if "chapter" in scrape_item.url.name:
-            return await self.chapter(scrape_item)
-        if "series" in scrape_item.url.parts:
-            return await self.series(scrape_item)
-        await self.handle_direct_link(scrape_item)
+        match scrape_item.url.parts[1:]:
+            case ["series", _]:
+                return await self.series(scrape_item)
+            case ["series", _, _]:
+                return await self.chapter(scrape_item)
+            case ["file", *_]:
+                await self.direct_file(scrape_item)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def series(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-
-        series_id = None
-        js_script = soup.select_one(JS_SELECTOR)
-        if not js_script:
-            raise ScrapeError(422, "Unable to parse series_id from html")
-
-        series_id = js_script.get_text().split('series_id\\":')[1].split(",")[0]
+        js_script = css.select_text(soup, Selector.SERIES_ID)
+        series_id = js_script.split('series_id\\":')[1].split(",")[0]
         scrape_item.setup_as_album("", album_id=series_id)
         # TODO: Add title
         # title: str = ""
-        api_url = API_ENTRYPOINT.with_query(series_id=series_id, perPage=30)
+        api_url = _API_ENTRYPOINT.with_query(series_id=series_id, perPage=30)
 
         for page in itertools.count(1):
             json_resp: dict[str, Any] = await self.request_json(api_url.update_query(page=page))
@@ -71,28 +86,26 @@ class OmegaScansCrawler(Crawler):
         if "This chapter is premium" in soup.get_text():
             raise ScrapeError(401, "This chapter is premium")
 
-        scrape_item.part_of_album = True
-        title_parts = css.select_text(soup, "title").split(" - ")
-        series_name, chapter_title = title_parts[:2]
-        series_title = self.create_title(series_name)
-        scrape_item.add_to_parent_title(series_title)
-        scrape_item.add_to_parent_title(chapter_title)
+        series, chapter = _extract_info(soup)
+        scrape_item.setup_as_album(self.create_title(series.title))
+        scrape_item.add_to_parent_title(chapter.name)
 
-        date_str = soup.select(DATE_SELECTOR)[-1].get_text()
-        date = self.parse_date(date_str)
-        if not date:
-            date_str = css.select_text(soup, DATE_JS_SELECTOR).split('created_at\\":\\"')[1].split(".")[0]
-            date = self.parse_date(date_str)
+        scrape_item.uploaded_at = self.parse_iso_date(chapter.created_at)
+        for _, link in self.iter_tags(soup, Selector.IMAGE, "src"):
+            self.create_task(self.direct_file(scrape_item, link))
+            scrape_item.add_children()
 
-        scrape_item.uploaded_at = date
-        for attribute in ("src", "data-src"):
-            for _, link in self.iter_tags(soup, IMAGE_SELECTOR, attribute):
-                filename, ext = self.get_filename_and_ext(link.name)
-                await self.handle_file(link, scrape_item, filename, ext)
 
-    @error_handling_wrapper
-    async def handle_direct_link(self, scrape_item: ScrapeItem) -> None:
-        """Handles a direct link."""
-        scrape_item.url = scrape_item.url.with_query(None)
-        filename, ext = self.get_filename_and_ext(scrape_item.url.name)
-        await self.handle_file(scrape_item.url, scrape_item, filename, ext)
+def _extract_info(soup: BeautifulSoup) -> tuple[Series, Chapter]:
+    data = next_js.extract(soup)
+    chapter = next_js.find(data, "id", "series_id", "chapter_title", "created_at")
+    series = next_js.find(data, "id", "series_slug", "title")
+    return Series(
+        title=series["title"],
+        slug=series["series_slug"],
+        thumbnail=series["thumbnail"],
+    ), Chapter(
+        name=chapter["chapter_name"],
+        slug=chapter["chapter_slug"],
+        created_at=chapter["created_at"],
+    )
