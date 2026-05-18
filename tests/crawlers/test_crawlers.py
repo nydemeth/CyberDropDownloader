@@ -214,3 +214,10 @@ async def test_direct_http_crawler(running_manager: Manager, url: str, filename:
     results: list[MediaItem] = sorted((call.args[0] for call in func.call_args_list), key=lambda x: str(x.url))
     func.assert_awaited()
     _validate_results(crawler, test_case, results)
+
+
+def test_invalid_crawler_modules_should_raise_import_error() -> None:
+    from cyberdrop_dl.crawlers.crawler import Registry
+
+    with pytest.raises(ImportError, match="Could not import crawlers from module"):
+        Registry._import_module("cyberdrop_dl.crawler.fake_crawler_12345")

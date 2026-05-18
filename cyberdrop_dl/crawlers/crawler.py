@@ -123,16 +123,33 @@ class Registry:
 
         assert __package__
         module = importlib.import_module(__package__)
-        cls._import_from(module)
+        errors = tuple(cls._import_from(module))
+        if errors:
+            error = RuntimeError("cyberdrop-dl installation is corrupted")
+            error.add_note("A complete uninstall and reinstall should fix crawler import errors")
+            raise BaseExceptionGroup("", (*errors, error))
+
         cls._loaded = True
 
     @classmethod
-    def _import_from(cls, module: ModuleType) -> None:
+    def _import_from(cls, module: ModuleType) -> Generator[ImportError]:
         """Import every module (and sub-package) inside *pkg_name*."""
         for sub_module_info in pkgutil.iter_modules(module.__path__, module.__name__ + "."):
-            sub_module = importlib.import_module(sub_module_info.name)
-            if sub_module_info.ispkg:
-                cls._import_from(sub_module)
+            try:
+                sub_module = cls._import_module(sub_module_info.name)
+            except ImportError as e:
+                yield e
+            else:
+                if sub_module_info.ispkg:
+                    yield from cls._import_from(sub_module)
+
+    @classmethod
+    def _import_module(cls, name: str, /) -> ModuleType:
+        try:
+            return importlib.import_module(name)
+        except ImportError as e:
+            msg = f"Could not import crawlers from module '{name}' [{e.msg}]"
+            raise ImportError(msg).with_traceback(e.__traceback__) from None
 
 
 class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
@@ -221,11 +238,12 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     def __init_subclass__(
         cls,
+        *,
         is_abc: bool = False,
         is_generic: bool = False,
         is_debug: bool = False,
         db_path: Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init_subclass__(**kwargs)
 
