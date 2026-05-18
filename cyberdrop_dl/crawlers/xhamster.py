@@ -31,7 +31,7 @@ class Selector:
 
 
 def _decrypt_url(raw_url: str) -> str | None:
-    if raw_url.startswith("http") or raw_url.startswith("/"):
+    if raw_url.startswith(("http", "/")):
         hex_string = AbsoluteHttpURL(raw_url).parts[1].partition(",")[0]
         decoded = _decrypt_url(hex_string)
         if decoded:
@@ -190,7 +190,7 @@ class XhamsterCrawler(Crawler):
             initials = await self._get_window_initials(next_page_url)
             images = initials["photosGalleryModel"]["photos"]
 
-    def _handle_img(self, scrape_item: ScrapeItem, img: dict[str, Any], results: dict[str, int]):
+    def _handle_img(self, scrape_item: ScrapeItem, img: dict[str, Any], results: dict[str, int]) -> None:
         src, page_url = self.parse_url(img["imageURL"]), self.parse_url(img["pageURL"])
         if self.check_album_results(src, results):
             return
@@ -350,7 +350,7 @@ def _make_decoder(algo: int, seed: int) -> Callable[[], int]:
         def decode_next() -> int:
             nonlocal current_step
 
-            current_step = current_step & 0xFFFFFFFF
+            current_step &= 0xFFFFFFFF
             current_step ^= (current_step << 13) & 0xFFFFFFFF
             current_step ^= (current_step >> 17) & 0xFFFFFFFF
             current_step ^= (current_step << 5) & 0xFFFFFFFF
@@ -413,8 +413,7 @@ def _make_decoder(algo: int, seed: int) -> Callable[[], int]:
             val = _ensure_signed_32int(current_step ^ (current_step << 5))
             val = _ensure_signed_32int(val * _ensure_signed_32int(0x7FEB352D))
             val = _ensure_signed_32int(val ^ ((val & 0xFFFFFFFF) >> 15))
-            val = _ensure_signed_32int(val * _ensure_signed_32int(0x846CA68B))
-            return val
+            return _ensure_signed_32int(val * _ensure_signed_32int(0x846CA68B))
 
     else:
         raise ValueError(f"Unknown crypto algo: {algo}")

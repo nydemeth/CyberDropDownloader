@@ -157,7 +157,7 @@ class TikTokCrawler(Crawler):
         if await self.check_complete(scrape_item.url, scrape_item.url):
             # The video was downloaded, but the audio may have not
             if not self.download_audios:
-                return
+                return None
 
             if post:
                 return self._handle_post(scrape_item, post)
@@ -196,7 +196,7 @@ class TikTokCrawler(Crawler):
         post = Post.from_dict(json_data)
         self._handle_post(scrape_item, post)
 
-    def _handle_post(self, scrape_item: ScrapeItem, post: Post):
+    def _handle_post(self, scrape_item: ScrapeItem, post: Post) -> None:
         scrape_item.url = post.canonical_url
         title = self.create_title(post.author.unique_id, post.id)
         scrape_item.add_to_parent_title(title)
@@ -263,6 +263,6 @@ class TikTokCrawler(Crawler):
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         if media_item.ext == ".mp3":
-            media_item.download_folder = media_item.download_folder / "Audios"
+            media_item.download_folder /= "Audios"
 
         await super().handle_media_item(media_item, m3u8)

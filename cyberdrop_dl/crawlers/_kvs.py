@@ -99,9 +99,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
     def _clean_title(cls, title: str) -> str:
         if title.startswith("New Videos Tagged"):
             title = title.partition("Showing")[0].partition("Tagged with")[-1].strip()
-        elif title.startswith(trash := "New Videos for: "):
-            title = title.partition(trash)[-1]
-        elif title.startswith(trash := "Videos for: "):
+        elif title.startswith(trash := "New Videos for: ") or title.startswith(trash := "Videos for: "):  # noqa: PIE810
             title = title.partition(trash)[-1]
         else:
             title = title.partition("New Videos")[0].strip()
@@ -279,7 +277,7 @@ def _parse_video_vars(video_vars: str) -> KVSVideo:
             if "/get_file/" not in url_str:
                 continue
             quality = flashvars.get(f"{key}_text")
-            resolution = Resolution.highest() if quality in ("HQ", "Best Quality") else parse_resolution(quality)
+            resolution = Resolution.highest() if quality in {"HQ", "Best Quality"} else parse_resolution(quality)
             url = _deobfuscate_url(url_str, license_token)
             yield resolution, url
 

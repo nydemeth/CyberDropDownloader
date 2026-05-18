@@ -126,7 +126,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
         if await self.check_complete_from_referer(scrape_item):
-            return
+            return None
 
         soup = await self.request_soup(scrape_item.url)
         if soup.select_one(Selector.PASSWORD_PROTECTED):
@@ -232,7 +232,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
             raise PasswordProtectedError(message="Incorrect password")
 
 
-def _check_is_available(soup: BeautifulSoup):
+def _check_is_available(soup: BeautifulSoup) -> None:
     if soup.select(Selector.RECAPTCHA):
         raise DDOSGuardError("Google recaptcha found")
 

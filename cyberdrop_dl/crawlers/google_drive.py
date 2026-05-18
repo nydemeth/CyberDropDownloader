@@ -103,16 +103,13 @@ class GoogleDriveCrawler(Crawler):
                 index = url.parts.index(name)
                 return url.parts[index + 1]
             except (ValueError, IndexError):
-                return
+                return None
 
         if folder_id := (next_to("folders") or next_to("embeddedfolderview")):
             return await self.folder(scrape_item, folder_id)
 
         if file_id := next_to("d"):
-            if (first := url.parts[1]) in _DOC_FORMATS:
-                doc = first
-            else:
-                doc = None
+            doc = first if (first := url.parts[1]) in _DOC_FORMATS else None
             return await self.file(scrape_item, file_id, doc)
 
         raise ValueError
@@ -190,7 +187,8 @@ class GoogleDriveCrawler(Crawler):
         method = "GET" if export_url.host == _DOCS_URL.host else "POST"
 
         async with self.request(export_url, method=method) as resp:
-            assert resp.ok and "html" not in resp.content_type
+            assert resp.ok
+            assert "html" not in resp.content_type
 
         return resp.url, resp.content_disposition.filename
 

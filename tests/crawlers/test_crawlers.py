@@ -61,7 +61,8 @@ _TEST_DATA: dict[str, list[dict[str, Any]]] = {}
 
 def _load_test_cases(path: Path) -> None:
     module_spec = importlib.util.spec_from_file_location(path.stem, path)
-    assert module_spec and module_spec.loader
+    assert module_spec
+    assert module_spec.loader
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
     if module.DOMAIN in _TEST_DATA:
@@ -103,7 +104,7 @@ async def test_crawler(running_manager: Manager, test_case: CrawlerTestCase, req
         async with ScrapeMapper(running_manager)() as scrape_mapper:
             await scrape_mapper.run()
             cls = next(
-                (crawler for crawler in scrape_mapper.crawlers.values() if crawler.DOMAIN == test_case.domain),
+                (crawler for crawler in scrape_mapper.crawlers.values() if test_case.domain == crawler.DOMAIN),
                 None,
             )
             assert cls, f"{test_case.domain} is not a valid crawler domain. Test case is invalid"
@@ -184,7 +185,7 @@ def _re_search(expected_value: str, result_value: str) -> re.Match[str] | None:
 
 
 @pytest.mark.parametrize(
-    "url, filename",
+    ("url", "filename"),
     [
         (
             "https://techdigitalspace.com/wp-content/uploads/2025/11/Valve-Steam-Machine-2.jpg",

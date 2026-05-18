@@ -226,7 +226,7 @@ def _get_bin_version(bin_path: str) -> str | None:
         ).stdout.decode("utf-8", errors="ignore")
 
     except Exception:
-        return
+        return None
     else:
         return stdout.partition("version")[-1].partition("Copyright")[0].strip()
 
@@ -321,7 +321,7 @@ class VideoStream(Stream):
         if width and height:
             resolution: str | None = f"{width}x{height}"
 
-        if (avg_fps := stream_info.get("avg_frame_rate")) and str(avg_fps) not in ("0/0", "0", "0.0"):
+        if (avg_fps := stream_info.get("avg_frame_rate")) and str(avg_fps) not in {"0/0", "0", "0.0"}:
             fps: TruncatedFloat | None = TruncatedFloat(Fraction(avg_fps))
 
         defaults = super(VideoStream, cls).validate(stream_info)

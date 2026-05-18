@@ -2,6 +2,7 @@ import datetime
 import itertools
 import shutil
 from pathlib import Path
+from typing import Never
 
 import pytest
 
@@ -141,7 +142,7 @@ class TestMoveFile:
         src.write_text("x")
         dst = tmp_path / "bar.txt"
 
-        def boom(*_, **_k):
+        def boom(*_, **_k) -> Never:
             raise OSError
 
         monkeypatch.setattr(shutil, "move", boom)

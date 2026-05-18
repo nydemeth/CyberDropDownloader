@@ -67,7 +67,7 @@ def post_startup_manager(running_manager: Manager) -> Manager:
 @pytest.mark.parametrize(
     ("url", "thread_name_and_id", "result", "canonical_url"),
     [
-        [
+        (
             "https://simpcity.su/threads/general-support.208041/page-260#post-23934165",
             "general-support.208041",
             (
@@ -77,8 +77,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 23934165,
             ),
             "https://simpcity.su/threads/general-support.208041",
-        ],
-        [
+        ),
+        (
             "https://celebforum.to/threads/infos-regelaenderungen.18821/page-3",
             "infos-regelaenderungen.18821",
             (
@@ -88,8 +88,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 None,
             ),
             "https://celebforum.to/threads/infos-regelaenderungen.18821",
-        ],
-        [
+        ),
+        (
             "https://www.bellazon.com/main/topic/27120-the-official-victorias-secret-thread",
             "27120-the-official-victorias-secret-thread",
             (
@@ -99,8 +99,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 None,
             ),
             "https://www.bellazon.com/main/topic/27120-the-official-victorias-secret-thread",
-        ],
-        [
+        ),
+        (
             "https://forums.socialmediagirls.com/threads/forum-rules.14/post-34",
             "forum-rules.14",
             (
@@ -110,8 +110,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 34,
             ),
             "https://forums.socialmediagirls.com/threads/forum-rules.14",
-        ],
-        [
+        ),
+        (
             "https://forums.socialmediagirls.com/threads/should-we-ban-gofile-76-5-say-no.436901/post-3942103",
             "should-we-ban-gofile-76-5-say-no.436901",
             (
@@ -121,8 +121,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 3942103,
             ),
             "https://forums.socialmediagirls.com/threads/should-we-ban-gofile-76-5-say-no.436901",
-        ],
-        [
+        ),
+        (
             "https://forums.socialmediagirls.com/threads/en-fr-tools-to-download-upload-content-websites-softwares-extensions.13930/page-11/#post-2070848",
             "en-fr-tools-to-download-upload-content-websites-softwares-extensions.13930",
             (
@@ -132,8 +132,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 2070848,
             ),
             "https://forums.socialmediagirls.com/threads/en-fr-tools-to-download-upload-content-websites-softwares-extensions.13930",
-        ],
-        [
+        ),
+        (
             "https://f95zone.to/threads/mod-uploading-rules-12-02-2018.9236/post-2726083",
             "mod-uploading-rules-12-02-2018.9236",
             (
@@ -143,8 +143,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 2726083,
             ),
             "https://f95zone.to/threads/mod-uploading-rules-12-02-2018.9236",
-        ],
-        [
+        ),
+        (
             "https://650f.bike/threads/central-stand-honda-cb650r-constands-power-evo.3093/page-2",
             "central-stand-honda-cb650r-constands-power-evo.3093",
             (
@@ -154,8 +154,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 None,
             ),
             "https://650f.bike/threads/central-stand-honda-cb650r-constands-power-evo.3093",
-        ],
-        [
+        ),
+        (
             "https://arstechnica.com/civis/threads/the-new-perpetual-photo-accessory-thread.1274775/page-3#post-29155063",
             "the-new-perpetual-photo-accessory-thread.1274775",
             (
@@ -165,8 +165,8 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 29155063,
             ),
             "https://arstechnica.com/civis/threads/the-new-perpetual-photo-accessory-thread.1274775",
-        ],
-        [
+        ),
+        (
             "https://www.laneros.com/temas/iphone-16-16e-16-plus-16-pro-16-promax.256047/page-64#post-7512404",
             "iphone-16-16e-16-plus-16-pro-16-promax.256047",
             (
@@ -176,7 +176,7 @@ def post_startup_manager(running_manager: Manager) -> Manager:
                 7512404,
             ),
             "https://www.laneros.com/temas/iphone-16-16e-16-plus-16-pro-16-promax.256047",
-        ],
+        ),
     ],
 )
 def test_parse_thread(url: str, thread_name_and_id: str, result: tuple[int, str, int, int], canonical_url: str) -> None:
@@ -187,7 +187,7 @@ def test_parse_thread(url: str, thread_name_and_id: str, result: tuple[int, str,
 
 
 @pytest.mark.parametrize(
-    "link, out",
+    ("link", "out"),
     [
         (
             "https://media.imagepond.net/media/IMG_2153a940fb5680979a52.jpg",
@@ -276,7 +276,7 @@ def test_parse_login_form_no_input_form_should_fail() -> None:
 
 
 @pytest.mark.parametrize(
-    "input_string, expected_output",
+    ("input_string", "expected_output"),
     [
         (
             r"some_text_before \/\/simpcity.su/path/to/resource.mp4 some_text_after",
@@ -401,7 +401,7 @@ def test_lazy_load_embeds() -> None:
     </div>""")
     result = list(TEST_CRAWLER._lazy_load_embeds(post))
     assert len(result) == 1
-    assert "//redgifs.com/ifr/downrightcluelesswirm" == result[0]
+    assert result[0] == "//redgifs.com/ifr/downrightcluelesswirm"
 
 
 @pytest.mark.parametrize(
@@ -424,216 +424,6 @@ def test_lazy_load_embeds() -> None:
                     />
                 </a>""",
             ["https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"],
-        ),
-        (
-            crawlers.SimpCityCrawler,
-            """
-                <a href="https://jpg5.su/img/aqDYT6c" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        title="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-                <a href="https://jpg5.su/img/aqDYZAt" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        title="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-            </div>""",
-            [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
-            ],
-        ),
-        (
-            crawlers.SimpCityCrawler,
-            """
-                <a href="https://jpg5.su/img/aqDYT6c" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        title="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-                <a href="https://jpg5.su/img/aqDYZAt" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        title="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-            </div>""",
-            [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
-            ],
-        ),
-        (
-            crawlers.SimpCityCrawler,
-            """
-                <a href="https://jpg5.su/img/aqDYT6c" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        title="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-                <a href="https://jpg5.su/img/aqDYZAt" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        title="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-            </div>""",
-            [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
-            ],
-        ),
-        (
-            crawlers.SimpCityCrawler,
-            """
-                <a href="https://jpg5.su/img/aqDYT6c" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        title="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-                <a href="https://jpg5.su/img/aqDYZAt" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        title="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-            </div>""",
-            [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
-            ],
-        ),
-        (
-            crawlers.SimpCityCrawler,
-            """
-                <a href="https://jpg5.su/img/aqDYT6c" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        title="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-                <a href="https://jpg5.su/img/aqDYZAt" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        title="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-            </div>""",
-            [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
-            ],
-        ),
-        (
-            crawlers.SimpCityCrawler,
-            """
-                <a href="https://jpg5.su/img/aqDYT6c" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        title="issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-                <a href="https://jpg5.su/img/aqDYZAt" target="_blank" class="link link--external" rel="nofollow ugc noopener">
-                    <img
-                        src="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        data-url="https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        class="bbImage"
-                        loading="lazy"
-                        alt="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        title="issfanfan-20250129-0001ef763780833ed714.md.jpg"
-                        style=""
-                        width=""
-                        height=""
-                    />
-                </a>
-            </div>""",
-            [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
-            ],
         ),
         (
             crawlers.SimpCityCrawler,
@@ -893,7 +683,13 @@ def test_is_attachment_empty_string_should_be_false() -> None:
 
 class TestCheckPostId:
     @pytest.mark.parametrize(
-        "init_post_id, current_post_id, scrape_single_forum_post, expected_continue_scraping, expected_scrape_this_post",
+        (
+            "init_post_id",
+            "current_post_id",
+            "scrape_single_forum_post",
+            "expected_continue_scraping",
+            "expected_scrape_this_post",
+        ),
         [
             # init_post_id > current_post_id
             (100, 90, True, True, False),

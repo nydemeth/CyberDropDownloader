@@ -22,7 +22,7 @@ class _Response(Protocol):
 
 async def check_resp(resp: _Response, /) -> None:
     if "html" not in resp.content_type:
-        return
+        return None
 
     return check_html(await resp.text())
 
@@ -54,9 +54,12 @@ class DDosGuard:
 
     @classmethod
     def check(cls, soup: BeautifulSoup) -> bool:
-        if (title := soup.select_one("title")) and (title_str := title.string):
-            if any(title.casefold() == title_str.casefold() for title in cls.TITLES):
-                return True
+        if (
+            (title := soup.select_one("title"))
+            and (title_str := title.string)
+            and any(title.casefold() == title_str.casefold() for title in cls.TITLES)
+        ):
+            return True
 
         return bool(soup.select_one(cls.SELECTOR))
 
@@ -165,7 +168,7 @@ def _anubis_worker(start: int, step: int, challenge: str, difficulty: int) -> tu
         nonce += step
 
 
-if sys.platform not in ("win32", "darwin") and hasattr(os, "sched_getaffinity"):
+if sys.platform not in {"win32", "darwin"} and hasattr(os, "sched_getaffinity"):
 
     def cpu_count() -> int:
         return len(os.sched_getaffinity(0))

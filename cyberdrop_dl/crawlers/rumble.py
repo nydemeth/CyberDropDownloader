@@ -58,7 +58,7 @@ class Video:
     @staticmethod
     def parse_formats(formats: dict[str, list[dict[str, Any]] | dict[str, dict[str, Any]]]) -> Generator[Format]:
         for type_, format_options in formats.items():
-            if type_ in ("audio", "tar", "timeline"):
+            if type_ in {"audio", "tar", "timeline"}:
                 continue
 
             try:
@@ -66,10 +66,7 @@ class Video:
             except KeyError:
                 raise ScrapeError(422, f"Video has an unknown format type: {type_}") from None
 
-            if isinstance(format_options, list):
-                pairs = ((None, f) for f in format_options)
-            else:
-                pairs = format_options.items()
+            pairs = ((None, f) for f in format_options) if isinstance(format_options, list) else format_options.items()
 
             is_single_file = type_ is not FormatType.HLS
 

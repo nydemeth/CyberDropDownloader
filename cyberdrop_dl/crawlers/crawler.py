@@ -81,7 +81,7 @@ _include = _PlaceHolderConfigInclude()
 
 _DB_PATH_BUILDERS: MappingProxyType[str, Callable[[AbsoluteHttpURL], str]] = MappingProxyType(
     {
-        "url": lambda url: str(url),
+        "url": str,
         "name": lambda url: url.name,
         "path": lambda url: url.path,
         "path_qs": lambda url: url.path_qs,
@@ -431,7 +431,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """Finishes handling the file and hands it off to the downloader."""
 
         ext = ext or Path(filename).suffix
-        if self.DOMAIN in ["cyberdrop"]:
+        if self.DOMAIN == "cyberdrop":
             custom_filename = remove_file_id(filename, ext)
 
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
@@ -621,8 +621,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
-        title = " ".join(title.split(" "))
-        return title
+        return " ".join(title.split(" "))
 
     @final
     def create_separate_post_title(
@@ -752,7 +751,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 try:
                     return css.select(soup, selector, "href")
                 except css.SelectorError:
-                    return
+                    return None
 
         while True:
             soup = await self.request_soup(page_url, impersonate=impersonate or None)
@@ -859,7 +858,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             if _include.audio_codec and audio_codec:
                 yield audio_codec
 
-            if _include.resolution and resolution and resolution not in (Resolution.highest(), Resolution.unknown()):
+            if _include.resolution and resolution and resolution not in {Resolution.highest(), Resolution.unknown()}:
                 res = resolution if type(resolution) is Resolution else Resolution.parse(resolution)
                 if fps and _include.fps:
                     yield res.name + "@" + (str(int(fps)) if fps.is_integer() else f"{fps:.1f}") + "fps"

@@ -158,7 +158,7 @@ class HistoryTable:
     async def get_duration(self, domain: str, media_item: MediaItem) -> float | None:
         """Returns the duration from the database."""
         if media_item.is_segment:
-            return
+            return None
 
         url_path = media_item.db_path
         query = "SELECT duration FROM media WHERE domain = ? and url_path = ? LIMIT 1"
@@ -306,7 +306,7 @@ async def fix_domains(db_conn: aiosqlite.Connection) -> None:
     await db_conn.commit()
 
 
-async def fix_referers(db_conn: aiosqlite.Connection):
+async def fix_referers(db_conn: aiosqlite.Connection) -> None:
     from cyberdrop_dl.crawlers import cyberdrop, jpg5, redgifs, turbovid
 
     logger.info("Updating old referers")

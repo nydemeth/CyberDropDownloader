@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     class AbsoluteHttpURL(yarl.URL):
         @signature.copy(yarl.URL.__new__)
-        def __new__(cls) -> AbsoluteHttpURL: ...
+        def __new__(cls) -> Self: ...
 
         @signature.copy(yarl.URL.__truediv__)
         def __truediv__(self) -> AbsoluteHttpURL: ...
@@ -429,9 +429,7 @@ class QueryDatetimeRange(NamedTuple):
         return self
 
     def is_in_range(self, other: datetime.datetime) -> bool:
-        if (self.before and other >= self.before) or (self.after and other <= self.after):
-            return False
-        return True
+        return not ((self.before and other >= self.before) or (self.after and other <= self.after))
 
     def as_query(self) -> dict[str, Any]:
         return {name: value.isoformat() for name, value in self._asdict().items() if value}

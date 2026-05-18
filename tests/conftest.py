@@ -24,7 +24,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def pytest_configure(config: Config):
+def pytest_configure(config: Config) -> None:
     config.test_crawlers_domains = {
         domain for item in config.getoption("--test-crawlers").split(",") if (domain := item.strip())
     }
@@ -63,13 +63,13 @@ async def logs(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
     return caplog
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def manager() -> Generator[Manager]:
     with Manager()() as manager:
         yield manager
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     async with manager.database:
         yield manager
