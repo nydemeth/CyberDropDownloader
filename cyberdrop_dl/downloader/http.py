@@ -133,7 +133,7 @@ class Downloader:
                 )
 
     @contextlib.asynccontextmanager
-    async def _download_context(self, media_item: MediaItem):
+    async def _download_context(self, media_item: MediaItem) -> AsyncGenerator[None]:
 
         media_item.attempts = 0
         await self.client.mark_incomplete(media_item, self.domain)
@@ -210,7 +210,7 @@ class Downloader:
         await self.client.handle_media_item_completion(media_item, downloaded=True)
         await self.finalize_download(media_item, downloaded=True)
 
-    async def finalize_download(self, media_item: MediaItem, downloaded: bool) -> None:
+    async def finalize_download(self, media_item: MediaItem, *, downloaded: bool) -> None:
         if downloaded:
             await aio.chmod(media_item.path, 0o666)
             await self.set_file_datetime(media_item, media_item.path)

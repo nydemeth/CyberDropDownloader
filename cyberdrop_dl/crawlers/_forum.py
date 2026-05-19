@@ -14,7 +14,7 @@ import dataclasses
 import datetime
 import re
 from abc import abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Protocol, final
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, final
 
 from bs4 import BeautifulSoup, Tag
 
@@ -86,7 +86,7 @@ class ForumPost:
             css.decompose(article, trash)
         try:
             date = datetime.datetime.fromisoformat(css.select(article, *selectors.date))
-        except Exception:
+        except Exception:  # noqa: BLE001
             date = None
 
         id_str = css.attr(article, selectors.id.attribute)
@@ -218,7 +218,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
 
     @final
     @property
-    def max_thread_folder_depth(self):
+    def max_thread_folder_depth(self) -> int | None:
         return self.manager.config.settings.download_options.maximum_thread_folder_depth
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -380,7 +380,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
     POST_URL_PART_NAME: ClassVar[str]
     PAGE_URL_PART_NAME: ClassVar[str]
 
-    def __init_subclass__(cls, is_abc: bool = False, **kwargs) -> None:
+    def __init_subclass__(cls, *, is_abc: bool = False, **kwargs: Any) -> None:
         super().__init_subclass__(is_abc=is_abc, **kwargs)
         if is_abc:
             return
@@ -393,10 +393,12 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
 
     @classmethod
     def is_thumbnail(cls, link: AbsoluteHttpURL) -> bool:
+        assert link
         return False
 
     @classmethod
     def thumbnail_to_img(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL | None:
+        assert url
         return None
 
     @classmethod
@@ -588,7 +590,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         try:
             if link_str := css.attr(link_obj, self.SELECTORS.posts.links.element):
                 return self.is_attachment(link_str)
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
         return False
 
@@ -597,7 +599,7 @@ def iter_links(links: Iterable[Tag], attribute: str) -> Iterable[str]:
     for link_tag in links:
         try:
             yield css.attr(link_tag, attribute)
-        except Exception:
+        except Exception:  # noqa: BLE001
             continue
 
 
@@ -688,7 +690,12 @@ def is_confirmation_link(link: AbsoluteHttpURL) -> bool:
     )
 
 
-def check_post_id(init_post_id: int | None, current_post_id: int, scrape_single_forum_post: bool) -> tuple[bool, bool]:
+def check_post_id(
+    init_post_id: int | None,
+    current_post_id: int,
+    *,
+    scrape_single_forum_post: bool,
+) -> tuple[bool, bool]:
     """Checks if the program should scrape the current post.
 
     Returns (continue_scraping, scrape_this_post)"""
@@ -703,7 +710,7 @@ def check_post_id(init_post_id: int | None, current_post_id: int, scrape_single_
     return True, True
 
 
-def pre_process_child(link_str: str, embeds: bool = False) -> str | None:
+def pre_process_child(link_str: str, *, embeds: bool = False) -> str | None:
     assert isinstance(link_str, str)
     if embeds:
         link_str = extract_embed_url(link_str)

@@ -1,5 +1,6 @@
 """Async versions of builtins and some path operations"""
 
+# ruff: noqa: A001
 from __future__ import annotations
 
 import asyncio
@@ -81,7 +82,7 @@ class AsyncIOWrapper(Generic[AnyStr]):
         self._io = await self._coro
         return self
 
-    async def __aexit__(self, *_) -> None:
+    async def __aexit__(self, *_: object) -> None:
         return await asyncio.to_thread(self._io.close)
 
     async def __aiter__(self) -> AsyncIterator[AnyStr]:
@@ -190,7 +191,7 @@ async def map_tuples(
 def run(coro: Coroutine[Any, Any, _T]) -> _T:
     def _loop_factory() -> asyncio.AbstractEventLoop:
         loop = asyncio.new_event_loop()
-        if sys.version_info > (3, 12):
+        if sys.version_info >= (3, 12):
             loop.set_task_factory(asyncio.eager_task_factory)
         return loop
 

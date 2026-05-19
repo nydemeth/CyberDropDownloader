@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import datetime
 import importlib
 import logging
 import pkgutil
@@ -41,6 +40,7 @@ from cyberdrop_dl.utils.filepath import compose_filename, get_filename_and_ext, 
 from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator, Iterable, Mapping
     from types import ModuleType
 
@@ -389,11 +389,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             return url.with_host(new_host)
         return url
 
-    @error_handling_wrapper
-    def raise_exc(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str) -> None:
-        if isinstance(exc, str):
-            exc = ScrapeError(exc)
-        raise exc
+    def raise_exc(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str | int) -> None:
+        with self.catch_errors(scrape_item):
+            if isinstance(exc, (str, int)):
+                exc = ScrapeError(exc)
+            raise exc
 
     @final
     def new_task_id(self, url: AbsoluteHttpURL):
@@ -549,7 +549,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     async def check_complete_from_referer(
-        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, any_crawler: bool = False
+        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, *, any_crawler: bool = False
     ) -> bool:
         """Checks if the scrape item has already been scraped.
 
@@ -581,7 +581,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         return await self.manager.database.history.check_album(self.DOMAIN, album_id)
 
     @final
-    def handle_external_links(self, scrape_item: ScrapeItem, reset: bool = True) -> None:
+    def handle_external_links(self, scrape_item: ScrapeItem, *, reset: bool = True) -> None:
         """Maps external links to the scraper class."""
         if reset:
             scrape_item.reset()
@@ -595,9 +595,9 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     def get_filename_and_ext(
         self,
         filename: str,
+        *,
         forum: bool = False,
         assume_ext: str | None = ".mp4",
-        *,
         mime_type: str | None = None,
     ) -> tuple[str, str]:
         """Wrapper around `utils.get_filename_and_ext`.
@@ -645,7 +645,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     def create_separate_post_title(
         self,
         title: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
         date: datetime.datetime | datetime.date | int | None = None,
         /,
     ) -> str:
@@ -655,7 +655,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
         if isinstance(date, int):
-            date = datetime.datetime.fromtimestamp(date)
+            date = dates.from_timestamp(date)
 
         post_title, _ = safe_format(title_format, id=id, number=id, date=date, title=title)
         return post_title
@@ -797,7 +797,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     @classmethod
-    def parse_date(cls, date_or_datetime: str, /, format: str) -> dates.TimeStamp | None:
+    def parse_date(cls, date_or_datetime: str, /, format: str) -> dates.TimeStamp | None:  # noqa: A002
         return dates.to_timestamp(dates.parse_format(date_or_datetime, format))
 
     @final
@@ -919,11 +919,11 @@ class CrawlerAPI:
     crawler: Crawler
 
     @signature.copy(HTTPClient.request)
-    async def request_text(self, *args, **kwargs) -> str:
+    async def request_text(self, *args: Any, **kwargs: Any) -> str:
         return await self.crawler.request_text(*args, **kwargs)
 
     @signature.copy(request_text)
-    async def request_json(self, *args, **kwargs) -> Any:
+    async def request_json(self, *args: Any, **kwargs: Any) -> Any:
         return await self.crawler.request_json(*args, **kwargs)
 
 
@@ -952,7 +952,7 @@ def _validate_supported_paths(cls: type[Crawler]) -> None:
 
 
 def _make_wiki_supported_domains(scrape_mapper_keys: tuple[str, ...]) -> tuple[str, ...]:
-    def generalize(domain):
+    def generalize(domain: str) -> str:
         if "." not in domain:
             return f"{domain}.*"
         return domain

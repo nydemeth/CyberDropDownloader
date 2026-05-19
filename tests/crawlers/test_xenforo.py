@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-from unittest import mock
-
 import pytest
 from bs4 import BeautifulSoup
 
@@ -37,26 +34,13 @@ def _html(string: str) -> str:
 def _post(
     message_body: str = "",
     message_attachments: str = "",
-    id: int = 12345,
+    id: int = 12345,  # noqa: A002
     crawler: xenforo.XenforoCrawler | None = None,
 ) -> _forum.ForumPost:
     crawler = crawler or TEST_CRAWLER
     html = _html(POST_TEMPLATE.format(id=id, message_body=message_body, message_attachments=message_attachments))
     article = BeautifulSoup(html, "html.parser").select("article")[0]
     return _forum.ForumPost.new(article, crawler.SELECTORS.posts)
-
-
-def _item_call(value: Any) -> mock._Call:
-    return mock.call(scrape_item, value)
-
-
-def _any_item_call(value: Any) -> mock._Call:
-    return mock.call(mock.ANY, value)
-
-
-def _amock(func: str = "process_child", crawler: xenforo.XenforoCrawler | None = None) -> mock._patch[mock.AsyncMock]:
-    crawler = crawler or TEST_CRAWLER
-    return mock.patch.object(crawler, func, new_callable=mock.AsyncMock)
 
 
 @pytest.fixture(name="manager")
@@ -694,10 +678,10 @@ class TestCheckPostId:
             # init_post_id > current_post_id
             (100, 90, True, True, False),
             (100, 90, False, True, False),
-            # init_post_id == current_post_id
+            # case init_post_id == current_post_id
             (100, 100, True, False, True),
             (100, 100, False, True, True),
-            # init_post_id < current_post_id
+            # case init_post_id < current_post_id
             (100, 110, True, False, False),
             (100, 110, False, True, True),
         ],
@@ -706,12 +690,15 @@ class TestCheckPostId:
         self,
         init_post_id: int,
         current_post_id: int,
+        *,
         scrape_single_forum_post: bool,
         expected_continue_scraping: bool,
         expected_scrape_this_post: bool,
     ) -> None:
         continue_scraping, scrape_this_post = _forum.check_post_id(
-            init_post_id, current_post_id, scrape_single_forum_post
+            init_post_id,
+            current_post_id,
+            scrape_single_forum_post=scrape_single_forum_post,
         )
         assert continue_scraping == expected_continue_scraping
         assert scrape_this_post == expected_scrape_this_post
@@ -721,7 +708,9 @@ class TestCheckPostId:
         current_post_id = 100
         scrape_single_forum_post = False
         continue_scraping, scrape_this_post = _forum.check_post_id(
-            init_post_id, current_post_id, scrape_single_forum_post
+            init_post_id,
+            current_post_id,
+            scrape_single_forum_post=scrape_single_forum_post,
         )
         assert continue_scraping is True
         assert scrape_this_post is True
@@ -732,10 +721,14 @@ class TestCheckPostId:
         scrape_single_forum_post = True
 
         with pytest.raises(AssertionError):
-            _forum.check_post_id(init_post_id, current_post_id, scrape_single_forum_post)
+            _forum.check_post_id(
+                init_post_id,
+                current_post_id,
+                scrape_single_forum_post=scrape_single_forum_post,
+            )
 
 
-# og_post_id = 23549340
+# original post_id = 23549340
 POST_TEMPLATE = """
 <article class="message message--post js-post js-inlineModContainer" data-author="" data-content="post-{id}" id="js-post-{id}" itemscope="" itemtype="https://schema.org/Comment" itemid="https://simpcity.su/posts/{id}/">
     <meta itemprop="parentItem" itemscope="" itemid="https://xenforocomunity.com/threads/fanfan.33077/" />

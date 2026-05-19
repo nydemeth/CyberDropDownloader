@@ -29,11 +29,11 @@ class Result(TypedDict):
     # Simplified version of media_item
     url: str
     filename: NotRequired[str | type]
-    debrid_link: NotRequired[str | None | type]
+    debrid_link: NotRequired[str | type | None]
     original_filename: NotRequired[str | type]
     referer: NotRequired[str | type]
-    album_id: NotRequired[str | None | type]
-    uploaded_at: NotRequired[int | None | type]
+    album_id: NotRequired[str | type | None]
+    uploaded_at: NotRequired[int | type | None]
     download_folder: NotRequired[str | type]
 
 
@@ -96,7 +96,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 
 @pytest.mark.crawler_test_case
-async def test_crawler(running_manager: Manager, test_case: CrawlerTestCase, request: pytest.FixtureRequest) -> None:
+async def test_crawler(running_manager: Manager, test_case: CrawlerTestCase) -> None:
     if test_case.skip:
         pytest.skip(reason=test_case.skip if isinstance(test_case.skip, str) else "")
 
@@ -129,7 +129,7 @@ def _assert_n_results(test_case: CrawlerTestCase, n_results: int) -> None:
         assert count == n_results
 
 
-class _NOT_NONE:  # noqa: N801
+class _NOT_NONE:  # noqa: N801, PLW1641
     def __eq__(self, other: object) -> bool:
         return other is not None
 

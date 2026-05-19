@@ -130,7 +130,7 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
         ui_failure = create_error_msg(422)
         log_msg = str(e).partition("For further information")[0].strip()
         error_log_msg = ErrorLogMessage(ui_failure, log_msg)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         exc_info = e
         error_log_msg = ErrorLogMessage.from_unknown_exc(e)
 
@@ -230,9 +230,9 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
         delete_empty_files_and_folders(sorted_folder)
 
 
-def _partial_files(dir: Path | str) -> Generator[Path]:
+def _partial_files(path: Path | str, /) -> Generator[Path]:
     try:
-        for entry in os.scandir(dir):
+        for entry in os.scandir(path):
             try:
                 if entry.is_dir(follow_symlinks=False):
                     yield from _partial_files(entry.path)

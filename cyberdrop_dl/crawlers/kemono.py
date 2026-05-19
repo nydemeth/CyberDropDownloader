@@ -99,7 +99,7 @@ class Post(AliasModel):
     # `Any` to skip validation, but these are `yarl.URL`. We generate them internally so no validation is needed
     soup_attachments: list[Any] = []  # noqa: RUF012
 
-    def model_post_init(self, *_) -> None:
+    def model_post_init(self, *_: object) -> None:
         if date := self.published or self.added:
             self.timestamp = to_timestamp(date)
 
@@ -197,7 +197,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
     API_ENTRYPOINT: ClassVar[AbsoluteHttpURL]
     SERVICES: ClassVar[tuple[str, ...]] = ()
 
-    def __init_subclass__(cls, **kwargs) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         Crawler._assert_fields_overrides(cls, "SERVICES")
 
@@ -428,7 +428,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
                 seen.add(link)
                 try:
                     url = self.parse_url(link)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     pass
                 else:
                     if self.DOMAIN not in url.host:
@@ -570,7 +570,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         if not partial_post.title or not partial_post.user_name:
             raise ScrapeError(422)
 
-        def files():
+        def files() -> Generator[AbsoluteHttpURL]:
             for selector in (
                 PostSelectors.VIDEOS,
                 PostSelectors.IMAGES,

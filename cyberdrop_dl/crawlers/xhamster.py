@@ -15,7 +15,7 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper, extr_text, parse_url, xor_decrypt
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Generator, Iterable
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
@@ -297,7 +297,7 @@ def _parse_xplayer_sources(xplayer_sources: dict[str, Any]) -> Iterable[Format]:
 
     seen_urls: set[AbsoluteHttpURL] = set()
 
-    def parse_format(format_dict: dict[str, str], codec: str):
+    def parse_format(format_dict: dict[str, str], codec: str) -> Generator[Format]:
         for key in ("url",):
             url = format_dict.get(key)
             if not url:

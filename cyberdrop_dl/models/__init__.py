@@ -1,6 +1,6 @@
 """Pydantic models"""
 
-from typing import ClassVar, TypedDict
+from typing import Any, ClassVar, TypedDict
 
 from cyclopts import Parameter
 from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, model_serializer, model_validator
@@ -37,7 +37,7 @@ class AppriseURL(AliasModel):
     _OS_SCHEMES: ClassVar[tuple[str, ...]] = "windows", "macosx", "dbus", "qt", "glib", "kde"
     _VALID_TAGS: ClassVar[set[str]] = {"no_logs", "attach_logs", "simplified"}
 
-    def model_post_init(self, *_) -> None:
+    def model_post_init(self, *_: Any) -> None:
         if not self.tags.intersection(self._VALID_TAGS):
             self.tags |= {"no_logs"}
 
@@ -63,7 +63,7 @@ class AppriseURL(AliasModel):
     def serialize(self, info: SerializationInfo) -> str:
         return self.format(dump_secret=info.mode != "json")
 
-    def format(self, dump_secret: bool) -> str:
+    def format(self, *, dump_secret: bool) -> str:
         url = str(self.url.get_secret_value() if dump_secret else self.url)
         if not self.tags:
             return url

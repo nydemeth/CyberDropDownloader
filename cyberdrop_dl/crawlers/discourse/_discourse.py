@@ -87,7 +87,7 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
     async def forum(self, scrape_item: ScrapeItem, /) -> None:
         raise NotImplementedError
 
-    def parse_thread(self, *args, **kwargs) -> None:
+    def parse_thread(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError
 
     async def thread(self, scrape_item: ScrapeItem, /, thread: Topic) -> None:
@@ -141,7 +141,7 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
                 try:
                     if link_str:
                         yield self.parse_url(link_str)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     continue
 
         return iter_links()

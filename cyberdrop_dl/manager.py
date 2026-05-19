@@ -29,6 +29,7 @@ from cyberdrop_dl.utils import get_system_information
 if TYPE_CHECKING:
     from collections.abc import Generator
     from os import PathLike
+    from types import NotImplementedType
 
     from cyberdrop_dl.cli import CLIargs
     from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
@@ -192,7 +193,7 @@ class Manager:
             log_spacer()
             logger.info("URLs by domain (includes children):", extra={"color": "cyan"})
 
-            def lines():
+            def lines() -> Generator[str]:
                 for domain, count in sorted(scrape_stats.domain_stats.items()):
                     yield f" - {domain}: {count:,}"
 
@@ -286,7 +287,7 @@ class AppData:
             db_file=cache / "cyberdrop.db",
         )
 
-    def __truediv__(self, other: PathLike[str]):
+    def __truediv__(self, other: PathLike[str]) -> Path | NotImplementedType:
         try:
             return self.path / other
         except TypeError:
@@ -299,5 +300,5 @@ class AppData:
         return str(self.path)
 
     def mkdirs(self) -> None:
-        for dir in (self.cache, self.configs, self.cookies):
-            dir.mkdir(parents=True, exist_ok=True)
+        for folder in (self.cache, self.configs, self.cookies):
+            folder.mkdir(parents=True, exist_ok=True)
