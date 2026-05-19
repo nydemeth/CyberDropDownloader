@@ -369,13 +369,15 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
             self._scraped_items.add(url.path_qs)
 
+            if not self.ALLOW_EMPTY_PATH and url.path == "/":
+                self.raise_exc(scrape_item, ScrapeError.unsupported())
+                return
+
             with self.new_task_id(scrape_item.url):
                 try:
-                    if not self.ALLOW_EMPTY_PATH and scrape_item.url.path == "/":
-                        raise ValueError
                     await self.fetch(scrape_item)
                 except ValueError:
-                    self.raise_exc(scrape_item, ScrapeError("Unknown URL path"))
+                    self.raise_exc(scrape_item, ScrapeError.unsupported())
                 except MaxChildrenError as e:
                     self.raise_exc(scrape_item, e)
 
@@ -433,7 +435,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         await self.__write_to_jsonl(media_item)
 
     @final
-    async def handle_file(
+    async def handle_file(  # noqa: PLR0913
         self,
         url: AbsoluteHttpURL,
         scrape_item: ScrapeItem,
@@ -854,7 +856,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         return await self._request_m3u8(url, headers, media_type)
 
     @final
-    def create_custom_filename(
+    def create_custom_filename(  # noqa: PLR0913
         self,
         name: str,  # can be the full name or just the stem
         ext: str,

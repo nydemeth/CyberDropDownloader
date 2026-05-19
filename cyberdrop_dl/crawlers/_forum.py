@@ -453,11 +453,8 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             )
             if scrape_this_post:
                 post_url = self.make_post_url(thread, current_post.id)
-                new_scrape_item = scrape_item.create_new(
-                    thread.url,
-                    possible_datetime=current_post.timestamp,
-                    add_parent=post_url,
-                )
+                new_scrape_item = scrape_item.create_new(thread.url, add_parent=post_url)
+                new_scrape_item.uploaded_at = current_post.timestamp
                 self.create_task(self.post(new_scrape_item, current_post))
                 try:
                     scrape_item.add_children()
@@ -599,7 +596,7 @@ def iter_links(links: Iterable[Tag], attribute: str) -> Iterable[str]:
     for link_tag in links:
         try:
             yield css.attr(link_tag, attribute)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S112
             continue
 
 

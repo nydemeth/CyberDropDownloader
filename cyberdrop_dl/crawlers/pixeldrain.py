@@ -176,7 +176,7 @@ class PixelDrainCrawler(Crawler):
             scrape_item.add_children()
 
     @error_handling_wrapper
-    async def filesystem(self, scrape_item: ScrapeItem, path: str) -> None:
+    async def filesystem(self, scrape_item: ScrapeItem, path: str) -> None:  # noqa: C901
         # https://github.com/Fornaxian/pixeldrain_web/blob/8e5ecfc5ce44c0b2b4fafdf9e8201dfc98395e88/svelte/src/filesystem/FilesystemAPI.ts
 
         origin = scrape_item.url.origin()
@@ -275,7 +275,7 @@ class PixelDrainCrawler(Crawler):
         for line in text.splitlines():
             try:
                 link = self.parse_url(line)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S112
                 continue
             new_scrape_item = scrape_item.create_child(link)
             self.handle_external_links(new_scrape_item)

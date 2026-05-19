@@ -291,7 +291,7 @@ def _parse_video(initials: dict[str, Any]) -> Video:
     )
 
 
-def _parse_xplayer_sources(xplayer_sources: dict[str, Any]) -> Iterable[Format]:
+def _parse_xplayer_sources(xplayer_sources: dict[str, Any]) -> Iterable[Format]:  # noqa: C901
     if not xplayer_sources:
         return
 
@@ -336,7 +336,7 @@ def _ensure_signed_32int(int32: int) -> int:
     return unsigned_32_bit
 
 
-def _make_decoder(algo: int, seed: int) -> Callable[[], int]:
+def _make_decoder(algo: int, seed: int) -> Callable[[], int]:  # noqa: C901, PLR0915
     current_step = seed
     if algo == 1:
 
@@ -424,9 +424,10 @@ def _make_decoder(algo: int, seed: int) -> Callable[[], int]:
 def _is_hex(hex_string: str) -> bool:
     try:
         int(hex_string, 16)
-        return True
     except ValueError:
         return False
+    else:
+        return True
 
 
 def _decode_hex_url(encrypted_url: str) -> str:

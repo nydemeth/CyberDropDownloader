@@ -76,7 +76,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             return url / ""
         return url
 
-    async def fetch(self, scrape_item: ScrapeItem) -> None:
+    async def fetch(self, scrape_item: ScrapeItem) -> None:  # noqa: PLR0911
         match scrape_item.url.parts[1:]:
             case ["categories" | "tags", _]:
                 return await self.collection(scrape_item)
@@ -206,7 +206,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         src = self.parse_url(css.select(soup, Selector.PICTURE, "src"))
         await self.direct_file(scrape_item, src)
 
-    async def _ajax_pagination(
+    async def _ajax_pagination(  # noqa: PLR0913
         self,
         url: AbsoluteHttpURL,
         block_id: str,
