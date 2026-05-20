@@ -30,11 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- Posts filtering by date based on URL params will be removed on the next major release (Wordpress)
+
 ### Removed
 
 ### Fixed
 
 - Crash trying to decode non https URLs from the database (jpg5)
+- Wordpress support
 
 ### Security
 
