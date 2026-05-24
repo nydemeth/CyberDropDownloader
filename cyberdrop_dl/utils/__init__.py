@@ -61,14 +61,14 @@ _FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
 def _fields(cls: type) -> tuple[str, ...]:
     if fields := _FIELDS_CACHE.get(cls):
         return fields
-    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls))
+    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls) if f.init)
     return fields
 
 
 class DictDataclass(Dataclass, Protocol):
     @classmethod
     def filter_dict(cls, data: dict[str, Any], /) -> dict[str, Any]:
-        return {name: data.get(name) for name in _fields(cls)}
+        return {name: data[name] for name in _fields(cls) if name in data}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], /, **overrides: Any) -> Self:
