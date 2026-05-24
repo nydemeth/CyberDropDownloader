@@ -3,21 +3,24 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import platform
 import time
+import warnings
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Self, cast, final
 
 import aiohttp
+from curl_cffi.aio import AsyncCurl
+from curl_cffi.requests import AsyncSession
+from curl_cffi.utils import CurlCffiWarning
 
 from cyberdrop_dl import aio, cookies, ddos_guard, signature
 from cyberdrop_dl.clients import flaresolverr, tcp
 from cyberdrop_dl.clients.request import Request, normalize_impersonation, prepare_headers
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
-from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
+from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError
 from cyberdrop_dl.utils import truncated_preview
 
 if TYPE_CHECKING:
@@ -25,10 +28,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from bs4 import BeautifulSoup
-    from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
     from curl_cffi.requests.session import HttpMethod
 
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -124,44 +127,16 @@ class HTTPClient:
             await self._session.close()
 
     def _create_curl_session(self) -> AsyncSession[CurlResponse]:
-        try:
-            from curl_cffi.aio import AsyncCurl
-            from curl_cffi.requests import AsyncSession
-            from curl_cffi.utils import CurlCffiWarning
-        except ImportError as e:
-            msg = (
-                f"curl_cffi is required to scrape this URL but a dependency it's not available on {platform.system()}.\n"
-                f"See: https://github.com/lexiforest/curl_cffi/issues/74#issuecomment-1849365636\n{e!r}"
-            )
-            raise ScrapeError("Missing Dependency", msg) from e
-
-        import warnings
-
-        loop = asyncio.get_running_loop()
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=CurlCffiWarning)
-            acurl = AsyncCurl(loop=loop)
-
-        proxy_or_none = str(proxy) if (proxy := self.manager.config.global_settings.general.proxy) else None
-
-        return AsyncSession(
-            loop=loop,
-            async_curl=acurl,
-            impersonate="chrome",
-            verify=bool(self.ssl_context),
-            proxy=proxy_or_none,
-            timeout=self.manager.config.global_settings.rate_limiting_options._curl_timeout,
-            max_redirects=8,
-            cookies={cookie.key: cookie.value for cookie in self.cookies},
-        )
+        session = _create_curl_session(self.manager.config)
+        session.cookies = {cookie.key: cookie.value for cookie in self.cookies}
+        return session
 
     def create_aiohttp_session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession(
             headers={"User-Agent": self.manager.config.global_settings.general.user_agent},
             raise_for_status=False,
             cookie_jar=self.cookies,
-            timeout=self.manager.config.global_settings.rate_limiting_options._aiohttp_timeout,
+            timeout=self.manager.config.global_settings.rate_limiting_options.aiohttp_timeout,
             proxy=self.manager.config.global_settings.general.proxy,
             connector=tcp.create_connector(self.ssl_context),
             requote_redirect_url=False,
@@ -352,3 +327,21 @@ class HTTPMixin(ABC):
     async def request_text(self, *args: Any, **kwargs: Any) -> str:
         async with self.request(*args, **kwargs) as resp:
             return await resp.text()
+
+
+def _create_curl_session(config: Config) -> AsyncSession[CurlResponse]:
+    loop = asyncio.get_running_loop()
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=CurlCffiWarning)
+        acurl = AsyncCurl(loop=loop)
+
+    return AsyncSession(
+        loop=loop,
+        async_curl=acurl,
+        impersonate="chrome",
+        verify=bool(config.global_settings.general.ssl_context),
+        proxy=str(proxy) if (proxy := config.global_settings.general.proxy) else None,
+        timeout=config.global_settings.rate_limiting_options.curl_timeout,
+        max_redirects=8,
+    )
