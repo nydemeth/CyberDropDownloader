@@ -30,7 +30,6 @@ from cyberdrop_dl.utils import (
     dates,
     error_handling_context,
     error_handling_wrapper,
-    get_download_path,
     is_absolute_http_url,
     is_blob_or_svg,
     m3u8,
@@ -463,7 +462,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         """Write general metadata (not specific to a single file) to json output"""
 
         filename = f"{name}.metadata"  # we won't write to fs, so we skip name sanitization
-        download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
+        download_folder = scrape_item.compose_download_path(self.FOLDER_DOMAIN)
         url = AbsoluteHttpURL(scrape_item.url.with_scheme("metadata"))
         media_item = MediaItem.from_item(
             scrape_item,
@@ -489,6 +488,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         m3u8: m3u8.Rendition | None = None,
         metadata: object = None,
         referer: AbsoluteHttpURL | None = None,
+        frag: str | None = None,
     ) -> None:
         """Finishes handling the file and hands it off to the downloader."""
 
@@ -496,7 +496,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if self.DOMAIN == "cyberdrop":
             custom_filename = remove_file_id(filename, ext)
 
-        download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
+        download_folder = scrape_item.compose_download_path(self.FOLDER_DOMAIN)
         media_item = MediaItem.from_item(
             scrape_item,
             url,
@@ -512,6 +512,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             media_item.metadata = metadata
         if referer:
             media_item.referer = referer
+        if frag:
+            media_item.referer = media_item.referer.with_fragment(frag)
         media_item.headers.update(self._prepare_headers(scrape_item))
         await self.handle_media_item(media_item, m3u8)
 
