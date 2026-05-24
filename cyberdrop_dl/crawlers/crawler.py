@@ -180,6 +180,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
+    _SCRAPE_SLOTS: ClassVar[int] = 20
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
     disabled: bool = False
 
@@ -199,7 +200,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
-        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
 
         self.downloader: Downloader = Downloader(
             self.manager,
@@ -964,12 +965,21 @@ _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 _CrawlerT_generic = TypeVar("_CrawlerT_generic", bound=Crawler, default=Crawler)
 
 
-@dataclasses.dataclass(slots=True)
 class API(HTTPMixin, Generic[_CrawlerT_generic]):
     crawler: _CrawlerT_generic
 
+    @final
+    def __init__(self, crawler: _CrawlerT_generic) -> None:
+        self.crawler = crawler
+        self.__post_init__()
+
+    def __post_init__(self): ...
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(crawler={self.crawler!r})"
+
     @signature.copy(Crawler.request)
-    def request(self, *args: Any, **kwargs: Any):
+    def request(self, *args: Any, **kwargs: Any) -> contextlib._AsyncGeneratorContextManager[AbstractResponse[Any]]:  # pyright: ignore[reportPrivateUsage]
         return self.crawler.request(*args, **kwargs)
 
 
