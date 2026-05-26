@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Acast support
 - Whyp.it support
 - Soundgasm support
+- Clyp.it support
 
 ### Changed
 
