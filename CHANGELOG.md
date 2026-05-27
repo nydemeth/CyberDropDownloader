@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--json` output missing files skipped by host or filename regex
 - Update website salt (Gofile)
 - Episode parsing (OnePace)
+- Do not crash on HTTP errors from profiles/search (Spankbang)
 
 ### Security
 
