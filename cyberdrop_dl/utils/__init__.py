@@ -47,10 +47,22 @@ if TYPE_CHECKING:
     _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | yarl.URL)
 
 _P = ParamSpec("_P")
+_T = TypeVar("_T")
 _R = TypeVar("_R")
 
 
 logger = logging.getLogger(__name__)
+
+_ERROR_WRAPPER_ATTR = "__cdl_error_wrapped__"
+
+
+def is_error_wrapped(method: object) -> bool:
+    return getattr(method, _ERROR_WRAPPER_ATTR, False)
+
+
+def mark_as_safe(fn: _T) -> _T:
+    setattr(fn, _ERROR_WRAPPER_ATTR, True)
+    return fn
 
 
 @contextlib.contextmanager
@@ -188,7 +200,7 @@ def error_handling_wrapper(
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
-        return async_wrapper
+        return mark_as_safe(async_wrapper)
 
     @functools.wraps(func)
     def wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -197,7 +209,7 @@ def error_handling_wrapper(
             assert not inspect.isawaitable(result)
             return result
 
-    return wrapper
+    return mark_as_safe(wrapper)
 
 
 def delete_empty_files_and_folders(path: Path) -> None:
