@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Final, final
 
 from rich.jupyter import JupyterMixin
-from rich.markup import escape
 from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
@@ -27,7 +26,7 @@ from rich.table import Column
 from rich.text import Text
 from typing_extensions import override
 
-from cyberdrop_dl.progress import DictProgress, ProgressHook, create_test_live, strip_markup, truncate_float
+from cyberdrop_dl.progress import Color, DictProgress, ProgressHook, create_test_live, strip_markup, truncate_float
 from cyberdrop_dl.progress.overflow import OverFlowPanel
 
 if TYPE_CHECKING:
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
 
 _current_hls_task: ContextVar[TaskID] = ContextVar("_current_hls_task")
 _HLS_TASK_FIELD_NAME: Final = "HLS"
+_DOMAIN_TASK_FIELD_NAME: Final = "DOMAIN"
 
 
 @dataclasses.dataclass(slots=True)
@@ -104,6 +104,7 @@ class DownloadsPanel(OverFlowPanel):
     def __init__(self, max_rows: int = 6) -> None:
         super().__init__(
             SpinnerColumn("dots3"),
+            TextColumn(f"[{Color.PLUM}]" + "({task.fields[" + _DOMAIN_TASK_FIELD_NAME + "]})"),
             AutoWidthTextColumn(
                 "[progress.description]{task.description}",
                 table_column=Column(justify="left", no_wrap=True),
@@ -146,12 +147,15 @@ class DownloadsPanel(OverFlowPanel):
         # We create both at the same time and smuggle the bytes task as a field of the segments task
         # to make all info available to the main progress for rendering
 
+        assert domain
         task_id = self._hls_progress.add_task("", total=None, visible=False)
-        filename = str(filename).rsplit("/", 1)[-1]
-        desc = escape((f"({domain.upper()}) {filename}").encode().decode("ascii", errors="ignore"))
-        segments_task = self._add_task(desc, segments)
         bytes_task = self._hls_progress[task_id]
-        self._progress.update(segments_task.id, HLS=bytes_task)
+        segments_task = self._add_task(
+            _escape_filename(filename),
+            segments,
+            fields={_DOMAIN_TASK_FIELD_NAME: domain.upper(), _HLS_TASK_FIELD_NAME: bytes_task},
+        )
+
         token = _current_hls_task.set(segments_task.id)
         try:
             yield
@@ -167,9 +171,13 @@ class DownloadsPanel(OverFlowPanel):
         domain: str,
         total: float | None,
     ) -> ProgressHook:
-        filename = str(description).rsplit("/", 1)[-1]
-        desc = escape((f"({domain.upper()}) {filename}").encode().decode("ascii", errors="ignore"))
-        task = self._add_task(desc, total)
+
+        assert domain
+        task = self._add_task(
+            _escape_filename(str(description)),
+            total,
+            fields={_DOMAIN_TASK_FIELD_NAME: domain.upper()},
+        )
 
         def advance(amount: int = 1) -> None:
             self._total_bytes += amount
@@ -265,6 +273,7 @@ def _dump_task(task: Task) -> dict[str, Any]:
     return {
         "speed": truncate_float(_task_speed(real_task)),
         "size": task.total,
+        "domain": task.fields[_DOMAIN_TASK_FIELD_NAME],
         "completed": task.completed,
         "hls": _HLS_TASK_FIELD_NAME in task.fields,
         "bytes_downloaded": real_task.completed,
@@ -297,6 +306,11 @@ def _select_bytes_units(size: int, *, binary: bool) -> tuple[int, str]:
     )
 
 
+def _escape_filename(filename: str) -> str:
+    filename = str(filename).rsplit("/", 1)[-1]
+    return filename.encode().decode("ascii", errors="ignore")
+
+
 def _task_speed(task: Task) -> float | None:
     return 0 if task.finished else task.speed
 
@@ -318,5 +332,5 @@ if __name__ == "__main__":
     import itertools
 
     panel.get_queue = itertools.count(1).__next__
-    with create_test_live(panel):
+    with create_test_live(panel, json=False):
         asyncio.run(panel.simulate())
