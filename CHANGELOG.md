@@ -22,7 +22,85 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## UNRELEASED
+
+### Added
+
+### Changed
+
+- Replace bunkr-albums.io with balbums.st
+- Switch to new downloads API (Bunkr)
+- Bunkr uses a new download URL format. All existing database entries are invalid
+- `--deep-scrape` no longer has any effect on Bunkr
+- Exclude dotfiles from empty files cleanup check
+
+### Deprecated
+
+### Removed
+
+- Support for direct links (Bunkr)
+
+### Fixed
+
+- Do not crash on HTTP errors from individual photos (Flickr)
+- Do not crash on HTTP errors from individual files (Google Drive)
+
+### Security
+
+- Reject download with leading dots as filenames (dot files)
+- Reject downloads if the final download path is outside the config download folder (path traversal)
+- The following extensions have been hardcoded to always be rejected:
+
+1. `.bat`
+2. `.com`
+3. `.exe`
+4. `.hta`
+5. `.inf`
+6. `.jar`
+7. `.js`
+8. `.lnk`
+9. `.msc`
+10. `.msi`
+11. `.ps1`
+12. `.ps2`
+13. `.psc1`
+14. `.psc2`
+15. `.sh`
+16. `.scf`
+17. `.vb`
+18. `.vbs`
+19. `.wsc`
+20. `.wsh`
+
+## [9.12.0] - 2026-05-27
+
+### Added
+
+- 1fichier support
+- Archive.org support
+- YTboob support
+- Rutube support
+- Acast support
+- Whyp.it support
+- Soundgasm support
+- Clyp.it support
+- Livestreamfails support
+- Yurivan support
+- Fatbox proxy support (Catbox)
+
+### Fixed
+
+- Date extraction (Rule34vault)
+- `--json` output missing files skipped by host or filename regex
+- Update website salt (Gofile)
+- Episode parsing (OnePace)
+- Do not crash on HTTP errors from profiles/search (Spankbang)
+
 ## [9.11.0] - 2026-05-20
+
+### Changed
+
+- Show the aggregate speed of all downloads
 
 ### Deprecated
 

@@ -10,11 +10,14 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
+from pydantic.types import ByteSize
+
 from cyberdrop_dl import aio, plugins, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
+from cyberdrop_dl.crawlers.crawler import ALLOW_NO_EXT
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
 from cyberdrop_dl.crawlers.http_direct import DirectHttpFile
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
@@ -24,7 +27,7 @@ from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import dates, filepath, get_download_path, remove_trailing_slash
+from cyberdrop_dl.utils import dates, filepath, remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence
@@ -99,8 +102,8 @@ class ScrapeStats:
 
     def update(self, item: ScrapeItem) -> None:
         self.count += 1
-        if item.parent_title:
-            self.groups.append(item.parent_title)
+        if item.folders:
+            self.groups.append("/".join(item.folders))
 
 
 @dataclasses.dataclass(slots=True)
@@ -164,21 +167,26 @@ class ScrapeMapper:
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
         assert not self._done.is_set()
-        _ = filepath.MAX_FILE_LEN.set(self.manager.config.global_settings.general.max_file_name_length)
-        _ = filepath.MAX_FOLDER_LEN.set(self.manager.config.global_settings.general.max_folder_name_length)
-        _ = CONCURRENT_SEGMENTS.set(self.manager.config.global_settings.rate_limiting_options.concurrent_segments)
+        config = self.manager.config
+        _ = filepath.MAX_FILE_LEN.set(config.global_settings.general.max_file_name_length)
+        _ = filepath.MAX_FOLDER_LEN.set(config.global_settings.general.max_folder_name_length)
+        _ = CONCURRENT_SEGMENTS.set(config.global_settings.rate_limiting_options.concurrent_segments)
+        _ = ALLOW_NO_EXT.set(not config.settings.ignore_options.exclude_files_with_no_extension)
 
-        self.manager.config.settings.files.download_folder.mkdir(parents=True, exist_ok=True)
-        if self.manager.config.settings.sorting.sort_downloads:
-            self.manager.config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
+        config.settings.files.download_folder.mkdir(parents=True, exist_ok=True)
+        if config.settings.sorting.sort_downloads:
+            config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
+        logger.debug(
+            "Using %s as chunk size", ByteSize(self.manager.download_client.chunk_size).human_readable(decimal=True)
+        )
         await self.manager.http_client.load_cookie_files(await self.manager.get_cookie_files())
         self.tui.mode = self.manager.cli_args.ui
         ## IMPORTANT: Order of each context matters!
         with self.tui():
             async with (
                 self.manager.http_client,
-                storage.monitor(self.manager.config.global_settings.general.required_free_space),
+                storage.monitor(config.global_settings.general.required_free_space),
                 self.manager.logs.task_group,
                 self._task_groups.downloads,
             ):
@@ -221,6 +229,7 @@ class ScrapeMapper:
 
             async for item in items:
                 item.children_limits = self.manager.config.settings.download_options.maximum_number_of_children
+                item.download_folder = self.manager.config.settings.files.download_folder
                 if self._should_scrape(item):
                     if item_limit and stats.count >= item_limit:
                         break
@@ -259,12 +268,12 @@ class ScrapeMapper:
         if self._jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
-            download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
+            download_folder = scrape_item.compose_download_path("jdownloader")
             relative_download_dir = download_folder.relative_to(self.manager.config.settings.files.download_folder)
             try:
                 await self._jdownloader.send(
                     scrape_item.url,
-                    scrape_item.parent_title,
+                    scrape_item.path.as_posix(),
                     relative_download_dir,
                 )
 
@@ -364,7 +373,7 @@ async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
         for url in urls:
             item = ScrapeItem(url=url)
             if group_name:
-                item.add_to_parent_title(group_name)
+                item.append_folders(group_name)
                 item.part_of_album = True
             yield item
 

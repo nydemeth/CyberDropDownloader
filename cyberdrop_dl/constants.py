@@ -168,3 +168,27 @@ class FileExt:
     )
     VIDEO_OR_IMAGE = VIDEO | IMAGE
     MEDIA = AUDIO | VIDEO_OR_IMAGE
+    DANGEROUS = frozenset(
+        {
+            ".bat",
+            ".com",
+            ".exe",
+            ".hta",
+            ".inf",
+            ".jar",
+            ".js",
+            ".lnk",
+            ".msc",
+            ".msi",
+            ".ps1",
+            ".ps2",
+            ".psc1",
+            ".psc2",
+            ".sh",
+            ".scf",
+            ".vb",
+            ".vbs",
+            ".wsc",
+            ".wsh",
+        }
+    )

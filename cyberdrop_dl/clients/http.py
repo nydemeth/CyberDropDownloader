@@ -2,32 +2,38 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
-import platform
 import time
+import warnings
+from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, cast, final
+from typing import TYPE_CHECKING, Any, Literal, Protocol, Self, cast, final
 
 import aiohttp
+from curl_cffi.aio import AsyncCurl
+from curl_cffi.requests import AsyncSession
+from curl_cffi.utils import CurlCffiWarning
 
 from cyberdrop_dl import aio, cookies, ddos_guard, signature
 from cyberdrop_dl.clients import flaresolverr, tcp
 from cyberdrop_dl.clients.request import Request, normalize_impersonation, prepare_headers
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
-from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
+from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError
 from cyberdrop_dl.utils import truncated_preview
 
 if TYPE_CHECKING:
+    import ssl
     from collections.abc import AsyncGenerator, Callable, Mapping
     from pathlib import Path
 
     from bs4 import BeautifulSoup
-    from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
     from curl_cffi.requests.session import HttpMethod
 
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -38,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 class _LazyResponseLog:
     def __init__(self, response: AbstractResponse[Any]) -> None:
-        self.response = response
+        self.response: AbstractResponse[Any] = response
 
     def __json__(self) -> dict[str, Any]:
         resp = self.response.__json__()
@@ -51,27 +57,56 @@ class _LazyResponseLog:
         return str(self.__json__())
 
 
+class RequestDoneCallback(Protocol):
+    def __call__(
+        self, url: AbsoluteHttpURL, response: AbstractResponse[Any], exc: Exception | None = None, /
+    ) -> None: ...
+
+
 @final
+@dataclasses.dataclass(slots=True)
 class HTTPClient:
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self.ssl_context = tcp.create_ssl_context(self.manager.config.global_settings.general.ssl_context)
-        self.rate_limits: dict[str, aio.RateLimiter] = {}
+    config: Config
+    impersonate: (
+        Literal[
+            "chrome",
+            "edge",
+            "safari",
+            "safari_ios",
+            "chrome_android",
+            "firefox",
+        ]
+        | None
+    ) = None
+    request_done_callback: RequestDoneCallback | None = None
+
+    rate_limits: dict[str, aio.RateLimiter] = dataclasses.field(init=False, default_factory=dict)
+    global_rate_limiter: aio.RateLimiter = dataclasses.field(init=False)
+    global_download_limiter: asyncio.Semaphore = dataclasses.field(init=False)
+
+    _ssl_context: ssl.SSLContext | Literal[False] = dataclasses.field(init=False)
+    _cookies: aiohttp.CookieJar | None = dataclasses.field(init=False, default=None)
+    _flaresolverr: flaresolverr.Client | None = dataclasses.field(init=False, default=None)
+    _curl_session: AsyncSession[CurlResponse] | None = dataclasses.field(init=False, default=None)
+    _session: aiohttp.ClientSession = dataclasses.field(init=False)
+    _download_session: aiohttp.ClientSession = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self._ssl_context = tcp.create_ssl_context(self.config.global_settings.general.ssl_context)
         self.global_rate_limiter = aio.RateLimiter.w_no_burst(
-            self.manager.config.global_settings.rate_limiting_options.rate_limit
+            self.config.global_settings.rate_limiting_options.rate_limit
         )
         self.global_download_limiter = asyncio.Semaphore(
-            self.manager.config.global_settings.rate_limiting_options.max_simultaneous_downloads
+            self.config.global_settings.rate_limiting_options.max_simultaneous_downloads
         )
 
-        self._cookies: aiohttp.CookieJar | None = None
-        self._dump_responses: bool = (
-            manager.config.settings.files.save_pages_html or manager.config.settings.files.dump_responses
-        )
-        self._flaresolverr: flaresolverr.Client | None = None
-        self._curl_session: AsyncSession[CurlResponse] | None = None
-        self._session: aiohttp.ClientSession
-        self._download_session: aiohttp.ClientSession
+    @staticmethod
+    def from_manager(manager: Manager) -> HTTPClient:
+        client = HTTPClient(config=manager.config, impersonate=manager.cli_args.impersonate)
+        if manager.config.settings.files.save_pages_html or manager.config.settings.files.dump_responses:
+            client.request_done_callback = manager.logs.write_response
+
+        return client
 
     @property
     def curl_session(self) -> AsyncSession[CurlResponse]:
@@ -88,7 +123,7 @@ class HTTPClient:
 
     @property
     def flaresolverr(self) -> flaresolverr.Client | None:
-        if self._flaresolverr is None and (url := self.manager.config.global_settings.general.flaresolverr):
+        if self._flaresolverr is None and (url := self.config.global_settings.general.flaresolverr):
             self._flaresolverr = flaresolverr.Client(url, self._session)
         return self._flaresolverr
 
@@ -123,46 +158,18 @@ class HTTPClient:
             await self._session.close()
 
     def _create_curl_session(self) -> AsyncSession[CurlResponse]:
-        try:
-            from curl_cffi.aio import AsyncCurl
-            from curl_cffi.requests import AsyncSession
-            from curl_cffi.utils import CurlCffiWarning
-        except ImportError as e:
-            msg = (
-                f"curl_cffi is required to scrape this URL but a dependency it's not available on {platform.system()}.\n"
-                f"See: https://github.com/lexiforest/curl_cffi/issues/74#issuecomment-1849365636\n{e!r}"
-            )
-            raise ScrapeError("Missing Dependency", msg) from e
-
-        import warnings
-
-        loop = asyncio.get_running_loop()
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=CurlCffiWarning)
-            acurl = AsyncCurl(loop=loop)
-
-        proxy_or_none = str(proxy) if (proxy := self.manager.config.global_settings.general.proxy) else None
-
-        return AsyncSession(
-            loop=loop,
-            async_curl=acurl,
-            impersonate="chrome",
-            verify=bool(self.ssl_context),
-            proxy=proxy_or_none,
-            timeout=self.manager.config.global_settings.rate_limiting_options._curl_timeout,
-            max_redirects=8,
-            cookies={cookie.key: cookie.value for cookie in self.cookies},
-        )
+        session = _create_curl_session(self.config)
+        session.cookies = {cookie.key: cookie.value for cookie in self.cookies}
+        return session
 
     def create_aiohttp_session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession(
-            headers={"User-Agent": self.manager.config.global_settings.general.user_agent},
+            headers={"User-Agent": self.config.global_settings.general.user_agent},
             raise_for_status=False,
             cookie_jar=self.cookies,
-            timeout=self.manager.config.global_settings.rate_limiting_options._aiohttp_timeout,
-            proxy=self.manager.config.global_settings.general.proxy,
-            connector=tcp.create_connector(self.ssl_context),
+            timeout=self.config.global_settings.rate_limiting_options.aiohttp_timeout,
+            proxy=self.config.global_settings.general.proxy,
+            connector=tcp.create_connector(self._ssl_context),
             requote_redirect_url=False,
         )
 
@@ -242,11 +249,11 @@ class HTTPClient:
             json=json,
             params=request_params or {},
             headers=prepare_headers(headers),
-            impersonate=normalize_impersonation(self.manager.cli_args.impersonate or impersonate),
+            impersonate=normalize_impersonation(self.impersonate or impersonate),
         )
 
         if not request.impersonate:
-            _ = request.headers.setdefault("User-Agent", self.manager.config.global_settings.general.user_agent)
+            _ = request.headers.setdefault("User-Agent", self.config.global_settings.general.user_agent)
 
         async with self._request(request) as resp:
             yield resp
@@ -264,8 +271,8 @@ class HTTPClient:
                 exc = e
                 raise
             finally:
-                if self._dump_responses:
-                    self.manager.logs.write_response(request.url, resp, exc)
+                if self.request_done_callback:
+                    self.request_done_callback(request.url, resp, exc)
                 del exc
                 del resp
 
@@ -311,8 +318,16 @@ class HTTPClient:
         assert self.flaresolverr
         solution = await self.flaresolverr.request(url, data)
         self.cookies.update_cookies(solution.cookies)
-        flaresolverr.verify_solution(self.manager.config.global_settings.general.user_agent, solution)
+        flaresolverr.verify_solution(self.config.global_settings.general.user_agent, solution)
         return AbstractResponse.create(solution)
+
+    @contextlib.contextmanager
+    def json_context(self, check: Callable[[Any, AbstractResponse[Any]], None], /):
+        token = _JSON_CHECK.set(check)
+        try:
+            yield
+        finally:
+            _JSON_CHECK.reset(token)
 
 
 async def _check_json(response: AbstractResponse[Any]) -> None:
@@ -324,54 +339,10 @@ async def _check_json(response: AbstractResponse[Any]) -> None:
         return
 
 
-class HTTPClientProxy(Protocol):
-    DOMAIN: ClassVar[str]
-    _IMPERSONATE: ClassVar[str | bool | None] = None
-
-    @property
-    def client(self) -> HTTPClient: ...
-
-    @classmethod
-    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
-        """Custom check for JSON responses.
-
-        This method is called automatically by the `HttpClient` when a JSON response is received from `cls.DOMAIN`
-        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
-
-        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
-
-        Example:
-            ```python
-            if isinstance(json, dict) and json.get("status") == "error":
-                raise ScrapeError(422, f"API error: {json['message']}")
-            ```
-
-        IMPORTANT:
-            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
-            should be handled by the crawler itself
-        """
-
+class HTTPMixin(ABC):
+    @abstractmethod
     @signature.copy(HTTPClient.request)
-    @contextlib.asynccontextmanager
-    async def request(
-        self,
-        *args: Any,
-        impersonate: str | bool | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[AbstractResponse[Any]]:
-        if impersonate is None:
-            impersonate = self._IMPERSONATE
-
-        token = _JSON_CHECK.set(self.__json_resp_check__)
-        try:
-            async with (
-                self.client.global_rate_limiter,
-                self.client.rate_limits[self.DOMAIN],
-                self.client.request(*args, impersonate=impersonate, **kwargs) as resp,
-            ):
-                yield resp
-        finally:
-            _JSON_CHECK.reset(token)
+    def request(self, *args: Any, **kwargs: Any) -> contextlib._AsyncGeneratorContextManager[AbstractResponse[Any]]: ...  # pyright: ignore[reportPrivateUsage]
 
     @signature.copy(request)
     async def request_json(self, *args: Any, **kwargs: Any) -> Any:
@@ -387,3 +358,21 @@ class HTTPClientProxy(Protocol):
     async def request_text(self, *args: Any, **kwargs: Any) -> str:
         async with self.request(*args, **kwargs) as resp:
             return await resp.text()
+
+
+def _create_curl_session(config: Config) -> AsyncSession[CurlResponse]:
+    loop = asyncio.get_running_loop()
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=CurlCffiWarning)
+        acurl = AsyncCurl(loop=loop)
+
+    return AsyncSession(
+        loop=loop,
+        async_curl=acurl,
+        impersonate="chrome",
+        verify=bool(config.global_settings.general.ssl_context),
+        proxy=str(proxy) if (proxy := config.global_settings.general.proxy) else None,
+        timeout=config.global_settings.rate_limiting_options.curl_timeout,
+        max_redirects=8,
+    )

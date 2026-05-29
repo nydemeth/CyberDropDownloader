@@ -115,7 +115,7 @@ def test_invalid_date_format(row) -> None:
         ),
         (
             "https://c.bunkr-cache.se/HwdRnHMUiWOQevCg/1df93418-5063-4e1b-851e-9470cb8fc5c6.mp4",
-            "/HwdRnHMUiWOQevCg/1df93418-5063-4e1b-851e-9470cb8fc5c6.mp4",
+            "/1df93418-5063-4e1b-851e-9470cb8fc5c6.mp4",
         ),
         (
             "https://e-hentai.network/h/1bb8b499a5a1a21f9e25e2c42513f310c20e83a9-115314-1280-720-wbp/keystamp=1763995200-3f6832af21;fileindex=169742365;xres=1280/1_2.webp",
@@ -142,26 +142,27 @@ def test_create_db_path(url: str, expected: str) -> None:
 
 class TestGetDownloadPath:
     def test_loose_file(self, item: ScrapeItem) -> None:
-        assert not item.parent_title
+        assert not item.folders
         assert not item.part_of_album
         assert not item.retry_path
-        download_path = item.create_download_path("cyberdrop")
-        assert download_path == Path("Loose Files (cyberdrop)")
+        assert item.path == Path()
+        download_path = item.compose_download_path("cyberdrop")
+        assert download_path == Path("downloads/Loose Files (cyberdrop)")
 
     def test_loose_file_with_parent(self, item: ScrapeItem) -> None:
-        item.add_to_parent_title("a/sub/folder")
-        download_path = item.create_download_path("cyberdrop")
-        assert download_path == Path("a-sub-folder/Loose Files (cyberdrop)")
+        item.append_folders("a/sub/folder")
+        download_path = item.compose_download_path("cyberdrop")
+        assert download_path == Path("downloads/a-sub-folder/Loose Files (cyberdrop)")
 
     def test_album_file(self, item: ScrapeItem) -> None:
-        item.add_to_parent_title("a/sub/folder")
+        item.append_folders("a/sub/folder")
         item.part_of_album = True
-        download_path = item.create_download_path("cyberdrop")
-        assert download_path == Path("a-sub-folder")
+        download_path = item.compose_download_path("cyberdrop")
+        assert download_path == Path("downloads/a-sub-folder")
 
     def test_retry_path(self, item: ScrapeItem) -> None:
-        item.add_to_parent_title("a/sub/folder")
+        item.append_folders("a/sub/folder")
         item.part_of_album = True
         item.retry_path = retry_path = Path("a/retry/path")
-        download_path = item.create_download_path("cyberdrop")
+        download_path = item.compose_download_path("cyberdrop")
         assert download_path == retry_path

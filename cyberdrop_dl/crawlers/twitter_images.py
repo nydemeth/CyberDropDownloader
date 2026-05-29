@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -28,6 +29,7 @@ class TwimgCrawler(Crawler):
             return await self.direct_file(scrape_item)
         await self.photo(scrape_item)
 
+    @error_handling_wrapper
     async def photo(self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None) -> None:
         # https://developer.x.com/en/docs/x-api/v1/data-dictionary/object-model/entities#photo_format
         link = url or scrape_item.url
@@ -44,7 +46,6 @@ class TwimgCrawler(Crawler):
         await self.handle_file(link, scrape_item, filename, ext)
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
-        _, *media_item.fallbacks = list(_make_download_urls(media_item.url))
         if media_item.referer == media_item.url and media_item.parents:
             media_item.referer = media_item.parents[0]
         await super().handle_media_item(media_item, m3u8)

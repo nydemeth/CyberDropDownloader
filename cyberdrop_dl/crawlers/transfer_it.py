@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from mega.transfer_it import TransferItClient
 
+from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
@@ -23,7 +24,7 @@ class TransferItCrawler(Crawler, db_path="path_qs_frag"):
     core: TransferItClient
 
     async def __async_post_init__(self) -> None:
-        self.core = TransferItClient(self.manager.http_client._session)
+        self.core = TransferItClient(self.manager.http_client._session, user_agent=CDL_USER_AGENT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -49,7 +50,7 @@ class TransferItCrawler(Crawler, db_path="path_qs_frag"):
             canonical_url = scrape_item.url.with_fragment(file.id)
             new_scrape_item = scrape_item.create_child(canonical_url)
             for part in path.parent.parts[1:]:
-                new_scrape_item.add_to_parent_title(part)
+                new_scrape_item.append_folders(part)
 
             dl_link = self.core.create_download_url(transfer_id, file, password)
             self.create_task(self._file(new_scrape_item, file, dl_link))

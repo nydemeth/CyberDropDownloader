@@ -81,13 +81,15 @@ class MotherlessCrawler(Crawler):
         if is_homepage or "images" in scrape_item.url.parts:
             async for soup in self.web_pager(images_url):
                 check_soup(soup)
-                for _, new_scrape_item in self.iter_children(scrape_item, soup, ITEM_SELECTOR, new_title_part="Images"):
+                for _, new_scrape_item in self.iter_children(scrape_item, soup, ITEM_SELECTOR):
+                    new_scrape_item.append_folders("Images")
                     self.create_task(self.run(new_scrape_item))
 
         if is_homepage or "videos" in scrape_item.url.parts:
             async for soup in self.web_pager(videos_url):
                 check_soup(soup)
-                for _, new_scrape_item in self.iter_children(scrape_item, soup, ITEM_SELECTOR, new_title_part="Videos"):
+                for _, new_scrape_item in self.iter_children(scrape_item, soup, ITEM_SELECTOR):
+                    new_scrape_item.append_folders("Videos")
                     self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -128,7 +130,8 @@ class MotherlessCrawler(Crawler):
                 title = self.create_title(title, collection_id)
                 scrape_item.setup_as_album(title, album_id=collection_id)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, ITEM_SELECTOR, new_title_part=name):
+            for _, new_scrape_item in self.iter_children(scrape_item, soup, ITEM_SELECTOR):
+                new_scrape_item.append_folders(name)
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -179,7 +182,7 @@ class MotherlessCrawler(Crawler):
             scrape_item.parents.append(parent_url)
             title = self.create_title(parent_title, parent_id)
             scrape_item.setup_as_album(title, album_id=parent_id)
-            scrape_item.add_to_parent_title(f"{media_info.type.capitalize()}s")
+            scrape_item.append_folders(f"{media_info.type.capitalize()}s")
 
         return media_info
 
