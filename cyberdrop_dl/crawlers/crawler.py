@@ -26,7 +26,13 @@ from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeEr
 from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.utils import css, dates, error_handling_context, is_absolute_http_url, is_blob_or_svg, m3u8, parse_url
-from cyberdrop_dl.utils.filepath import compose_filename, get_filename_and_ext, remove_file_id
+from cyberdrop_dl.utils.filepath import (
+    check_dangerous_filename,
+    check_path_traversal,
+    compose_filename,
+    get_filename_and_ext,
+    remove_file_id,
+)
 from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
@@ -505,6 +511,10 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if frag:
             media_item.referer = media_item.referer.with_fragment(frag)
         media_item.headers.update(self._prepare_headers(scrape_item))
+        if not scrape_item.retry_path:
+            check_path_traversal(self.manager.config.settings.files.download_folder, media_item.download_folder)
+
+        check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
 
     def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
