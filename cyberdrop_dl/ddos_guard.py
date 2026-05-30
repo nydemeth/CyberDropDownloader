@@ -6,33 +6,58 @@ import hashlib
 import json
 import os
 import sys
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol, final
 
 import yarl
 from bs4 import BeautifulSoup
+from typing_extensions import override
 
 from cyberdrop_dl.exceptions import DDOSGuardError
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from multidict import MultiDict
 
 
 class _Response(Protocol):
     @property
     def content_type(self) -> str: ...
+    @property
+    def headers(self) -> MultiDict[str]: ...
+    @property
+    def status_code(self) -> int: ...
     async def text(self) -> str: ...
+
+
+def _soup(html: str) -> BeautifulSoup:
+    return BeautifulSoup(html, "html.parser")
 
 
 async def check_resp(resp: _Response, /) -> None:
     if "html" not in resp.content_type:
-        return None
+        return
 
-    return check_html(await resp.text())
+    posibilities = [cls for cls in (DDosGuard, CloudFlareTurnstile, Anubis) if cls.may_be_challenge(resp)]
+    if not posibilities:
+        return
+
+    for protection in posibilities:
+        if protection._is_challenge(resp):  # pyright: ignore[reportPrivateUsage]
+            raise DDOSGuardError(f"{protection.__name__} anti-bot protection detected")
+
+    soup = _soup(await resp.text())
+    check_soup(soup, posibilities)
 
 
 def check_html(html: str) -> None:
-    check_soup(BeautifulSoup(html, "html.parser"))
+    check_soup(_soup(html))
 
 
-def check_soup(soup: BeautifulSoup) -> None:
-    for protection in (DDosGuard, CloudFlareTurnstile, Anubis):
+def check_soup(soup: BeautifulSoup, /, posibilities: Iterable[type[DDosGuard]] | None = None) -> None:
+    if posibilities is None:
+        posibilities = (DDosGuard, CloudFlareTurnstile, Anubis)
+    for protection in posibilities:
         if protection.check(soup):
             raise DDOSGuardError(f"{protection.__name__} anti-bot protection detected")
 
@@ -41,16 +66,27 @@ class DDosGuard:
     TITLES = "Just a moment...", "DDoS-Guard"
     SELECTOR = ", ".join(
         (
-            "#cf-challenge-running",
-            ".ray_id",
-            ".attack-box",
-            "#cf-please-wait",
+            "#ddg-captcha",
             "#challenge-spinner",
             "#trk_jschal_js",
             "#turnstile-wrapper",
-            ".lds-ring",
         )
     )
+
+    @classmethod
+    def may_be_challenge(cls, resp: _Response) -> bool:
+        server = resp.headers.get("server")
+        return bool(server and server.casefold().startswith("ddos-guard"))
+
+    @final
+    @classmethod
+    def is_challenge(cls, resp: _Response) -> bool:
+        return cls.may_be_challenge(resp) and cls._is_challenge(resp)
+
+    @classmethod
+    def _is_challenge(cls, resp: _Response) -> bool:
+        assert resp is not None
+        return False
 
     @classmethod
     def check(cls, soup: BeautifulSoup) -> bool:
@@ -70,10 +106,30 @@ class CloudFlareTurnstile(DDosGuard):
         (
             "captchawrapper",
             "cf-turnstile",
-            "script[src*='challenges.cloudflare.com/turnstile']",
+            "#cf-challenge-running",
+            "#cf-please-wait",
+            "iframe[id^='cf-chl-']",
+            "iframe script:-soup-contains('_cf_chl_opt')",
             "script:-soup-contains('Dont open Developer Tools')",
         )
     )
+
+    @classmethod
+    @override
+    def may_be_challenge(cls, resp: _Response) -> bool:
+        server = resp.headers.get("server")
+        return bool(server and server.casefold().startswith("cloudflare"))
+
+    @classmethod
+    @override
+    def _is_challenge(cls, resp: _Response) -> bool:
+        mitigated = resp.headers.get("cf-mitigated")
+        return bool(mitigated and mitigated.casefold() == "challenge")
+
+    @classmethod
+    @override
+    def check(cls, soup: BeautifulSoup) -> bool:
+        return super().check(soup) and bool(soup.select_one("script[src*='challenges.cloudflare.com/turnstile/v']"))
 
 
 class Anubis(DDosGuard):
@@ -85,6 +141,14 @@ class Anubis(DDosGuard):
             "p:-soup-contains-own(the administrator of this website has set up Anubis to protect the server against the scourge of AI)",
         ),
     )
+
+    @classmethod
+    @override
+    def may_be_challenge(cls, resp: _Response) -> bool:
+        for cookie in resp.headers.getall("Set-Cookie", ()):
+            if "-anubis-cookie-verification" in cookie or "-anubis-auth" in cookie:
+                return True
+        return False
 
     @classmethod
     def parse_challenge(cls, soup: BeautifulSoup) -> _AnubisChallenge | None:
