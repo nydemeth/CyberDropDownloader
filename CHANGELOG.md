@@ -28,13 +28,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Replace bunkr-albums.io with balbums.st
-- Switch to new downloads API (Bunkr)
-- Bunkr uses a new download URL format. All existing database entries are invalid
-- `--deep-scrape` no longer has any effect on Bunkr
-- Exclude dotfiles from empty files cleanup check
+- Hard fail if any config option requires `ffmpeg` but `ffmpeg` is not installed
 
 ### Deprecated
+
+### Removed
+
+### Fixed
+
+- Some false positive DDoS-Guard detections
+
+### Security
+
+## [9.13.0] - 2026-05-29
+
+### Changed
+
+- Replace bunkr-albums.io with balbums.st
+- Switch to new downloads API (Bunkr)
+- `--deep-scrape` no longer has any effect on Bunkr
+- Exclude dot files from empty files check
 
 ### Removed
 
@@ -48,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - Reject download with leading dots as filenames (dot files)
-- Reject downloads if the final download path is outside the config download folder (path traversal)
+- Reject downloads if the final download path is outside the root download folder (path traversal)
 - The following extensions have been hardcoded to always be rejected:
 
 1. `.bat`
