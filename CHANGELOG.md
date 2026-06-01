@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Support for download proxies. Proxy URLs with be rewritten as pixeldrain.com URLs (PixelDrain)
+
 ### Fixed
 
 - Some false positive DDoS-Guard detections

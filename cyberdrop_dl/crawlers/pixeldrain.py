@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, final
 
 from typing_extensions import override
 
-from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -20,8 +19,6 @@ if TYPE_CHECKING:
 
 
 _PRIMARY_URL = AbsoluteHttpURL("https://pixeldrain.com")
-_BYPASS_HOSTS = "pd.cybar.xyz", "pd.1drv.eu.org"
-_PIXELDRAIN_PROXY = AbsoluteHttpURL(env.PIXELDRAIN_PROXY) if env.PIXELDRAIN_PROXY else None
 _CURRENT_ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("_CURRENT_ORIGIN")
 
 
@@ -74,6 +71,31 @@ class FileSystem:
     path: list[Node]
 
 
+class PixelDrainProxyCrawler(Crawler):
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"File": "/<file_id>"}
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "pd.cybar.xyz", "pd.1drv.eu.org"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://pd.1drv.eu.org")
+    DOMAIN: ClassVar[str] = "pixeldrain-proxy"
+
+    @override
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
+        match scrape_item.url.parts[1:]:
+            case ["u", _]:
+                return self.handle_external_links(scrape_item)
+            case _:
+                raise ValueError
+
+    @classmethod
+    @override
+    def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        url = super().transform_url(url).with_host("pixeldrain.com")
+        match url.parts[1:]:
+            case [file_id]:
+                return url.origin() / "u" / file_id
+            case _:
+                return url
+
+
 class PixelDrainCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
         "pixeldrain.com",
@@ -83,7 +105,6 @@ class PixelDrainCrawler(Crawler):
         "pixeldrain.biz",
         "pixeldrain.tech",
         "pixeldrain.dev",
-        *_BYPASS_HOSTS,
     )
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
@@ -126,8 +147,6 @@ class PixelDrainCrawler(Crawler):
     @override
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         _CURRENT_ORIGIN.set(scrape_item.url.origin())
-        if scrape_item.url.host in _BYPASS_HOSTS:
-            return await self.file(scrape_item, scrape_item.url.name)
 
         match scrape_item.url.parts[1:]:
             case ["u", file_id]:
@@ -233,24 +252,13 @@ class PixelDrainCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
-        debrid_link = None
-        if scrape_item.url.host in _BYPASS_HOSTS:
-            debrid_link = scrape_item.url
-            _CURRENT_ORIGIN.set(_PRIMARY_URL)
-            scrape_item.url = _PRIMARY_URL / "u" / file_id
-
-        elif _PIXELDRAIN_PROXY:
-            debrid_link = _PIXELDRAIN_PROXY / file_id
-
         if await self.check_complete_from_referer(scrape_item.url):
             return
 
         file = await self.api.file(file_id)
-        await self._file(scrape_item, file, debrid_link)
+        await self._file(scrape_item, file)
 
-    async def _file(
-        self, scrape_item: ScrapeItem, file: File | Node, debrid_link: AbsoluteHttpURL | None = None
-    ) -> None:
+    async def _file(self, scrape_item: ScrapeItem, file: File | Node) -> None:
         if "text/plain" in file.mime_type:
             return await self.text(scrape_item, file)
 
@@ -260,7 +268,7 @@ class PixelDrainCrawler(Crawler):
 
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
         scrape_item.uploaded_at = self.parse_iso_date(file.date_upload)
-        await self.handle_file(src, scrape_item, file.name, ext, debrid_link=debrid_link, custom_filename=filename)
+        await self.handle_file(src, scrape_item, file.name, ext, custom_filename=filename)
 
     @error_handling_wrapper
     async def text(self, scrape_item: ScrapeItem, file: File | Node) -> None:
