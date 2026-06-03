@@ -181,9 +181,9 @@ class Client:
                 logger.debug("Making FlareSolverr request [id=%s]\n%s", request_id, params)
                 async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
                     resp_json = await response.json()
+                    logger.debug("Finished FlareSolverr request [id=%s]\n%s", request_id, _LazyResponseLog(resp_json))
                     resp = Response.from_dict(resp_json)
                     resp.id = str(request_id)
-                    logger.debug("Finished FlareSolverr request [id=%s]\n%s", request_id, _LazyResponseLog(resp_json))
                     return resp
 
     async def _create_session(self) -> None:
