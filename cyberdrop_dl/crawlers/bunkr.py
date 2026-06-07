@@ -9,21 +9,19 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from aiohttp import ClientConnectorError
 from typing_extensions import override
 
-from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DDOSGuardError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, deserialize, error_handling_wrapper, open_graph, parse_url
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Mapping
 
     from bs4 import BeautifulSoup
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-_REINFORCED_URL = AbsoluteHttpURL("https://get.bunkrr.su/file")
-_SIGN_API = AbsoluteHttpURL("https://glb-apisign.cdn.cr/sign")
 _HOST_OPTIONS: frozenset[str] = frozenset(("bunkr.site", "bunkr.cr", "bunkr.ph"))
 _find_js_vars = re.compile(r'var\s+(\w+)\s*=\s*(".*?"|\'.*?\'|[^;]+);', re.DOTALL).findall
 known_bad_hosts: set[str] = set()
@@ -37,6 +35,7 @@ class Selector:
 
 
 class BunkrCrawler(Crawler):
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ("bunkr",)
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Album": "/a/<album_id>",
         "Video": "/v/<slug>",
@@ -48,8 +47,16 @@ class BunkrCrawler(Crawler):
         "Stream redirect": "/<slug>",
     }
 
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://bunkr.site")
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://bunkr.cr")
     DOMAIN: ClassVar[str] = "bunkr"
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = (
+        "bunkr.black",
+        "bunkr.su",
+        "bunkr.is",
+        "bunkr.la",
+        "bunkr.se",
+        "bunkrr.su",
+    )
     _RATE_LIMIT: ClassVar[RateLimit] = 5, 1
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = True
     _known_good_host: ClassVar[str | None] = None
@@ -62,7 +69,7 @@ class BunkrCrawler(Crawler):
     @classmethod
     @override
     def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-        url = super().transform_url(url)
+        url = _fix_domain(url)
         match url.parts[1:]:
             case ["v" | "d" | "i", js_slug]:
                 return url.origin() / "f" / js_slug
@@ -70,14 +77,14 @@ class BunkrCrawler(Crawler):
                 return url
 
     def __post_init__(self) -> None:
-        self.api: BunkrAPI = BunkrAPI(self)
+        self.api: BunkrAPI = BunkrAPI.from_crawler(self)
         self._parse_files = _make_album_parser()
         self._redirect_lock: asyncio.Lock = asyncio.Lock()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["file", file_id] if scrape_item.url.host == _REINFORCED_URL.host:
-                return await self.reinforced_file(scrape_item, file_id)
+            case ["file", file_id] if scrape_item.url.host == self.api.DL_ENDPOINT.host:
+                return await self.file_download(scrape_item, file_id)
             case ["a", album_id]:
                 return await self.album(scrape_item, album_id)
             case ["v" | "d" | "i", _]:
@@ -130,34 +137,38 @@ class BunkrCrawler(Crawler):
         if soup.select_one(Selector.SERVER_UNDER_MAINTENANCE):
             raise ScrapeError("Bunkr Maintenance", "Server under maintenance")
 
-        filename = open_graph.title(soup)
         try:
             cdn = _extract_js_vars(soup)["jsCDN"]
         except css.SelectorError:
-            reinforced_url = css.select(soup, Selector.DOWNLOAD_BTN, "href")
-            file_id = self.parse_url(reinforced_url).name
-            source = await self.api.source(file_id)
-            src = source.url
+            dl_url = css.select(soup, Selector.DOWNLOAD_BTN, "href")
+            file_id = self.parse_url(dl_url).name
+            src, filename = await self.api.download(file_id)
         else:
+            filename = open_graph.title(soup)
             src = self.parse_url(cdn)
 
         await self._file(scrape_item, src, filename)
 
     @error_handling_wrapper
-    async def reinforced_file(self, scrape_item: ScrapeItem, file_id: str) -> None:
+    async def file_download(self, scrape_item: ScrapeItem, file_id: str) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
             return
-        source = await self.api.source(file_id)
-        await self._file(scrape_item, source.url, source.ogname)
+        source, name = await self.api.download(file_id)
+        await self._file(scrape_item, source, name)
 
     async def _file(self, scrape_item: ScrapeItem, src: AbsoluteHttpURL, filename: str | None = None) -> None:
+        referer = scrape_item.url
+        if not self.is_subdomain(referer):
+            referer = referer.with_host(self.PRIMARY_URL.host)
+
+        if await self.check_complete(src, referer):
+            return
+
         src = await self.api.sign(src)
         name = src.query.get("n") or filename or src.name
         src = src.update_query(n=name)
         filename, ext = self.get_filename_and_ext(name, assume_ext=".mp4")
-        if not self.is_subdomain(scrape_item.url):
-            scrape_item.url = scrape_item.url.with_host(self.PRIMARY_URL.host)
-        await self.handle_file(src, scrape_item, name, ext, custom_filename=filename)
+        await self.handle_file(src, scrape_item, name, ext, custom_filename=filename, referer=referer)
 
     async def _try_request_soup(self, url: AbsoluteHttpURL) -> BeautifulSoup | None:
         try:
@@ -198,29 +209,22 @@ class BunkrCrawler(Crawler):
 
 
 class BunkrAPI(API):
-    async def source(self, file_id: str) -> Source:
-        reinforced_url = _REINFORCED_URL / file_id
-        soup = await self.request_soup(reinforced_url)
-        js_vars = _extract_js_vars(soup)
-        return deserialize(Source, js_vars)
+    DL_ENDPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://dl.bunkr.cr/api/_001_v2")
+    SIGN_ENDPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://glb-apisign.cdn.cr/sign")
+    headers: Mapping[str, str] = {
+        "Referer": str(DL_ENDPOINT.origin()) + "/",
+        "Origin": str(DL_ENDPOINT.origin()),
+    }
+
+    async def download(self, file_id: str) -> tuple[AbsoluteHttpURL, str | None]:
+        resp = await self.request_json(self.DL_ENDPOINT, headers=self.headers, json={"id": file_id})
+        url = self.parse_url(resp["mediafiles"]).with_path(resp["path"])
+        return url, resp.get("original")
 
     async def sign(self, src: AbsoluteHttpURL) -> AbsoluteHttpURL:
-        api_url = _SIGN_API.with_query(path=src.path)
-        resp = await self.request_json(api_url)
+        api_url = self.SIGN_ENDPOINT.with_query(path=src.path)
+        resp = await self.request_json(api_url, headers=self.headers)
         return src.with_query(token=resp["token"], ex=resp["ex"])
-
-
-@dataclasses.dataclass(slots=True)
-class Source:
-    ogname: str
-    jsCDN: str  # noqa: N815
-    jsType: str  # noqa: N815
-    jsSlug: str  # noqa: N815
-    signUrl: str  # noqa: N815
-    url: AbsoluteHttpURL = dataclasses.field(init=False)
-
-    def __post_init__(self) -> None:
-        self.url = parse_url(self.jsCDN) / "storage/media" / self.jsSlug
 
 
 @dataclasses.dataclass(slots=True)
@@ -274,8 +278,16 @@ def _fix_encoding(val: str) -> str:
 
 
 def fix_db_referer(referer: str) -> str:
-    url = AbsoluteHttpURL(referer)
+    url = BunkrCrawler.transform_url(AbsoluteHttpURL(referer))
     if BunkrCrawler.is_subdomain(url):
         return str(url)
 
-    return str(BunkrCrawler.transform_url(url).with_host(BunkrCrawler.PRIMARY_URL.host))
+    return str(url.with_host(BunkrCrawler.PRIMARY_URL.host))
+
+
+def _fix_domain(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+    if url.host == "get.bunkrr.su":
+        return url.with_host("dl.bunkr.cr")
+    if url.host in BunkrCrawler.OLD_DOMAINS:
+        return url.with_host(BunkrCrawler.PRIMARY_URL.host)
+    return url

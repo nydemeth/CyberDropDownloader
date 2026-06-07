@@ -6,7 +6,6 @@ import dataclasses
 import logging
 import time
 import warnings
-from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Literal, Protocol, Self, cast, final
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 _JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("_JSON_CHECK", default=None)
+RequestContext = contextlib._AsyncGeneratorContextManager[AbstractResponse[Any]]  # pyright: ignore[reportPrivateUsage]
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,8 @@ class HTTPClient:
     def flaresolverr(self) -> flaresolverr.Client | None:
         if self._flaresolverr is None and (url := self.config.global_settings.general.flaresolverr):
             self._flaresolverr = flaresolverr.Client(url, self._session)
+        if self._flaresolverr and self._flaresolverr.is_down:
+            return None
         return self._flaresolverr
 
     def __sync_session_cookies(self, url: AbsoluteHttpURL) -> None:
@@ -205,6 +207,7 @@ class HTTPClient:
         impersonate: str | bool | None = None,
         data: Any = None,
         json: Any = None,
+        default_ua: str | None = None,
         **request_params: Any,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
         """Make an HTTP request and retry w flaresolverr if required"""
@@ -216,6 +219,7 @@ class HTTPClient:
             impersonate=impersonate,
             data=data,
             json=json,
+            default_ua=default_ua,
             request_params=request_params,
         ) as resp:
             try:
@@ -239,6 +243,7 @@ class HTTPClient:
         impersonate: str | bool | None = None,
         data: Any = None,
         json: Any = None,
+        default_ua: str | None = None,
         request_params: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
 
@@ -253,7 +258,7 @@ class HTTPClient:
         )
 
         if not request.impersonate:
-            _ = request.headers.setdefault("User-Agent", self.config.global_settings.general.user_agent)
+            _ = request.headers.setdefault("User-Agent", default_ua or self.config.global_settings.general.user_agent)
 
         async with self._request(request) as resp:
             yield resp
@@ -339,10 +344,10 @@ async def _check_json(response: AbstractResponse[Any]) -> None:
         return
 
 
-class HTTPMixin(ABC):
-    @abstractmethod
+class HTTPMixin:
     @signature.copy(HTTPClient.request)
-    def request(self, *args: Any, **kwargs: Any) -> contextlib._AsyncGeneratorContextManager[AbstractResponse[Any]]: ...  # pyright: ignore[reportPrivateUsage]
+    def request(self, *args: Any, **kwargs: Any) -> RequestContext:
+        raise NotImplementedError
 
     @signature.copy(request)
     async def request_json(self, *args: Any, **kwargs: Any) -> Any:

@@ -236,6 +236,10 @@ class MessageBoardCrawler(Crawler, is_abc=True):
             case ["goto" | "posts", _, *_]:
                 self._check_thread_recursion(scrape_item)
                 return await self.follow_redirect(scrape_item)
+            case ["members", *_]:
+                return None
+            case [slug] if slug.startswith("#"):
+                return None
             case _:
                 raise ValueError
 

@@ -181,7 +181,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
 
     @error_handling_wrapper
     async def direct_file(
-        self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None, assume_ext: str | None = None
+        self, scrape_item: ScrapeItem, /, url: AbsoluteHttpURL | None = None, assume_ext: str | None = None
     ) -> None:
         link = self._thumbnail_to_src(url or scrape_item.url)
         await super().direct_file(scrape_item, link, assume_ext)
