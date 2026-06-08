@@ -20,17 +20,61 @@ from aiolimiter.leakybucket import AsyncLimiter
 from typing_extensions import Sentinel
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterable,
+        AsyncIterator,
+        Awaitable,
+        Callable,
+        Coroutine,
+        Iterable,
+        Iterator,
+    )
     from types import CoroutineType
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
 
 _T = TypeVar("_T")
+_T1 = TypeVar("_T1")
+_T2 = TypeVar("_T2")
+_T3 = TypeVar("_T3")
 _Ts = TypeVarTuple("_Ts")
 _R = TypeVar("_R")
 _P = ParamSpec("_P")
 _MISSING = Sentinel("_MISSING")
+
+
+class _AsyncChain:
+    """Like itertools.chain, but for async iterables"""
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}"
+
+    def __call__(self, *async_iterables: AsyncIterable[_T]) -> AsyncGenerator[_T]:
+        return self.from_iterable(async_iterables)
+
+    @staticmethod
+    async def from_iterable(async_iterables: Iterable[AsyncIterable[_T]]) -> AsyncGenerator[_T]:
+        for a_iterable in async_iterables:
+            async for value in a_iterable:
+                yield value
+
+
+chain = _AsyncChain()
+
+
+async def peek_first(async_iterable: AsyncIterable[_T], /) -> tuple[_T, AsyncGenerator[_T, None]]:
+    async_iterator = aiter(async_iterable)
+    try:
+        first = await anext(async_iterator)
+    except StopAsyncIteration as e:
+        raise e.__cause__ or e from None
+
+    async def yield_again() -> AsyncGenerator[_T, None]:
+        yield first
+
+    return first, chain(yield_again(), async_iterator)
 
 
 @dataclasses.dataclass(slots=True, eq=False)
@@ -202,6 +246,32 @@ async def gather(*coros: Awaitable[_T]) -> list[_T]:
         tasks = [tg.create_task(wrap(coro)) for coro in coros]
 
     return [t.result() for t in tasks]
+
+
+@overload
+async def deterministic_gather(*coros: Awaitable[_T]) -> list[_T]: ...
+@overload
+async def deterministic_gather(coro: Awaitable[_T], /) -> tuple[_T]: ...
+@overload
+async def deterministic_gather(coro_1: Awaitable[_T1], coro_2: Awaitable[_T2], /) -> tuple[_T1, _T2]: ...
+@overload
+async def deterministic_gather(
+    coro_1: Awaitable[_T1], coro_2: Awaitable[_T2], coro_3: Awaitable[_T3], /
+) -> tuple[_T1, _T2, _T3]: ...
+
+
+async def deterministic_gather(*coros: Awaitable[_T]) -> list[_T]:  # pyright: ignore[reportInconsistentOverload]
+    async def try_call(coro: Awaitable[_T]):
+        try:
+            return await coro
+        except Exception as e:  # noqa: BLE001
+            return e
+
+    results = await gather(*(try_call(c) for c in coros))
+    errors = tuple(r for r in results if isinstance(r, Exception))
+    if errors:
+        raise BaseExceptionGroup("", errors)
+    return cast("list[_T]", results)
 
 
 async def map(
