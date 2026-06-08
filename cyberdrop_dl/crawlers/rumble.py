@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.compat import IntEnum
@@ -13,7 +13,9 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, m3u8, parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import AsyncGenerator, Generator, Iterable
+
+    from bs4 import BeautifulSoup
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
@@ -30,14 +32,16 @@ class FormatType(IntEnum):
     MP4 = 3
 
 
-class Metadata(NamedTuple):
+@dataclasses.dataclass(slots=True, frozen=True, order=True)
+class Metadata:
     bitrate: int = 0
     size: int = 0
     w: int = 0
     h: int = 0
 
 
-class Format(NamedTuple):
+@dataclasses.dataclass(slots=True, frozen=True, order=True)
+class Format:
     resolution: Resolution
     is_single_file: bool  # for formats with the same resolution, give priority to non hls
     bitrate: int
@@ -54,45 +58,6 @@ class Video:
     url: AbsoluteHttpURL
     best_format: Format
     subtitles: tuple[Subtitle, ...]
-
-    @staticmethod
-    def parse_formats(formats: dict[str, list[dict[str, Any]] | dict[str, dict[str, Any]]]) -> Generator[Format]:
-        for type_, format_options in formats.items():
-            if type_ in {"audio", "tar", "timeline"}:
-                continue
-
-            try:
-                type_ = FormatType[type_.upper()]
-            except KeyError:
-                raise ScrapeError(422, f"Video has an unknown format type: {type_}") from None
-
-            pairs = ((None, f) for f in format_options) if isinstance(format_options, list) else format_options.items()
-
-            is_single_file = type_ is not FormatType.HLS
-
-            for height, fmt in pairs:
-                url = parse_url(fmt["url"])
-                meta = Metadata(**(fmt.get("meta") or {}))
-
-                if meta.w and meta.h:
-                    resolution = Resolution(meta.w, meta.h)
-
-                elif height and height != "auto":
-                    resolution = Resolution.parse(height)
-
-                else:
-                    resolution = Resolution.unknown()
-
-                yield Format(resolution, is_single_file, meta.bitrate, meta.size, type_, url)
-
-    @staticmethod
-    def parse_subs(subs: dict[str, dict[str, str]]) -> Generator[Subtitle]:
-        for code, sub in subs.items():
-            yield Subtitle(
-                url=sub["path"],
-                lang_code=code.replace("-auto", ".auto"),
-                name=sub.get("language"),
-            )
 
 
 class RumbleCrawler(Crawler):
@@ -127,12 +92,19 @@ class RumbleCrawler(Crawler):
     @error_handling_wrapper
     async def channel(self, scrape_item: ScrapeItem, name: str) -> None:
         scrape_item.setup_as_album(self.create_title(name))
-        init_page = int(scrape_item.url.query.get("page") or 1)
+        async for soup in self._pager(scrape_item.url):
+            info = _extract_channel_info(soup)
+            videos = (v for v in info["items"] if v.get("object_type") == "video")
+            for video in videos:
+                new_item = scrape_item.create_child(self.parse_url(video["url"]))
+                self.create_task(self.run(new_item))
+                scrape_item.add_children()
+
+    async def _pager(self, url: AbsoluteHttpURL) -> AsyncGenerator[BeautifulSoup]:
+        init_page = int(url.query.get("page") or 1)
         try:
             for page in itertools.count(init_page):
-                soup = await self.request_soup(scrape_item.url.update_query(page=page))
-                for _, new_scrape_item in self.iter_children(scrape_item, soup, "a.videostream__link"):
-                    self.create_task(self.run(new_scrape_item))
+                yield await self.request_soup(url.update_query(page=page))
 
         except DownloadError as e:
             if e.status == 404:
@@ -179,8 +151,8 @@ class RumbleCrawler(Crawler):
         if video.get("live") == LiveStatus.CURRENTLY_LIVE:
             raise ScrapeError(422, "livestreams are not supported")
 
-        formats = Video.parse_formats(video.get("ua") or {})
-        subs = Video.parse_subs(video.get("cc") or {})
+        formats = _parse_formats(video.get("ua") or {})
+        subs = _parse_subs(video.get("cc") or {})
 
         return Video(
             upload_date=video["pubDate"],
@@ -196,7 +168,8 @@ class RumbleCrawler(Crawler):
 
         async def resolve_m3u8(fmt: Format) -> Format:
             m3u8, info = await self.request_m3u8_playlist(fmt.url)
-            return fmt._replace(
+            return dataclasses.replace(
+                fmt,
                 resolution=info.resolution,
                 m3u8=m3u8,
                 bitrate=info.stream_info.bandwidth or 0,
@@ -206,3 +179,46 @@ class RumbleCrawler(Crawler):
             hls_formats = await aio.map(resolve_m3u8, hls_formats, task_limit=10)
 
         return max((*hls_formats, *other_formats))
+
+
+def _extract_channel_info(soup: BeautifulSoup) -> dict[str, Any]:
+    return next(css.iter_json(soup, "relative_url"))
+
+
+def _parse_formats(formats: dict[str, list[dict[str, Any]] | dict[str, dict[str, Any]]]) -> Generator[Format]:
+    for type_, format_options in formats.items():
+        if type_ in {"audio", "tar", "timeline"}:
+            continue
+
+        try:
+            type_ = FormatType[type_.upper()]
+        except KeyError:
+            raise ScrapeError(422, f"Video has an unknown format type: {type_}") from None
+
+        pairs = ((None, f) for f in format_options) if isinstance(format_options, list) else format_options.items()
+
+        is_single_file = type_ is not FormatType.HLS
+
+        for height, fmt in pairs:
+            url = parse_url(fmt["url"])
+            meta = Metadata(**(fmt.get("meta") or {}))
+
+            if meta.w and meta.h:
+                resolution = Resolution(meta.w, meta.h)
+
+            elif height and height != "auto":
+                resolution = Resolution.parse(height)
+
+            else:
+                resolution = Resolution.unknown()
+
+            yield Format(resolution, is_single_file, meta.bitrate, meta.size, type_, url)
+
+
+def _parse_subs(subs: dict[str, dict[str, str]]) -> Generator[Subtitle]:
+    for code, sub in subs.items():
+        yield Subtitle(
+            url=sub["path"],
+            lang_code=code.replace("-auto", ".auto"),
+            name=sub.get("language"),
+        )

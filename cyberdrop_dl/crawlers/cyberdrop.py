@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl import aio
+from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
-
-_API_ENTRYPOINT = AbsoluteHttpURL("https://api.cyberdrop.cr/api/")
-_PRIMARY_URL = AbsoluteHttpURL("https://cyberdrop.cr/")
 
 
 class Selector:
@@ -30,10 +27,13 @@ class CyberdropCrawler(Crawler):
         ),
         "Direct links": "/api/file/d/<file_id>",
     }
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://cyberdrop.cr/")
     DOMAIN: ClassVar[str] = "cyberdrop"
-    OLD_DOMAINS = ("cyberdrop.me", "cyberdrop.to")
-    _RATE_LIMIT: ClassVar[tuple[float, float]] = 5, 1
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("cyberdrop.me", "cyberdrop.to")
+    _RATE_LIMIT: ClassVar[RateLimit] = 5, 1
+
+    def __post_init__(self) -> None:
+        self.api: CyberdropAPI = CyberdropAPI.from_crawler(self)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -68,18 +68,21 @@ class CyberdropCrawler(Crawler):
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        info, auth = await asyncio.gather(
-            self.request_json(_API_ENTRYPOINT / "file" / "info" / file_id),
-            self.request_json(_API_ENTRYPOINT / "file" / "auth" / file_id),
-            return_exceptions=True,
-        )
-        if isinstance(info, BaseException):
-            raise info
-
-        if isinstance(auth, BaseException):
-            raise auth
+        info, auth = await aio.safe_gather(self.api.file_info(file_id), self.api.file_auth(file_id))
 
         name: str = info["name"]
         filename, ext = self.get_filename_and_ext(name)
         link = self.parse_url(auth["url"])
         await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
+
+
+class CyberdropAPI(API):
+    ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://api.cyberdrop.cr/api")
+
+    async def file_info(self, file_id: str) -> dict[str, str]:
+        api_url = self.ENTRYPOINT / "file/info" / file_id
+        return await self.request_json(api_url)
+
+    async def file_auth(self, file_id: str) -> dict[str, str]:
+        api_url = self.ENTRYPOINT / "file/auth" / file_id
+        return await self.request_json(api_url)

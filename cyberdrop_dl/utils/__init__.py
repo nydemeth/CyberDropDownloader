@@ -67,7 +67,7 @@ def group_exceptions(message: str | None = None) -> Generator[None]:
 
 
 def _exc_group_msg(e: ExceptionGroup) -> str:
-    if "unhandled errors in a TaskGroup" not in e.message:
+    if e.message and "unhandled errors in a TaskGroup" not in e.message:
         return e.message
 
     first = e.exceptions[0]

@@ -159,15 +159,33 @@ def page_title(soup: Tag, domain: str | None = None) -> str:
 
 
 def json_ld(soup: Tag, /, contains: str | None = None) -> JsonLD:
-    selector = "script[type='application/ld+json']"
-    if contains:
-        selector += f":-soup-contains('{contains}')"
-
-    ld_json = json.loads(select_text(soup, selector)) or {}
-    if isinstance(ld_json, list):
+    ld_json = next(iter_json_ld(soup, contains)) or {}
+    if type(ld_json) is list:
         ld_json = ld_json[0]
 
     return cast("JsonLD", ld_json)
+
+
+def iter_json_ld(soup: Tag, /, contains: str | None = None) -> Generator[Any]:
+    return _iter_json(soup, "script[type='application/ld+json']", contains=contains)
+
+
+def iter_json(soup: Tag, /, contains: str | None = None) -> Generator[Any]:
+    return _iter_json(soup, "script[type='application/ld+json'], script[type='application/json']", contains=contains)
+
+
+def _iter_json(
+    soup: Tag,
+    /,
+    selector: str,
+    *,
+    contains: str | None = None,
+) -> Generator[Any]:
+    for tag in iselect(soup, selector):
+        content = text(tag)
+        if contains and contains not in content:
+            continue
+        yield json.loads(content)
 
 
 def parse_form(form: Tag, /) -> HTMLForm:
