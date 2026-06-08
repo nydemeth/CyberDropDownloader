@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         Coroutine,
         Iterable,
         Iterator,
+        Sequence,
     )
     from types import CoroutineType
 
@@ -249,26 +250,31 @@ async def gather(*coros: Awaitable[_T]) -> list[_T]:
 
 
 @overload
-async def deterministic_gather(*coros: Awaitable[_T]) -> list[_T]: ...
+async def safe_gather(coro: Awaitable[_T1], /) -> tuple[_T1]: ...
 @overload
-async def deterministic_gather(coro: Awaitable[_T], /) -> tuple[_T]: ...
+async def safe_gather(coro_1: Awaitable[_T1], coro_2: Awaitable[_T2], /) -> tuple[_T1, _T2]: ...
 @overload
-async def deterministic_gather(coro_1: Awaitable[_T1], coro_2: Awaitable[_T2], /) -> tuple[_T1, _T2]: ...
-@overload
-async def deterministic_gather(
-    coro_1: Awaitable[_T1], coro_2: Awaitable[_T2], coro_3: Awaitable[_T3], /
+async def safe_gather(
+    coro_1: Awaitable[_T1],
+    coro_2: Awaitable[_T2],
+    coro_3: Awaitable[_T3],
+    /,
 ) -> tuple[_T1, _T2, _T3]: ...
 
 
-async def deterministic_gather(*coros: Awaitable[_T]) -> list[_T]:  # pyright: ignore[reportInconsistentOverload]
-    async def try_call(coro: Awaitable[_T]):
-        try:
-            return await coro
-        except Exception as e:  # noqa: BLE001
-            return e
+async def safe_gather(
+    coro_1: Awaitable[_T1],
+    coro_2: Awaitable[_T2] | None = None,
+    coro_3: Awaitable[_T3] | None = None,
+    /,
+) -> Sequence[_T]:
+    """Like `asyncio.gather(*coros, return_exceptions=True)`, but all exceptions are re-raised as an ExceptionGroup
 
-    results = await gather(*(try_call(c) for c in coros))
-    errors = tuple(r for r in results if isinstance(r, Exception))
+    This makes errors deterministic"""
+
+    coros = filter(None, (coro_1, coro_2, coro_3))
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    errors = tuple(r for r in results if isinstance(r, BaseException))
     if errors:
         raise BaseExceptionGroup("", errors)
     return cast("list[_T]", results)
