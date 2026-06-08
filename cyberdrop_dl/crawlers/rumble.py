@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-import json
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import aio
@@ -183,8 +182,7 @@ class RumbleCrawler(Crawler):
 
 
 def _extract_channel_info(soup: BeautifulSoup) -> dict[str, Any]:
-    content = css.select_text(soup, "script[type='application/json']:-soup-contains-own(relative_url)")
-    return json.loads(content)
+    return next(css.iter_json(soup, "relative_url"))
 
 
 def _parse_formats(formats: dict[str, list[dict[str, Any]] | dict[str, dict[str, Any]]]) -> Generator[Format]:
