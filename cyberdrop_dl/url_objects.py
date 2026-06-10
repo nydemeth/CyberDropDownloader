@@ -151,7 +151,7 @@ class MediaItem:
 
     id: tuple[str, ...] = field(init=False)
     base64_id: str = field(init=False)
-    headers: dict[str, Any] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.id = self.domain, self.db_path
@@ -172,10 +172,6 @@ class MediaItem:
     @property
     def real_url(self) -> AbsoluteHttpURL:
         return self.debrid_link or self.url
-
-    @property
-    def unique_temp_path(self) -> Path:
-        return self.path.parent / f"{self.base64_id}.part"
 
     @staticmethod
     def from_item(  # noqa: PLR0913

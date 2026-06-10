@@ -6,6 +6,7 @@ from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils.filepath import remove_file_id
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -73,7 +74,7 @@ class CyberdropCrawler(Crawler):
         name: str = info["name"]
         filename, ext = self.get_filename_and_ext(name)
         link = self.parse_url(auth["url"])
-        await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
+        await self.handle_file(link, scrape_item, name, ext, custom_filename=remove_file_id(filename, ext))
 
 
 class CyberdropAPI(API):

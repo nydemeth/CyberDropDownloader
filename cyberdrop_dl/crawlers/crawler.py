@@ -32,7 +32,6 @@ from cyberdrop_dl.utils.filepath import (
     check_path_traversal,
     compose_filename,
     get_filename_and_ext,
-    remove_file_id,
 )
 from cyberdrop_dl.utils.strings import safe_format
 
@@ -481,6 +480,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         url: AbsoluteHttpURL,
         scrape_item: ScrapeItem,
         filename: str,
+        /,
         ext: str | None = None,
         *,
         custom_filename: str | None = None,
@@ -490,12 +490,11 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         referer: AbsoluteHttpURL | None = None,
         frag: str | None = None,
     ) -> None:
-        """Finishes handling the file and hands it off to the downloader."""
+        """Finishes handling the file and hands it off to the downloader.
+
+        Referer is the referer to use for the db, not the actual HTTTP headers referer"""
 
         ext = ext or Path(filename).suffix
-        if self.DOMAIN == "cyberdrop":
-            custom_filename = remove_file_id(filename, ext)
-
         download_folder = scrape_item.compose_download_path(self.FOLDER_DOMAIN)
         media_item = MediaItem.from_item(
             scrape_item,

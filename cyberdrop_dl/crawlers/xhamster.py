@@ -230,7 +230,7 @@ class XhamsterCrawler(Crawler):
         await self.handle_file(
             scrape_item.url,
             scrape_item,
-            filename=video.id + ext,
+            video.id + ext,
             custom_filename=custom_filename,
             m3u8=m3u8,
             debrid_link=debrid_link,
