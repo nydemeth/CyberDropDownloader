@@ -7,6 +7,8 @@ import time
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, final
 
+from aiohttp import hdrs
+
 from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients import etag
 from cyberdrop_dl.constants import FileExt
@@ -72,7 +74,7 @@ class DownloadClient:
         resume_point = 0
         if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
             resume_point = size
-            media_item.headers["Range"] = f"bytes={size}-"
+            media_item.headers[hdrs.RANGE] = f"bytes={size}-"
 
         await asyncio.sleep(self.manager.config.global_settings.rate_limiting_options.total_delay)
 
@@ -114,7 +116,7 @@ class DownloadClient:
         if not media_item.is_segment and (content_type := _get_content_type(resp.headers)):
             _check_content_type(content_type, media_item.ext)
 
-        media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
+        media_item.filesize = int(resp.headers[hdrs.CONTENT_LENGTH])
         try:
             _ = media_item.path
         except AttributeError:
@@ -182,7 +184,7 @@ class DownloadClient:
     async def _post_download_check(self, media_item: MediaItem, *_: Any) -> None:
         if not await aio.get_size(media_item.partial_file):
             await aio.unlink(media_item.partial_file, missing_ok=True)
-            raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, message="File is empty")
+            raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
@@ -245,8 +247,6 @@ class DownloadClient:
             self.manager.add_completed(media_item)
         except Exception:
             logger.exception(f"Error handling media item completion of: {media_item.path}")
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
     def get_download_dir(self, media_item: MediaItem) -> Path:
         """Returns the download directory for the media item."""
@@ -385,7 +385,7 @@ def _check_content_type(content_type: str, ext: str) -> str | None:
 
 
 def _get_content_type(headers: Mapping[str, str]) -> str | None:
-    content_type = headers.get("Content-Type")
+    content_type = headers.get(hdrs.CONTENT_TYPE)
     if not content_type:
         return None
 
@@ -394,7 +394,7 @@ def _get_content_type(headers: Mapping[str, str]) -> str | None:
 
 
 def _get_last_modified(headers: Mapping[str, str]) -> int | None:
-    if date_str := headers.get("Last-Modified"):
+    if date_str := headers.get(hdrs.LAST_MODIFIED):
         return dates.parse_http(date_str)
 
 
@@ -402,12 +402,12 @@ def _is_html_or_text(content_type: str) -> bool:
     return any(s in content_type for s in ("html", "text"))
 
 
-def _check_content_length(headers: Mapping[str, Any]) -> None:
-    content_length, content_type = headers.get("Content-Length"), headers.get("Content-Type")
-    if content_length is None or content_type is None:
+def _check_content_length(headers: Mapping[str, str]) -> None:
+    content_length, content_type = headers[hdrs.CONTENT_LENGTH], headers.get(hdrs.CONTENT_TYPE)
+    if content_type is None:
         return
     if content_length == "322509" and content_type == "video/mp4":
-        raise DownloadError(status="Bunkr Maintenance", message="Bunkr under maintenance")
+        raise DownloadError("Bunkr Maintenance", "Bunkr under maintenance")
     if content_length == "73003" and content_type == "video/mp4":
         raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
 

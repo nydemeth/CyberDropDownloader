@@ -130,9 +130,6 @@ class Downloader:
                 if not e.retry:
                     raise
 
-                if e.status != 999:
-                    media_item.attempts += 1
-
                 logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
                 if media_item.attempts >= self.max_attempts:
                     raise
@@ -141,7 +138,7 @@ class Downloader:
                     f"Retrying {self.log_prefix.lower()}: {media_item.url}, retry attempt: {media_item.attempts + 1}"
                 )
 
-    async def _finalize_download(self, media_item: MediaItem) -> None:
+    async def __finalize_download(self, media_item: MediaItem) -> None:
         await aio.chmod(media_item.path, 0o666)
         if media_item.is_segment:
             return
@@ -168,7 +165,7 @@ class Downloader:
             return bool(await self.__download_w_retries(media_item))
 
     @contextlib.asynccontextmanager
-    async def _download_context(self, media_item: MediaItem) -> AsyncGenerator[None]:
+    async def __download_context(self, media_item: MediaItem) -> AsyncGenerator[None]:
         await self.client.mark_incomplete(media_item, media_item.domain)
         if media_item.is_segment:
             yield
@@ -217,7 +214,7 @@ class Downloader:
 
         else:
             if downloaded:
-                await self._finalize_download(media_item)
+                await self.__finalize_download(media_item)
             return downloaded
 
     @contextlib.asynccontextmanager
@@ -234,7 +231,7 @@ class Downloader:
         if media_item.url.path in self._processed_items and not self._ignore_history:
             return False
 
-        async with self._download_context(media_item):
+        async with self.__download_context(media_item):
             return await self._download(media_item)
 
     @error_handling_wrapper
@@ -243,7 +240,7 @@ class Downloader:
             return
 
         assert ffmpeg.is_installed()
-        async with self._download_context(media_item):
+        async with self.__download_context(media_item):
             await self.__hls_download(media_item, m3u8_group)
 
     async def __hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
@@ -276,7 +273,7 @@ class Downloader:
 
         await self.client.process_completed(media_item, media_item.domain)
         await self.client.handle_media_item_completion(media_item, downloaded=True)
-        await self._finalize_download(media_item)
+        await self.__finalize_download(media_item)
 
 
 def _is_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
