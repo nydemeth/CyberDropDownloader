@@ -73,7 +73,7 @@ class PorntrexCrawler(Crawler):
         title = self.create_title(title, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
 
-        for _, link in self.iter_tags(soup, Selector.IMAGES):
+        for link in self.iter_urls(soup, Selector.IMAGES):
             await self.direct_file(scrape_item, link)
             scrape_item.add_children()
 

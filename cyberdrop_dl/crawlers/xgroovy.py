@@ -69,6 +69,6 @@ class XGroovyCrawler(FluidPlayerCrawler):
             raise ScrapeError(401, "Could not find album title")
         title = self.create_title(title, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
-        for _, url in self.iter_tags(soup, "div.swiper-slide > a, a#main_image_holder"):
+        for url in self.iter_urls(soup, "div.swiper-slide > a, a#main_image_holder"):
             await self.direct_file(scrape_item, url)
             scrape_item.add_children()

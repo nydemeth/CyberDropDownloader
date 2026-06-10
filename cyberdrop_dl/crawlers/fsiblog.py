@@ -64,7 +64,7 @@ class FSIBlogCrawler(Crawler):
             link = self.parse_url(video)
             self.create_task(self.direct_file(scrape_item, link))
 
-        for _, image in self.iter_tags(soup, Selector.IMAGES):
+        for image in self.iter_urls(soup, Selector.IMAGES):
             self.create_task(self.direct_file(scrape_item, image))
 
     @error_handling_wrapper

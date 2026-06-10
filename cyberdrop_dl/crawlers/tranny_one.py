@@ -87,9 +87,10 @@ class TrannyOneCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         name = css.select_text(soup, Selector.ALBUM_TITLE)
         scrape_item.setup_as_album(self.create_title(f"{name} [album]"), album_id=album_id)
-        results = await self.get_album_results(album_id)
-        for _, pic in self.iter_tags(soup, Selector.IMAGES, results=results):
+        should_download = await self.make_album_checker(album_id)
+        for pic in filter(should_download, self.iter_urls(soup, Selector.IMAGES)):
             self.create_task(self.direct_file(scrape_item, pic))
+            scrape_item.add_children()
 
     @error_handling_wrapper
     async def model(self, scrape_item: ScrapeItem, model_id: str) -> None:

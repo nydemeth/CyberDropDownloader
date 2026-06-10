@@ -170,7 +170,7 @@ class XVideosCrawler(Crawler):
     @error_handling_wrapper
     async def gallery(self, scrape_item: ScrapeItem, album_id: str) -> None:
         title: str = ""
-        results = await self.get_album_results(album_id)
+        should_download = await self.make_album_checker(album_id)
         async for soup in self.web_pager(scrape_item.url, relative_to=scrape_item.url.origin()):
             if not title:
                 title_tag = css.select(soup, Selectors.GALLERY_TITLE)
@@ -179,8 +179,9 @@ class XVideosCrawler(Crawler):
                 title = self.create_title(css.text(title_tag).split(">", 1)[-1].strip(), album_id)
                 scrape_item.setup_as_album(title, album_id=album_id)
 
-            for _, src in self.iter_tags(soup, Selectors.GALLERY_IMG, results=results):
+            for src in filter(should_download, self.iter_urls(soup, Selectors.GALLERY_IMG)):
                 self.create_task(self.direct_file(scrape_item, src))
+                scrape_item.add_children()
 
     async def _get_soup(self, url: AbsoluteHttpURL) -> BeautifulSoup:
         if url.host not in self._seen_domains:

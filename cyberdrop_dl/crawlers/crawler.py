@@ -732,7 +732,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self.client.cookies.update_cookies(cookies, response_url)
 
     @final
-    def iter_tags(
+    def iter_thumbnails(
         self,
         soup: Tag,
         selector: str,
@@ -797,7 +797,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
         :param results: must be the output of `self.get_album_results`.
         If provided, it will be used as a filter, to only yield items that has not been downloaded before"""
-        for thumb, link in self.iter_tags(soup, selector, attribute, results=results):
+        for thumb, link in self.iter_thumbnails(soup, selector, attribute, results=results):
             new_scrape_item = scrape_item.create_child(link)
             yield thumb, new_scrape_item
             scrape_item.add_children()

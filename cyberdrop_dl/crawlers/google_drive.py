@@ -123,7 +123,7 @@ class GoogleDriveCrawler(Crawler):
         title = self.create_title(folder_name, folder_id)
         scrape_item.setup_as_album(title, album_id=folder_id)
 
-        for index, (_, child) in enumerate(self.iter_tags(soup, _FOLDER_ITEM_SELECTOR), 1):
+        for index, child in enumerate(self.iter_urls(soup, _FOLDER_ITEM_SELECTOR), 1):
             new_scrape_item = scrape_item.create_child(child)
             self.create_task(self.run(new_scrape_item))
             scrape_item.add_children()

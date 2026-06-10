@@ -149,6 +149,6 @@ class PimpBunnyCrawler(Crawler):
                 title = css.select_text(soup, Selector.ALBUM_TITLE)
                 scrape_item.setup_as_album(self.create_title(f"{title} [album]"))
 
-            for _, image in self.iter_tags(soup, Selector.ITEM):
+            for image in self.iter_urls(soup, Selector.ITEM):
                 self.create_task(self.direct_file(scrape_item, image))
                 scrape_item.add_children()
