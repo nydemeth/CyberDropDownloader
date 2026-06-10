@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from pathlib import Path
 
-    from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.config import Config
 
 
 _T = TypeVar("_T")
@@ -36,14 +36,14 @@ def delete_empty_files_and_folders(path: Path) -> None:
     _ = delete_empty_files_and_folders_in_place(path, exclude=[MAIN_LOG_FILE.get(None)])
 
 
-def check_partials_and_empty_folders(manager: Manager) -> None:
-    download_folder = manager.config.settings.files.download_folder
+def check_partials_and_empty_folders(config: Config) -> None:
+    download_folder = config.settings.files.download_folder
 
     logger.info("Checking for partial downloads...")
     if has_partial_files(download_folder):
         logger.warning("There are partial downloads in the downloads folder")
 
-    settings = manager.config.settings.runtime_options
+    settings = config.settings.runtime_options
     if settings.delete_partial_files:
         logger.info("Deleting partial downloads...")
         delete_partial_files(download_folder)
@@ -54,8 +54,8 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
     logger.info("Deleting empty files and folders...")
     delete_empty_files_and_folders(download_folder)
 
-    sorted_folder = manager.config.settings.sorting.sort_folder
-    if sorted_folder and manager.config.settings.sorting.sort_downloads:
+    sorted_folder = config.settings.sorting.sort_folder
+    if sorted_folder and config.settings.sorting.sort_downloads:
         delete_empty_files_and_folders(sorted_folder)
 
 

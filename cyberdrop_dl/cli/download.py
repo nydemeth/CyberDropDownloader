@@ -74,7 +74,7 @@ async def _post_runtime(manager: Manager) -> None:
     if manager.config.settings.sorting.sort_downloads and not manager.cli_args.retry_any:
         await manager.sorter.run()
 
-    check_partials_and_empty_folders(manager)
+    check_partials_and_empty_folders(manager.config)
 
     if manager.config.settings.runtime_options.update_last_forum_post:
         await manager.logs.update_last_forum_post(manager.config.settings.files.input_file)
