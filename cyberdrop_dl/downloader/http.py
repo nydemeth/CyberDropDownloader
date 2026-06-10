@@ -72,11 +72,10 @@ class Downloader:
     """Hight level class that handles limiters, database checks, skip by config checks and retries"""
 
     manager: Manager
-    domain: str
     log_prefix: str = "Download"
     use_server_lock: bool = False
 
-    _download_slots: int | None = None
+    _slots: int | None = None
     _waiting_items: int = dataclasses.field(init=False, default=0)
     _processed_items: set[str] = dataclasses.field(init=False, default_factory=set)
     _current_attempt_filesize: dict[str, int] = dataclasses.field(init=False, default_factory=dict)
@@ -86,29 +85,29 @@ class Downloader:
     )
 
     def __post_init__(self) -> None:
-        self.download_slots = self._download_slots
+        self.slots = self._slots
 
     @property
     def waiting_items(self) -> int:
         return self._waiting_items
 
     @property
-    def download_slots(self) -> int | None:
-        return self._download_slots
+    def slots(self) -> int | None:
+        return self._slots
 
-    @download_slots.setter
-    def download_slots(self, new_limit: int | None) -> None:
+    @slots.setter
+    def slots(self, new_limit: int | None) -> None:
         try:
             sem = self._semaphore
         except AttributeError:
             pass
         else:
-            if not (sem._waiters is None and sem._value == self._download_slots):
+            if not (sem._waiters is None and sem._value == self._slots):
                 raise RuntimeError("Can't change download limits. Downloader is already in use")
 
         upper_limit = self.config.global_settings.rate_limiting_options.max_simultaneous_downloads_per_domain
-        self._download_slots = min(new_limit or upper_limit, upper_limit)
-        self._semaphore = asyncio.Semaphore(self._download_slots)
+        self._slots = min(new_limit or upper_limit, upper_limit)
+        self._semaphore = asyncio.Semaphore(self._slots)
 
     @property
     def client(self) -> DownloadClient:

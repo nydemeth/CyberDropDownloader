@@ -215,9 +215,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self.client: HTTPClient = manager.http_client
         self.downloader: Downloader = Downloader(
             manager,
-            self.DOMAIN,
             use_server_lock=self._USE_DOWNLOAD_SERVERS_LOCKS,
-            _download_slots=self._DOWNLOAD_SLOTS,
+            _slots=self._DOWNLOAD_SLOTS,
         )
 
         self.__post_init__()
