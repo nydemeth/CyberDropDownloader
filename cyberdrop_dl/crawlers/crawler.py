@@ -732,46 +732,13 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self.client.cookies.update_cookies(cookies, response_url)
 
     @final
-    def iter_thumbnails(
-        self,
-        soup: Tag,
-        selector: str,
-        /,
-        attribute: str = "href",
-        *,
-        results: Mapping[str, bool] | None = None,
-    ) -> Generator[tuple[AbsoluteHttpURL | None, AbsoluteHttpURL]]:
-        """Generates tuples with an URL from the `src` value of the first image tag (AKA the thumbnail) and an URL from the value of `attribute`
-
-        :param results: must be the output of `self.get_album_results`.
-        If provided, it will be used as a filter, to only yield items that has not been downloaded before"""
-        album_results = results or {}
-
-        seen: set[str] = set()
-        for tag in css.iselect(soup, selector):
-            link_str: str | None = css.attr_or_none(tag, attribute)
-            if not link_str or link_str in seen:
-                continue
-            seen.add(link_str)
-            link = self.parse_url(link_str)
-            if self.check_album_results(link, album_results):
-                continue
-            try:
-                thumb_str: str | None = css.select(tag, "img", "src")
-            except css.SelectorError:
-                thumb = None
-            else:
-                thumb = None if is_blob_or_svg(thumb_str) else self.parse_url(thumb_str)
-
-            yield thumb, link
-
-    @final
     @classmethod
     def iter_urls(
         cls, tag: Tag, selector: str, attribute: str = "href", origin: AbsoluteHttpURL | None = None
     ) -> Generator[AbsoluteHttpURL]:
         for url in unique(css.iselect(tag, selector, attribute)):
-            yield cls.parse_url(url, origin)
+            if not is_blob_or_svg(url):
+                yield cls.parse_url(url, origin)
 
     @final
     async def make_album_checker(self, album_id: str) -> Callable[[AbsoluteHttpURL], bool]:

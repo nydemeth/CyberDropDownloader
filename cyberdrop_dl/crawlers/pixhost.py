@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 class Selector:
     GALLERY_TITLE = "a.link h2"
-    GALLERY_IMAGES = "div.images a"
+    GALLERY_IMAGES = "div.images a img"
     IMAGE = "img.image-img"
 
 
@@ -49,15 +49,10 @@ class PixHostCrawler(Crawler):
         title = css.select_text(soup, Selector.GALLERY_TITLE)
         title = self.create_title(title, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
-        results = await self.get_album_results(album_id)
-
-        for thumb, web_url in self.iter_thumbnails(soup, Selector.GALLERY_IMAGES):
-            assert thumb
-            src = _thumbnail_to_src(thumb)
-            if self.check_album_results(src, results):
-                continue
-            new_scrape_item = scrape_item.create_child(web_url)
-            self.create_task(self.direct_file(new_scrape_item, src))
+        should_download = await self.make_album_checker(album_id)
+        urls = map(_thumbnail_to_src, self.iter_urls(soup, Selector.GALLERY_IMAGES, "src"))
+        for src in filter(should_download, urls):
+            self.create_task(self.direct_file(scrape_item, src))
             scrape_item.add_children()
 
     @error_handling_wrapper
