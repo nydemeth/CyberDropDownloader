@@ -40,7 +40,7 @@ CDL will only use Real-Debrid for unsupported sites. To use it for a site that C
 
 ## Supported sites
 
-List of sites supported by cyberdrop-dl-patched as of version 9.14.0
+List of sites supported by cyberdrop-dl-patched as of version 9.15.0
 
 ### 1fichier
 
@@ -299,9 +299,9 @@ ex: To only download categories from a date range: ,
 
 ### Bunkr
 
-**Primary URL**: [https://bunkr.site](https://bunkr.site)
+**Primary URL**: [https://bunkr.cr](https://bunkr.cr)
 
-**Supported Domains**: `bunkr.*`
+**Supported Domains**: `bunkr.*`, `bunkr.black`, `bunkr.cr`, `bunkr.is`, `bunkr.la`, `bunkr.se`, `bunkr.su`, `bunkrr.su`
 
 **Supported Paths**:
 
@@ -1161,7 +1161,7 @@ spreadsheets:
 
 **Primary URL**: [https://hotpic.cc](https://hotpic.cc)
 
-**Supported Domains**: `2385290.xyz`, `hotpic.*`
+**Supported Domains**: `2385290.xyz`, `hotpic.*`, `myhostdata.space`
 
 **Supported Paths**:
 
@@ -2075,9 +2075,9 @@ spreadsheets:
 **Supported Paths**:
 
 - File:
-  - `?id=...`
+  - `?id=<file_id>`
 - Tags:
-  - `?tags=...`
+  - `?tags=<name>`
 
 
 ### RealDebrid
