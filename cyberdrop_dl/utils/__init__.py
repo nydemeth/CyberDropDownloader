@@ -26,7 +26,7 @@ from cyberdrop_dl.utils._dataclasses import type_adapter as type_adapter
 from cyberdrop_dl.utils._path_traverse import has_partial_files, partial_files
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator
+    from collections.abc import Callable, Coroutine, Generator, Iterable
     from pathlib import Path
 
     from cyberdrop_dl.downloader.http import Downloader
@@ -369,3 +369,11 @@ def truncated_preview(content: str, max_len: int = 100) -> str:
 def basic_auth(username: str, password: str) -> str:
     token = base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
     return f"Basic {token}"
+
+
+def unique(itr: Iterable[_T], /) -> Generator[_T]:
+    seen: set[_T] = set()
+    for ele in itr:
+        if ele not in seen:
+            seen.add(ele)
+            yield ele

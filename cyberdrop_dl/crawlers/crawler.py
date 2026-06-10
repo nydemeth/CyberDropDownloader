@@ -26,7 +26,16 @@ from cyberdrop_dl.downloader.http import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
-from cyberdrop_dl.utils import css, dates, error_handling_context, is_absolute_http_url, is_blob_or_svg, m3u8, parse_url
+from cyberdrop_dl.utils import (
+    css,
+    dates,
+    error_handling_context,
+    is_absolute_http_url,
+    is_blob_or_svg,
+    m3u8,
+    parse_url,
+    unique,
+)
 from cyberdrop_dl.utils.filepath import (
     check_dangerous_filename,
     check_path_traversal,
@@ -757,6 +766,23 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             yield thumb, link
 
     @final
+    @classmethod
+    def iter_urls(
+        cls, tag: Tag, selector: str, attribute: str = "href", origin: AbsoluteHttpURL | None = None
+    ) -> Generator[AbsoluteHttpURL]:
+        for url in unique(css.iselect(tag, selector, attribute)):
+            yield cls.parse_url(url, origin)
+
+    @final
+    async def make_album_checker(self, album_id: str) -> Callable[[AbsoluteHttpURL], bool]:
+        results = await self.get_album_results(album_id)
+
+        def should_download(url: AbsoluteHttpURL) -> bool:
+            return not self.check_album_results(url, results)
+
+        return should_download
+
+    @final
     def iter_children(
         self,
         scrape_item: ScrapeItem,
@@ -976,7 +1002,7 @@ class API(HTTPMixin, ABC):
     def __post_init__(self) -> None: ...
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}(PRIMARY_URL={self.PRIMARY_URL!r})>"
+        return f"<{type(self).__name__}({self.PRIMARY_URL!r})>"
 
     @final
     @property
