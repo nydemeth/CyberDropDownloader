@@ -74,7 +74,7 @@ class RealDebridCrawler(Crawler, cdl_user_agent=True):
             raise ScrapeError(ui_failure, msg)
 
     def __post_init__(self) -> None:
-        token = self.manager.config.auth.realdebrid.api_key
+        token = self.config.auth.realdebrid.api_key
         self.disabled = not bool(token)
         self.api: RealDebridAPI = RealDebridAPI(self, token)
 

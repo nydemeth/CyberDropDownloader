@@ -80,7 +80,7 @@ class GoFileCrawler(Crawler):
     @property
     def headers(self) -> dict[str, str]:
         headers = {
-            "User-Agent": (ua := self.manager.config.global_settings.general.user_agent),
+            "User-Agent": (ua := self.config.global_settings.general.user_agent),
             "Origin": "https://gofile.io",
             "Referer": "https://gofile.io/",
         }
@@ -220,7 +220,7 @@ class GoFileCrawler(Crawler):
     @error_handling_wrapper
     async def _get_credentials(self, _) -> None:
         with self.disable_on_error("Unable to get api_key"):
-            if key := self.manager.config.auth.gofile.api_key:
+            if key := self.config.auth.gofile.api_key:
                 self._api_key = key
             else:
                 self._api_key = await self._create_temp_account()

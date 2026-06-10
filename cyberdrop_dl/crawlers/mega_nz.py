@@ -59,15 +59,15 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
 
     @property
     def user(self) -> str | None:
-        return self.manager.config.auth.meganz.email or None
+        return self.config.auth.meganz.email or None
 
     @property
     def password(self) -> str | None:
-        return self.manager.config.auth.meganz.password or None
+        return self.config.auth.meganz.password or None
 
     def __post_init__(self) -> None:
         self._decryption_keys: dict[AbsoluteHttpURL, tuple[Crypto, int]] = {}
-        api = MegaAPI(self.manager.http_client._session)
+        api = MegaAPI(self.client._session)
         api.user_agent = CDL_USER_AGENT
         self.core = MegaCore(api)
         speed_limiter = self.downloader.client.speed_limiter

@@ -55,7 +55,9 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.config import Config
+    from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 logger = logging.getLogger(__name__)
 
@@ -210,19 +212,17 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
         self.config: Config = manager.config
-
+        self.scrape_mapper: ScrapeMapper = manager.scrape_mapper
+        self.database: Database = manager.database
+        self.client: HTTPClient = manager.http_client
         self.downloader: Downloader = Downloader(
-            self.manager,
+            manager,
             self.DOMAIN,
             use_server_lock=self._USE_DOWNLOAD_SERVERS_LOCKS,
             _download_slots=self._DOWNLOAD_SLOTS,
         )
 
         self.__post_init__()
-
-    @property
-    def client(self) -> HTTPClient:
-        return self.manager.http_client
 
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
@@ -236,7 +236,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         async with self._startup_lock:
             if self._ready:
                 return
-            self.manager.http_client.rate_limits[self.DOMAIN] = aio.RateLimiter.w_no_burst(*self._RATE_LIMIT)
+
+            self.client.rate_limits[self.DOMAIN] = aio.RateLimiter.w_no_burst(*self._RATE_LIMIT)
 
             await self.__async_post_init__()
             self._ready = True
@@ -357,7 +358,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
-        _ = self.manager.scrape_mapper.create_task(coro)
+        _ = self.scrape_mapper.create_task(coro)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -451,7 +452,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.log.info(f"Scraping {url}")
         _ = ORIGIN.set(url.origin())
-        return self.manager.scrape_mapper.tui.scrape.new(url)
+        return self.scrape_mapper.tui.scrape.new(url)
 
     @final
     @staticmethod
@@ -567,20 +568,20 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         but Crawler code can use it to skip unnecessary requests"""
 
         db_path = self.__db_path__(url)
-        current_referer, downloaded = await self.manager.database.history.check_complete(self.DOMAIN, db_path)
+        current_referer, downloaded = await self.database.history.check_complete(self.DOMAIN, db_path)
         if downloaded:
             logger.info("Skipping %s as it has already been downloaded", url)
-            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.scrape_mapper.tui.files.stats.previously_completed += 1
 
             if referer and url != referer and str(referer) != current_referer:
                 # Update the referer if it has changed so that check_complete_by_referer can work
                 logger.info("Updating referer of %s from %s to %s", url, current_referer, referer)
-                await self.manager.database.history.update_referer(self.DOMAIN, db_path, referer)
+                await self.database.history.update_referer(self.DOMAIN, db_path, referer)
 
         return downloaded
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
-        self.manager.scrape_mapper.create_download_task(
+        self.scrape_mapper.create_download_task(
             self._download(
                 media_item,
                 m3u8,
@@ -591,11 +592,11 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     async def __should_skip(self, media_item: MediaItem) -> bool:
         if await self.check_complete(media_item.url, media_item.referer):
             if media_item.album_id:
-                await self.manager.database.history.set_album_id(self.DOMAIN, media_item)
+                await self.database.history.set_album_id(self.DOMAIN, media_item)
             return True
 
         if _should_skip_by_config(media_item, self.config):
-            self.manager.scrape_mapper.tui.files.stats.skipped += 1
+            self.scrape_mapper.tui.files.stats.skipped += 1
             return True
 
         return False
@@ -609,10 +610,10 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if `any_crawler` is `True`, checks database entries for all crawlers and returns `True` if at least 1 of them has marked it as completed
         """
         domain = None if any_crawler else self.DOMAIN
-        downloaded = await self.manager.database.history.check_complete_by_referer(domain, referer)
+        downloaded = await self.database.history.check_complete_by_referer(domain, referer)
         if downloaded:
             logger.info(f"Skipping {referer} as it has already been downloaded")
-            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.scrape_mapper.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
@@ -620,23 +621,23 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self: Crawler, url: AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
-        downloaded = await self.manager.database.hash.check_hash_exists(hash_type, hash_value)
+        downloaded = await self.database.hash.check_hash_exists(hash_type, hash_value)
         if downloaded:
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
-            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.scrape_mapper.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
     async def get_album_results(self, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
-        return await self.manager.database.history.check_album(self.DOMAIN, album_id)
+        return await self.database.history.check_album(self.DOMAIN, album_id)
 
     @final
     def handle_external_links(self, scrape_item: ScrapeItem, *, reset: bool = True) -> None:
         """Maps external links to the scraper class."""
         if reset:
             scrape_item.reset()
-        self.create_task(self.manager.scrape_mapper.send_to_crawler(scrape_item))
+        self.create_task(self.scrape_mapper.send_to_crawler(scrape_item))
 
     @final
     def handle_embed(self, scrape_item: ScrapeItem) -> None:
@@ -671,7 +672,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         url_path = self.__db_path__(url)
         if album_results.get(url_path) is True:
             logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.scrape_mapper.tui.files.stats.previously_completed += 1
             return True
         return False
 
