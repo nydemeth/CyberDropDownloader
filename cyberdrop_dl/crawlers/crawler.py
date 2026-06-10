@@ -758,16 +758,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         /,
         attribute: str = "href",
         *,
-        results: Mapping[str, bool] | None = None,
-    ) -> Generator[tuple[AbsoluteHttpURL | None, ScrapeItem]]:
+        results: Mapping[str, bool] | None = None,  # noqa: ARG002
+    ) -> Generator[tuple[None, ScrapeItem]]:
         """Generates tuples with an URL from the `src` value of the first image tag (AKA the thumbnail) and a new scrape item from the value of `attribute`
 
         :param results: must be the output of `self.get_album_results`.
         If provided, it will be used as a filter, to only yield items that has not been downloaded before"""
-        for thumb, link in self.iter_thumbnails(soup, selector, attribute, results=results):
-            new_scrape_item = scrape_item.create_child(link)
-            yield thumb, new_scrape_item
-            scrape_item.add_children()
+        for new_scrape_item in scrape_item.create_children(self.iter_urls(soup, selector, attribute)):
+            yield None, new_scrape_item
 
     async def web_pager(
         self,

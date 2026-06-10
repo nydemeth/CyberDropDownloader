@@ -15,7 +15,7 @@ import yarl
 from cyberdrop_dl.utils.filepath import sanitize_folder
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Generator, Iterable, Sequence
 
     from cyberdrop_dl import signature
     from cyberdrop_dl.manager import Manager
@@ -340,6 +340,11 @@ class ScrapeItem:
 
     def setup_as_post(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
         return self.setup_as(title, FORUM_POST, album_id=album_id)
+
+    def create_children(self, urls: Iterable[AbsoluteHttpURL]) -> Generator[Self]:
+        for url in urls:
+            yield self.create_child(url)
+            self.add_children()
 
     @property
     def origin(self) -> AbsoluteHttpURL | None:
