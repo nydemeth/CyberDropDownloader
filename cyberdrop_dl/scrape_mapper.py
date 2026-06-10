@@ -19,7 +19,7 @@ from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import ALLOW_NO_EXT
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
-from cyberdrop_dl.crawlers.http_direct import DirectHttpFile
+from cyberdrop_dl.crawlers.http_direct import DirectHttpFileCrawler
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from cyberdrop_dl.downloader.hls import CONCURRENT_SEGMENTS
@@ -119,7 +119,7 @@ class ScrapeMapper:
     manager: Manager
     crawlers: dict[str, type[Crawler]] = dataclasses.field(init=False, default_factory=dict)
 
-    _direct_http: DirectHttpFile = dataclasses.field(init=False)
+    _direct_http: DirectHttpFileCrawler = dataclasses.field(init=False)
     _jdownloader: JDownloader = dataclasses.field(init=False)
     _real_debrid: RealDebridCrawler = dataclasses.field(init=False)
     _task_groups: TaskGroups = dataclasses.field(
@@ -140,7 +140,7 @@ class ScrapeMapper:
         return total
 
     def __post_init__(self) -> None:
-        self._direct_http = DirectHttpFile(self.manager)
+        self._direct_http = DirectHttpFileCrawler(self.manager)
         self._jdownloader = JDownloader.from_manager(self.manager)
         self._real_debrid = RealDebridCrawler(self.manager)
         self._factory = CrawlerFactory(self.manager)

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-class DirectHttpFile(Crawler, is_generic=True):
+class DirectHttpFileCrawler(Crawler, is_generic=True):
     DOMAIN: ClassVar[str] = "no_crawler"
 
     async def __async_post_init__(self) -> None:

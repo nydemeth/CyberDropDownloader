@@ -212,8 +212,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
         self.config: Config = manager.config
-        self.scrape_mapper: ScrapeMapper = manager.scrape_mapper
-        self.database: Database = manager.database
         self.client: HTTPClient = manager.http_client
         self.downloader: Downloader = Downloader(
             manager,
@@ -259,7 +257,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         cdl_user_agent: bool = False,
         **kwargs: Any,
     ) -> None:
-        assert cls.__name__.endswith("Crawler")
+        assert cls.__name__.endswith("Crawler"), f"{cls.__name__} does not end with 'Crawler'"
         assert cls.__name__ not in Registry.names
         Registry.names.add(cls.__name__)
         super().__init_subclass__(**kwargs)
@@ -355,6 +353,16 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     def _assert_fields_overrides(subclass: type[Crawler], *fields: str) -> None:
         for field_name in fields:
             assert getattr(subclass, field_name, None), f"Subclass {subclass.__name__} must override: {field_name}"
+
+    @final
+    @property
+    def database(self) -> Database:
+        return self.manager.database
+
+    @final
+    @property
+    def scrape_mapper(self) -> ScrapeMapper:
+        return self.manager.scrape_mapper
 
     @final
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
