@@ -203,6 +203,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._scraped_items: set[str] = set()
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
+        self.config: Config = manager.config
 
         self.downloader: Downloader = Downloader(
             self.manager,
@@ -370,7 +371,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @final
     @property
     def deep_scrape(self) -> bool:
-        return self.manager.config.deep_scrape
+        return self.config.deep_scrape
 
     @final
     @property
@@ -379,7 +380,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @property
     def separate_posts(self) -> bool:
-        return self.manager.config.settings.download_options.separate_posts
+        return self.config.settings.download_options.separate_posts
 
     @final
     @contextlib.contextmanager
@@ -519,14 +520,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             media_item.metadata = metadata
 
         if not scrape_item.retry_path:
-            check_path_traversal(self.manager.config.settings.files.download_folder, media_item.download_folder)
+            check_path_traversal(self.config.settings.files.download_folder, media_item.download_folder)
 
         check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
 
     def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
         return {
-            "User-Agent": self._DEFAULT_UA or self.manager.config.global_settings.general.user_agent,
+            "User-Agent": self._DEFAULT_UA or self.config.global_settings.general.user_agent,
             "Referer": str(scrape_item.url),
         }
 
@@ -544,7 +545,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             await self.__write_to_jsonl(media_item)
 
     async def __write_to_jsonl(self, media_item: MediaItem) -> None:
-        if not self.manager.config.settings.files.dump_json:
+        if not self.config.settings.files.dump_json:
             return
 
         await self.manager.logs.write_jsonl([media_item.serialize()])
@@ -584,7 +585,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
                 await self.manager.database.history.set_album_id(self.DOMAIN, media_item)
             return True
 
-        if _should_skip_by_config(media_item, self.manager.config):
+        if _should_skip_by_config(media_item, self.config):
             self.manager.scrape_mapper.tui.files.stats.skipped += 1
             return True
 
@@ -670,19 +671,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @final
     def create_title(self, title: str, album_id: str | None = None, thread_id: int | None = None) -> str:
         """Creates the title for the scrape item."""
-        title = (title or "Untitled").strip()
-
-        if album_id and self.manager.config.settings.download_options.include_album_id_in_folder_name:
-            title = f"{title} {album_id}"
-
-        if thread_id and self.manager.config.settings.download_options.include_thread_id_in_folder_name:
-            title = f"{title} {thread_id}"
-
-        if not self.manager.config.settings.download_options.remove_domains_from_folder_names:
-            title = f"{title} ({self.FOLDER_DOMAIN})"
-
-        # Remove double spaces
-        return " ".join(title.split(" "))
+        return create_title(self.config, self.FOLDER_DOMAIN, title, album_id, thread_id)
 
     @final
     def create_separate_post_title(
@@ -694,7 +683,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     ) -> str:
         if not self.separate_posts:
             return ""
-        title_format = self.manager.config.settings.download_options.separate_posts_format
+        title_format = self.config.settings.download_options.separate_posts_format
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
         if isinstance(date, int):
@@ -1089,3 +1078,25 @@ def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
         return True
 
     return False
+
+
+def create_title(
+    config: Config,
+    domain: str,
+    title: str,
+    album_id: str | None = None,
+    thread_id: int | None = None,
+) -> str:
+    title = (title or "Untitled").strip()
+
+    if album_id and config.settings.download_options.include_album_id_in_folder_name:
+        title = f"{title} {album_id}"
+
+    if thread_id and config.settings.download_options.include_thread_id_in_folder_name:
+        title = f"{title} {thread_id}"
+
+    if not config.settings.download_options.remove_domains_from_folder_names:
+        title = f"{title} ({domain})"
+
+    # Remove double spaces
+    return " ".join(title.split(" "))
