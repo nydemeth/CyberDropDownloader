@@ -17,16 +17,16 @@ classifiers = [
 dependencies = [
     "aiodns >=4.0.4; sys_platform != 'android' and sys_platform != 'win32'",
     "aiohappyeyeballs>=2.6.2",
-    "aiohttp >=3.14.0",
+    "aiohttp >=3.14.1",
     "aiolimiter >=1.2.1",
     "aiosqlite>=0.22.1",
     "async-mega-py >=2.4.1",
     "backports.zstd >=1.5.0; implementation_name=='cpython' and python_version < '3.14'",
-    "beautifulsoup4 >=4.14.3",
+    "beautifulsoup4 >=4.15.0",
     "brotli >=1.2.0; implementation_name=='cpython' and sys_platform!='ios'",
     "certifi >=2026.5.20",
     "curl-cffi >=0.15; implementation_name == 'cpython' ",
-    "cyclopts>=4.16.1",
+    "cyclopts>=4.17.0",
     "idna>=3.18",
     "imagesize >=2.0.0",
     "inquirer>=3.4.1",
@@ -55,14 +55,14 @@ license-files = ["LICENSE"]
 maintainers = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
 readme = "README.md"
 requires-python = ">=3.11"
-version = "9.15.0.dev0"
+version = "9.15.0.dev1"
 
 [project.optional-dependencies]
 apprise = [
     "apprise >=1.11.0",
     "click >=8.4.1",
     'pywin32>=312; platform_system == "Windows"',
-    'tzdata>=2025.3; platform_system == "Windows"'
+    'tzdata>=2026.2; platform_system == "Windows"'
 ]
 
 [project.scripts]
