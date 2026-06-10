@@ -36,7 +36,7 @@ class StreamtapeCrawler(Crawler):
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
         scrape_item.url = self.PRIMARY_URL / "v" / video_id
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return None
 
         soup = await self.request_soup(scrape_item.url)

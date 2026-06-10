@@ -64,7 +64,7 @@ class YandexDiskCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return None
 
         with self._request_context():
@@ -119,7 +119,7 @@ class YandexDiskCrawler(Crawler):
 
     @error_handling_wrapper
     async def _process_file(self, scrape_item: ScrapeItem, file: YandexFile) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return None
 
         referer = str(file.url)

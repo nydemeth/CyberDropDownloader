@@ -66,7 +66,7 @@ class CloudflareStreamCrawler(Crawler):
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str, token: str | None) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         m3u8_url = self.PRIMARY_URL / (token or video_id) / "manifest/video.m3u8"

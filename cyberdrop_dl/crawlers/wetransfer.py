@@ -58,7 +58,7 @@ class WeTransferCrawler(Crawler):
     async def file(
         self, scrape_item: ScrapeItem, file_id: str, security_hash: str, recipient_id: str | None = None
     ) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         payload = {"intent": "entire_transfer", "security_hash": security_hash}

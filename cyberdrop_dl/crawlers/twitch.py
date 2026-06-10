@@ -91,7 +91,7 @@ class TwitchCrawler(Crawler):
     async def vod(self, scrape_item: ScrapeItem, video_id: str) -> None:
         video_id = video_id.removeprefix("v")
         scrape_item.url = self.PRIMARY_URL / "videos" / video_id
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         video = await self.api.video(video_id)
@@ -141,7 +141,7 @@ class TwitchCrawler(Crawler):
     @error_handling_wrapper
     async def clip(self, scrape_item: ScrapeItem, slug: str) -> None:
         scrape_item.url = _CLIPS_URL / slug
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         clip = await self.api.clip(slug)

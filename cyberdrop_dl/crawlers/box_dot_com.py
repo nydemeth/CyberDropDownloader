@@ -67,7 +67,7 @@ class BoxDotComCrawler(Crawler):
         for trash in ("/embed_widget/", "/embed/"):
             canonical_path = canonical_path.replace(trash, "")
         scrape_item.url = scrape_item.url.with_path(canonical_path, keep_query=True, keep_fragment=True)
-        if "file" in scrape_item.url.parts and await self.check_complete_from_referer(scrape_item):
+        if "file" in scrape_item.url.parts and await self.check_complete_from_referer(scrape_item.url):
             return None
 
         soup = await self.request_soup(scrape_item.url)

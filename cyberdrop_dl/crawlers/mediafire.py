@@ -135,11 +135,11 @@ class MediaFireCrawler(Crawler, db_path="name"):
 
     @error_handling_wrapper
     async def _file(self, scrape_item: ScrapeItem, file: File, *, check_referer: bool = True) -> None:
-        if check_referer and await self.check_complete_from_referer(scrape_item):
+        if check_referer and await self.check_complete_from_referer(scrape_item.url):
             return
 
         hash_algo = "sha256" if len(file.hash) == 64 else "md5"
-        if await self.check_complete_by_hash(scrape_item, hash_algo, file.hash):
+        if await self.check_complete_by_hash(scrape_item.url, hash_algo, file.hash):
             return
 
         soup = await self.request_soup(scrape_item.url, impersonate=True)

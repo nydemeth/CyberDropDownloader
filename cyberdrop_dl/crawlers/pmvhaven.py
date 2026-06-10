@@ -116,7 +116,7 @@ class PMVHavenCrawler(Crawler):
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         api_url = self.PRIMARY_URL / "api/videos" / video_id

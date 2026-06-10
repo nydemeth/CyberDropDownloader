@@ -127,7 +127,7 @@ class OneDriveCrawler(Crawler):
     async def link_with_credentials(
         self, scrape_item: ScrapeItem, og_share_link: AbsoluteHttpURL | None = None
     ) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         if og_share_link and await self.check_complete_from_referer(og_share_link):

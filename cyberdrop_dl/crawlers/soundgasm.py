@@ -40,7 +40,7 @@ class SoundGasmCrawler(Crawler):
 
     @error_handling_wrapper
     async def audio(self, scrape_item: ScrapeItem, user: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         scrape_item.setup_as_profile(self.create_title(user))

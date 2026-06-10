@@ -121,7 +121,7 @@ class LeakedZoneCrawler(Crawler):
 
     @error_handling_wrapper
     async def _video(self, scrape_item: ScrapeItem, post: Post) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
         await self._handle_video(scrape_item, post)
 

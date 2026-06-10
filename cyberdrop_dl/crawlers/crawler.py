@@ -100,10 +100,6 @@ _DB_PATH_BUILDERS: MappingProxyType[str, Callable[[AbsoluteHttpURL], str]] = Map
 )
 
 
-def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
-    return item if isinstance(item, AbsoluteHttpURL) else item.url
-
-
 @dataclasses.dataclass(slots=True, frozen=True, order=True)
 class CrawlerInfo:
     site: str
@@ -602,28 +598,26 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     async def check_complete_from_referer(
-        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, *, any_crawler: bool = False
+        self: Crawler, referer: AbsoluteHttpURL, *, any_crawler: bool = False
     ) -> bool:
         """Checks if the scrape item has already been scraped.
 
         if `any_crawler` is `True`, checks database entries for all crawlers and returns `True` if at least 1 of them has marked it as completed
         """
-        url = _url(scrape_item)
         domain = None if any_crawler else self.DOMAIN
-        downloaded = await self.manager.database.history.check_complete_by_referer(domain, url)
+        downloaded = await self.manager.database.history.check_complete_by_referer(domain, referer)
         if downloaded:
-            logger.info(f"Skipping {url} as it has already been downloaded")
+            logger.info(f"Skipping {referer} as it has already been downloaded")
             self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
     async def check_complete_by_hash(
-        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
+        self: Crawler, url: AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
         downloaded = await self.manager.database.hash.check_hash_exists(hash_type, hash_value)
         if downloaded:
-            url = _url(scrape_item)
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
             self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
         return downloaded

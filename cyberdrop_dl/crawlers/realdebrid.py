@@ -112,7 +112,7 @@ class RealDebridCrawler(Crawler, cdl_user_agent=True):
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
         url = scrape_item.url
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         title = self.create_title(f"files [{url.host}]")

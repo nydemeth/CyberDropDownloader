@@ -47,7 +47,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return None
 
         video = await self._request_video(scrape_item.url.origin(), video_id)

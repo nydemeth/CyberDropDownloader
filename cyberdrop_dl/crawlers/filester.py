@@ -51,7 +51,7 @@ class FilesterCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, slug: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         soup = await self._request_soup_w_pass(scrape_item.url, scrape_item.password)

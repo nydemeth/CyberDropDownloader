@@ -93,7 +93,7 @@ class ImgurCrawler(Crawler):
 
     @error_handling_wrapper
     async def image(self, scrape_item: ScrapeItem, image_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
         image = await self._api_request("image", image_id)
         await self._image(scrape_item, image)

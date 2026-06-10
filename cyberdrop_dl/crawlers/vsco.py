@@ -40,7 +40,7 @@ class VSCOCrawler(Crawler):
 
     @error_handling_wrapper
     async def media(self, scrape_item: ScrapeItem, user: str, type_: str, id_: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         scrape_item.setup_as_profile(self.create_title(user))
@@ -96,7 +96,7 @@ class VSCOCrawler(Crawler):
         m3u8 = res = None
         ext = url.suffix
         if ext == ".m3u8":
-            if await self.check_complete_from_referer(scrape_item):
+            if await self.check_complete_from_referer(scrape_item.url):
                 return
 
             ext = ".mp4"

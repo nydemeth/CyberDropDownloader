@@ -66,7 +66,7 @@ class WhypItCrawler(Crawler):
 
     @error_handling_wrapper
     async def track(self, scrape_item: ScrapeItem, track_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         track = await self.api.track(track_id, token=scrape_item.url.query.get("token"))

@@ -83,12 +83,12 @@ class TurboVidCrawler(Crawler):
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, file_id: str) -> None:
         scrape_item.url = self.PRIMARY_URL / "d" / file_id
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         soup = await self.request_soup(scrape_item.url)
         checksum = css.select_text(soup, Selector.MD5)
-        if await self.check_complete_by_hash(scrape_item, "md5", checksum):
+        if await self.check_complete_by_hash(scrape_item.url, "md5", checksum):
             return
 
         scrape_item.uploaded_at = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))

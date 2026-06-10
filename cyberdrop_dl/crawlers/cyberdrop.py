@@ -66,7 +66,7 @@ class CyberdropCrawler(Crawler):
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
         scrape_item.url = self.PRIMARY_URL / "f" / file_id
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         info, auth = await aio.safe_gather(self.api.file_info(file_id), self.api.file_auth(file_id))

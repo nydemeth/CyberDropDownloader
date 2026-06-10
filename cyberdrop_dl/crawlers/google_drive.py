@@ -176,7 +176,7 @@ class GoogleDriveCrawler(Crawler):
 
     @error_handling_wrapper
     async def _file(self, scrape_item: ScrapeItem, export_url: AbsoluteHttpURL) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         link, name = await self._get_file_info(export_url)

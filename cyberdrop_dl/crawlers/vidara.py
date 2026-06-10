@@ -35,7 +35,7 @@ class VidaraCrawler(Crawler, db_path="path_qs_frag"):
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         m3u8_url, thumbnail = await self._request_stream(video_id)
