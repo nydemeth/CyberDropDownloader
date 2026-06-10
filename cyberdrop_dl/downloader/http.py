@@ -26,7 +26,6 @@ from cyberdrop_dl.utils import dates, error_handling_wrapper
 if TYPE_CHECKING:
     import datetime
     from collections.abc import AsyncGenerator
-    from pathlib import Path
 
     from cyberdrop_dl.clients.downloads import DownloadClient
     from cyberdrop_dl.config import Config
@@ -164,8 +163,6 @@ class Downloader:
 
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem) -> AsyncGenerator[None]:
-
-        media_item.attempts = 0
         await self.client.mark_incomplete(media_item, media_item.domain)
         if media_item.is_segment:
             yield
@@ -179,7 +176,6 @@ class Downloader:
 
     async def run(self, media_item: MediaItem) -> bool:
         """Runs the download loop."""
-
         if media_item.url.path in self._processed_items and not self._ignore_history:
             return False
 
@@ -197,8 +193,6 @@ class Downloader:
 
     async def _start_hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
         media_item.path = media_item.download_folder / media_item.filename
-        # TODO: register database duration from m3u8 info
-        # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.path.name
         await self.manager.database.history.add_download_filename(media_item.domain, media_item)
 
@@ -227,12 +221,13 @@ class Downloader:
 
         await self.client.process_completed(media_item, media_item.domain)
         await self.client.handle_media_item_completion(media_item, downloaded=True)
-        await self.finalize_download(media_item, downloaded=True)
+        await self.__finalize_download(media_item)
 
-    async def finalize_download(self, media_item: MediaItem, *, downloaded: bool) -> None:
-        if downloaded:
-            await aio.chmod(media_item.path, 0o666)
-            await self.set_file_datetime(media_item, media_item.path)
+    async def __finalize_download(self, media_item: MediaItem) -> None:
+        await aio.chmod(media_item.path, 0o666)
+        if media_item.is_segment:
+            return
+        await _set_mtime(media_item, self.config)
         self.manager.scrape_mapper.tui.files.stats.completed += 1
         logger.info(f"Download finished: {media_item.url}")
 
@@ -249,26 +244,6 @@ class Downloader:
             raise DurationError(origin=media_item)
         if not _is_allowed_date_range(media_item, self.config):
             raise RestrictedDateRangeError(origin=media_item)
-
-    async def set_file_datetime(self, media_item: MediaItem, complete_file: Path) -> None:
-        """Sets the file's datetime."""
-        if media_item.is_segment:
-            return
-
-        if self.config.settings.download_options.disable_file_timestamps:
-            return
-        if not media_item.uploaded_at:
-            logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
-            return
-
-        # 1. try setting creation date
-        await dates.set_creation_time(complete_file, media_item.uploaded_at)
-
-        # 2. try setting modification and access date
-        try:
-            await asyncio.to_thread(os.utime, complete_file, (media_item.uploaded_at, media_item.uploaded_at))
-        except OSError:
-            pass
 
     async def start_download(self, media_item: MediaItem) -> bool:
         if not media_item.is_segment:
@@ -318,11 +293,7 @@ class Downloader:
 
         else:
             if downloaded:
-                await aio.chmod(media_item.path, 0o666)
-                if not media_item.is_segment:
-                    await self.set_file_datetime(media_item, media_item.path)
-                    self.manager.scrape_mapper.tui.files.stats.completed += 1
-                    logger.info(f"Download finished: {media_item.url}")
+                await self.__finalize_download(media_item)
             return downloaded
 
 
@@ -352,3 +323,24 @@ def _filter_by_date(item_datetime: datetime.datetime, config: Config) -> bool:
     if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
         return False
     return not (ignore_options.exclude_after and item_date > ignore_options.exclude_after)
+
+
+async def _set_mtime(media_item: MediaItem, config: Config) -> None:
+    if media_item.is_segment:
+        return
+
+    if config.settings.download_options.disable_file_timestamps:
+        return
+
+    if not media_item.uploaded_at:
+        logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
+        return
+
+    # 1. try setting creation date
+    await dates.set_creation_time(media_item.path, media_item.uploaded_at)
+
+    # 2. try setting modification and access date
+    try:
+        await asyncio.to_thread(os.utime, media_item.path, (media_item.uploaded_at, media_item.uploaded_at))
+    except OSError:
+        pass
