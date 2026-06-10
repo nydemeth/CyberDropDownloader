@@ -436,3 +436,22 @@ async def temp_dir() -> AsyncGenerator[Path]:
         yield Path(temp_dir.name)
     finally:
         await asyncio.to_thread(temp_dir.cleanup)
+
+
+def periodic_sleep(period: int, /) -> Callable[[], Awaitable[None]]:
+    """Yield control to the event loop every n calls
+
+    To use within busy blocking loops"""
+
+    if period <= 0:
+        raise ValueError("period must be a positive integer")
+
+    calls = 0
+
+    async def sleep() -> None:
+        nonlocal calls
+        calls += 1
+        if calls % period == 0:
+            await asyncio.sleep(0)
+
+    return sleep
