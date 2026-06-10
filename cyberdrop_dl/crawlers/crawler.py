@@ -490,30 +490,34 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         referer: AbsoluteHttpURL | None = None,
         frag: str | None = None,
     ) -> None:
-        """Finishes handling the file and hands it off to the downloader.
+        """Creates a MediaItem and hands it off to the downloader.
 
-        Referer is the referer to use for the db, not the actual HTTTP headers referer"""
+        Referer is the referer to use for the db, not the actual HTTP referer"""
 
-        ext = ext or Path(filename).suffix
-        download_folder = scrape_item.compose_download_path(self.FOLDER_DOMAIN)
-        media_item = MediaItem.from_item(
-            scrape_item,
-            url,
-            self.DOMAIN,
-            filename=custom_filename or filename,
-            download_folder=download_folder,
-            db_path=self.__db_path__(url),
-            original_filename=filename,
-            ext=ext,
-        )
-        media_item.debrid_link = debrid_link
-        if metadata is not None:
-            media_item.metadata = metadata
-        if referer:
-            media_item.referer = referer
+        referer = referer or scrape_item.url
         if frag:
-            media_item.referer = media_item.referer.with_fragment(frag)
+            referer = referer.with_fragment(frag)
+
+        media_item = MediaItem(
+            url=url,
+            domain=self.DOMAIN,
+            download_folder=scrape_item.compose_download_path(self.FOLDER_DOMAIN),
+            filename=custom_filename or filename,
+            db_path=self.__db_path__(url),
+            referer=referer,
+            album_id=scrape_item.album_id,
+            ext=ext or Path(filename).suffix,
+            original_filename=filename,
+            parents=scrape_item.parents.copy(),
+            uploaded_at=scrape_item.uploaded_at,
+            parent_threads=scrape_item.parent_threads.copy(),
+            debrid_link=debrid_link,
+        )
+
         media_item.headers.update(self._prepare_headers(scrape_item))
+        if metadata:
+            media_item.metadata = metadata
+
         if not scrape_item.retry_path:
             check_path_traversal(self.manager.config.settings.files.download_folder, media_item.download_folder)
 

@@ -138,7 +138,7 @@ class MediaItem:
     parents: list[AbsoluteHttpURL] = field(default_factory=list)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
 
-    attempts: int = 0
+    attempts: int = field(init=False, default=0)
     partial_file: Path = None  # pyright: ignore[reportAssignmentType]
     path: Path = None  # pyright: ignore[reportAssignmentType]
     hash: str | None = None
