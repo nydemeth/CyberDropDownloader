@@ -5,7 +5,7 @@ import contextlib
 import dataclasses
 import logging
 import os
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
@@ -34,11 +34,6 @@ if TYPE_CHECKING:
     from cyberdrop_dl.utils.m3u8 import Rendition
 
 logger = logging.getLogger(__name__)
-
-
-class SegmentDownloadResult(NamedTuple):
-    item: MediaItem
-    downloaded: bool
 
 
 _KNOWN_BAD_URLS = {
@@ -73,6 +68,7 @@ class Downloader:
     manager: Manager
     log_prefix: str = "Download"
     use_server_lock: bool = False
+    max_attempts: int = dataclasses.field(init=False)
 
     _slots: int | None = None
     _waiting_items: int = dataclasses.field(init=False, default=0)
@@ -85,6 +81,10 @@ class Downloader:
 
     def __post_init__(self) -> None:
         self.slots = self._slots
+        if self.config.settings.download_options.disable_download_attempt_limit:
+            self.max_attempts = 1
+        else:
+            self.max_attempts = self.config.global_settings.rate_limiting_options.download_attempts
 
     @property
     def waiting_items(self) -> int:
@@ -120,22 +120,11 @@ class Downloader:
     def _ignore_history(self) -> bool:
         return self.manager.config.settings.runtime_options.ignore_history
 
-    @property
-    def max_attempts(self) -> int:
-        if self.config.settings.download_options.disable_download_attempt_limit:
-            return 1
-        return self.config.global_settings.rate_limiting_options.download_attempts
-
-    def _server_lock(self, server: str) -> asyncio.Lock | contextlib.nullcontext[None]:
-        if self.use_server_lock:
-            return self._server_locks[server]
-        return _NULL_CONTEXT
-
     @error_handling_wrapper
-    async def download(self, media_item: MediaItem) -> bool:
+    async def __download_w_retries(self, media_item: MediaItem) -> bool:
         while True:
             try:
-                return bool(await self._download(media_item))
+                return bool(await self.__download_file(media_item))
 
             except DownloadError as e:
                 if not e.retry:
@@ -152,14 +141,31 @@ class Downloader:
                     f"Retrying {self.log_prefix.lower()}: {media_item.url}, retry attempt: {media_item.attempts + 1}"
                 )
 
-    @contextlib.asynccontextmanager
-    async def lock(self, url: AbsoluteHttpURL) -> AsyncGenerator[None]:
-        async with (
-            self._server_lock(url.host),
-            self._semaphore,
-            self.manager.http_client.global_download_limiter,
-        ):
-            yield
+    async def _finalize_download(self, media_item: MediaItem) -> None:
+        await aio.chmod(media_item.path, 0o666)
+        if media_item.is_segment:
+            return
+        await _set_mtime(media_item, self.config)
+        self.manager.scrape_mapper.tui.files.stats.completed += 1
+        logger.info(f"Download finished: {media_item.url}")
+
+    async def _check_skip_by_config(self, media_item: MediaItem) -> None:
+        if not _is_allowed_filetype(media_item, self.config):
+            raise RestrictedFiletypeError(origin=media_item)
+        if not _is_allowed_date_range(media_item, self.config):
+            raise RestrictedDateRangeError(origin=media_item)
+        if not await storage.has_sufficient_space(media_item.download_folder):
+            raise InsufficientFreeSpaceError(media_item)
+        if await filter_by_duration(media_item, self.config):
+            await self.manager.database.history.add_duration(media_item.domain, media_item)
+            raise DurationError(origin=media_item)
+
+    async def _download(self, media_item: MediaItem) -> bool:
+        if not media_item.is_segment:
+            logger.info(f"{self.log_prefix} starting: {media_item.url}")
+
+        async with _exclusive_lock(media_item):
+            return bool(await self.__download_w_retries(media_item))
 
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem) -> AsyncGenerator[None]:
@@ -174,94 +180,13 @@ class Downloader:
             self._waiting_items -= 1
             yield
 
-    async def run(self, media_item: MediaItem) -> bool:
-        """Runs the download loop."""
-        if media_item.url.path in self._processed_items and not self._ignore_history:
-            return False
-
-        async with self._download_context(media_item):
-            return await self.start_download(media_item)
-
-    @error_handling_wrapper
-    async def download_hls(self, media_item: MediaItem, m3u8_group: Rendition) -> None:
-        if media_item.url.path in self._processed_items and not self._ignore_history:
-            return
-
-        assert ffmpeg.is_installed()
-        async with self._download_context(media_item):
-            await self._start_hls_download(media_item, m3u8_group)
-
-    async def _start_hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
-        media_item.path = media_item.download_folder / media_item.filename
-        media_item.download_filename = media_item.path.name
-        await self.manager.database.history.add_download_filename(media_item.domain, media_item)
-
-        with self.manager.scrape_mapper.tui.downloads.download_hls(
-            media_item.filename,
-            media_item.domain,
-            segments=sum(len(m.segments) for m in rendition if m is not None),
-            url=media_item.url,
-        ):
-            await self._hls_download(media_item, rendition)
-
-    async def _hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
-        streams = await hls.download(media_item, rendition, self.start_download)
-        if not streams.audio:
-            await aio.move(streams.video, media_item.path)
-
-        else:
-            # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
-            # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
-            # so we leave them as independent files for now
-            logger.debug(f"Merging audio and video stream from {media_item.real_url}")
-            ffmpeg_result = await ffmpeg.merge((streams.video, streams.audio), media_item.path)
-
-            if not ffmpeg_result.success:
-                raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
-
-        await self.client.process_completed(media_item, media_item.domain)
-        await self.client.handle_media_item_completion(media_item, downloaded=True)
-        await self.__finalize_download(media_item)
-
-    async def __finalize_download(self, media_item: MediaItem) -> None:
-        await aio.chmod(media_item.path, 0o666)
-        if media_item.is_segment:
-            return
-        await _set_mtime(media_item, self.config)
-        self.manager.scrape_mapper.tui.files.stats.completed += 1
-        logger.info(f"Download finished: {media_item.url}")
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-    async def check_file_can_download(self, media_item: MediaItem) -> None:
-        """Checks if the file can be downloaded."""
-        if not await storage.has_sufficient_space(media_item.download_folder):
-            raise InsufficientFreeSpaceError(media_item)
-        if not _is_allowed_filetype(media_item, self.config):
-            raise RestrictedFiletypeError(origin=media_item)
-        if await filter_by_duration(media_item, self.config):
-            await self.manager.database.history.add_duration(media_item.domain, media_item)
-            raise DurationError(origin=media_item)
-        if not _is_allowed_date_range(media_item, self.config):
-            raise RestrictedDateRangeError(origin=media_item)
-
-    async def start_download(self, media_item: MediaItem) -> bool:
-        if not media_item.is_segment:
-            logger.info(f"{self.log_prefix} starting: {media_item.url}")
-
-        async with _exclusive_lock(media_item):
-            return bool(await self.download(media_item))
-
-    async def _download(self, media_item: MediaItem) -> bool | None:  # noqa: C901
-        """Downloads the media item."""
-        url_as_str = str(media_item.url)
-        if url_as_str in _KNOWN_BAD_URLS:
-            raise DownloadError(_KNOWN_BAD_URLS[url_as_str])
+    async def __download_file(self, media_item: MediaItem) -> bool | None:
+        _check_url(media_item)
+        media_item.attempts += 1
         try:
-            media_item.attempts = media_item.attempts or 1
             if not media_item.is_segment:
                 media_item.duration = await self.manager.database.history.get_duration(media_item.domain, media_item)
-                await self.check_file_can_download(media_item)
+                await self._check_skip_by_config(media_item)
             downloaded = await self.client.download_file(media_item.domain, media_item)
 
         except SkipDownloadError as e:
@@ -288,13 +213,70 @@ class Downloader:
                 self._current_attempt_filesize[media_item.filename] = size
                 raise DownloadError(status=999, message="Download timeout reached, retrying", retry=True) from None
 
-            message = str(e)
-            raise DownloadError(ui_message, message, retry=True) from e
+            raise DownloadError(ui_message, str(e), retry=True) from e
 
         else:
             if downloaded:
-                await self.__finalize_download(media_item)
+                await self._finalize_download(media_item)
             return downloaded
+
+    @contextlib.asynccontextmanager
+    async def lock(self, url: AbsoluteHttpURL) -> AsyncGenerator[None]:
+        server_lock = self._server_locks[url.host] if self.use_server_lock else _NULL_CONTEXT
+        async with (
+            server_lock,
+            self._semaphore,
+            self.manager.http_client.global_download_limiter,
+        ):
+            yield
+
+    async def run(self, media_item: MediaItem) -> bool:
+        if media_item.url.path in self._processed_items and not self._ignore_history:
+            return False
+
+        async with self._download_context(media_item):
+            return await self._download(media_item)
+
+    @error_handling_wrapper
+    async def download_hls(self, media_item: MediaItem, m3u8_group: Rendition) -> None:
+        if media_item.url.path in self._processed_items and not self._ignore_history:
+            return
+
+        assert ffmpeg.is_installed()
+        async with self._download_context(media_item):
+            await self.__hls_download(media_item, m3u8_group)
+
+    async def __hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
+        media_item.path = media_item.download_folder / media_item.filename
+        media_item.download_filename = media_item.path.name
+        await self.manager.database.history.add_download_filename(media_item.domain, media_item)
+
+        with self.manager.scrape_mapper.tui.downloads.download_hls(
+            media_item.filename,
+            media_item.domain,
+            segments=sum(len(m.segments) for m in rendition if m is not None),
+            url=media_item.url,
+        ):
+            await self._hls_download(media_item, rendition)
+
+    async def _hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
+        streams = await hls.download(media_item, rendition, self._download)
+        if not streams.audio:
+            await aio.move(streams.video, media_item.path)
+
+        else:
+            # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
+            # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
+            # so we leave them as independent files for now
+            logger.debug(f"Merging audio and video stream from {media_item.real_url}")
+            ffmpeg_result = await ffmpeg.merge((streams.video, streams.audio), media_item.path)
+
+            if not ffmpeg_result.success:
+                raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
+
+        await self.client.process_completed(media_item, media_item.domain)
+        await self.client.handle_media_item_completion(media_item, downloaded=True)
+        await self._finalize_download(media_item)
 
 
 def _is_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
@@ -344,3 +326,9 @@ async def _set_mtime(media_item: MediaItem, config: Config) -> None:
         await asyncio.to_thread(os.utime, media_item.path, (media_item.uploaded_at, media_item.uploaded_at))
     except OSError:
         pass
+
+
+def _check_url(media_item: MediaItem) -> None:
+    url_as_str = str(media_item.url)
+    if url_as_str in _KNOWN_BAD_URLS:
+        raise DownloadError(_KNOWN_BAD_URLS[url_as_str])

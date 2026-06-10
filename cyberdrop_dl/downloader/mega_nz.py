@@ -65,12 +65,9 @@ class MegaDownloader(Downloader):
     def __post_init__(self) -> None:
         super(MegaDownloader, self).__post_init__()
         self._client = MegaDownloadClient(self.manager)
+        self.max_attempts: int = 1
 
     @property
     @override
     def client(self) -> MegaDownloadClient:
         return self._client
-
-    @property
-    def max_attempts(self) -> int:
-        return 1
