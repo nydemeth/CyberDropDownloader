@@ -65,7 +65,7 @@ class MyDesiCrawler(Crawler):
         for page in itertools.count(init_page):
             soup = await self.request_soup(base_url / str(page))
             n_videos = 0
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, "a.infos"):
+            for new_scrape_item in self.iter_children(scrape_item, soup, "a.infos"):
                 n_videos += 1
                 self.create_task(self.run(new_scrape_item))
 

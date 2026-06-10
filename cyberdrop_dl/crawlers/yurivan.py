@@ -49,7 +49,7 @@ class YuriVanCrawler(Crawler):
 
     def _chapters(self, scrape_item: ScrapeItem, story_id: str, soup: BeautifulSoup):
         selector = f"a[href*='/story/{story_id}/read?chapter=']"
-        for _, new_item in self.iter_children(scrape_item, soup, selector):
+        for new_item in scrape_item.create_children(self.iter_urls(soup, selector)):
             self.create_task(self.run(new_item))
             scrape_item.add_children()
 

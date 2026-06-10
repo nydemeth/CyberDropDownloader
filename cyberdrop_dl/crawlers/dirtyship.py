@@ -51,7 +51,7 @@ class DirtyShipCrawler(Crawler):
                 title = self.create_title(f"{name} [{type_}]")
                 scrape_item.setup_as_album(title)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.PLAYLIST_ITEM):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.PLAYLIST_ITEM):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

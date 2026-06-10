@@ -35,7 +35,7 @@ class SoundGasmCrawler(Crawler):
         scrape_item.setup_as_profile("")
         soup = await self.request_soup(scrape_item.url)
 
-        for _, new_item in self.iter_children(scrape_item, soup, ".sound-details a"):
+        for new_item in self.iter_children(scrape_item, soup, ".sound-details a"):
             self.create_task(self.run(new_item))
 
     @error_handling_wrapper

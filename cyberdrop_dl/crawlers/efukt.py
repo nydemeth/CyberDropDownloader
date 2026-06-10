@@ -61,7 +61,7 @@ class EfuktCrawler(Crawler):
     @error_handling_wrapper
     async def homepage(self, scrape_item: ScrapeItem) -> None:
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEO_THUMBS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEO_THUMBS):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -72,7 +72,7 @@ class EfuktCrawler(Crawler):
                 title = css.select_text(soup, Selector.TITLE)
                 scrape_item.setup_as_album(self.create_title(f"{title} [series]"))
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEO_THUMBS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEO_THUMBS):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

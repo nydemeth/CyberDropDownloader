@@ -82,7 +82,7 @@ class XXXBunkerCrawler(Crawler):
                 title = self.create_title(f"{name} [{category}]")
                 scrape_item.setup_as_album(title)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
                 self.create_task(self.run(new_scrape_item))
 
 

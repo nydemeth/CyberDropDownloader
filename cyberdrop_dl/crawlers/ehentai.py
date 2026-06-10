@@ -56,7 +56,7 @@ class EHentaiCrawler(Crawler):
                 scrape_item.setup_as_album(title, album_id=gallery_id)
                 scrape_item.uploaded_at = self.parse_iso_date(date_str)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_IMAGES):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_IMAGES):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

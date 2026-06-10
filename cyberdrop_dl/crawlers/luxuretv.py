@@ -49,7 +49,7 @@ class LuxureTVCrawler(Crawler):
             url /= ""
 
         async for soup in self.web_pager(url, impersonate=True):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_THUMBS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_THUMBS):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

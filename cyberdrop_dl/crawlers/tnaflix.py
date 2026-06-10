@@ -74,7 +74,7 @@ class TNAFlixCrawler(Crawler):
                 title = self.create_title(f"{name} - [{collection_type}]")
                 scrape_item.setup_as_album(title)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_THUMBS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_THUMBS):
                 self.create_task(self.run(new_scrape_item))
 
 

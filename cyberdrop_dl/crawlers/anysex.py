@@ -47,7 +47,7 @@ class AnySexCrawler(FluidPlayerCrawler):
     async def photo_search(self, scrape_item: ScrapeItem, query: str) -> None:
         scrape_item.setup_as_album(self.create_title(query))
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, ".item > a"):
+            for new_scrape_item in self.iter_children(scrape_item, soup, ".item > a"):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -56,5 +56,5 @@ class AnySexCrawler(FluidPlayerCrawler):
         name = open_graph.title(soup)
         title = self.create_title(f"{name} [album]")
         scrape_item.setup_as_album(title, album_id=album_id)
-        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.IMAGES):
+        for new_scrape_item in self.iter_children(scrape_item, soup, Selector.IMAGES):
             self.create_task(self.run(new_scrape_item))

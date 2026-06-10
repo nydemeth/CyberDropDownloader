@@ -141,5 +141,5 @@ class ImagePondCrawler(Crawler):
         scrape_item.setup_as_profile(title)
 
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.USER_FILES):
+            for new_item in self.iter_children(scrape_item, soup, Selector.USER_FILES):
                 self.create_task(self.run(new_item))

@@ -43,7 +43,7 @@ class NudoStarTVCrawler(Crawler):
             if "Last OnlyFans Updates" in title or not soup.select_one(Selector.CONTENT):
                 raise ScrapeError(404)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

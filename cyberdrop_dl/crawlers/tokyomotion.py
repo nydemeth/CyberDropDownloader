@@ -162,7 +162,7 @@ class TokioMotionCrawler(Crawler):
     @error_handling_wrapper
     async def crawl_children(self, scrape_item: ScrapeItem, selector: str) -> None:
         async for soup in self._web_pager(scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, selector):
+            for new_item in self.iter_children(scrape_item, soup, selector):
                 self.create_task(self.run(new_item))
 
     async def _web_pager(self, url: AbsoluteHttpURL) -> AsyncIterator[BeautifulSoup]:

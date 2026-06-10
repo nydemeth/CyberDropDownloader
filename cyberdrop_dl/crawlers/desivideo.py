@@ -54,5 +54,5 @@ class DesiVideoCrawler(Crawler):
         title = self.create_title(query)
         scrape_item.setup_as_album(title)
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
                 self.create_task(self.run(new_scrape_item))

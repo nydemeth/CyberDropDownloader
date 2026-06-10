@@ -115,7 +115,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
                 self.create_task(self._handle_content_id_task(new_scrape_item, content_id))
                 scrape_item.add_children()
 
-            for _, new_scrape_item in self.iter_children(
+            for new_scrape_item in self.iter_children(
                 scrape_item, ajax_soup, Selector.SUBFOLDERS, attribute="sharing-url"
             ):
                 self.create_task(self.run(new_scrape_item))

@@ -302,7 +302,7 @@ class WordPressHTMLCrawler(WordPressBaseCrawler, is_generic=True):
 
     async def _post_pager(self, scrape_item: ScrapeItem, date_range: QueryDatetimeRange | None = None) -> None:
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.POST_LINK_FROM_PAGE.element):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.POST_LINK_FROM_PAGE.element):
                 if (
                     date_range
                     and (date_from_path := _match_date_from_path(new_scrape_item.url.parts[1:]))

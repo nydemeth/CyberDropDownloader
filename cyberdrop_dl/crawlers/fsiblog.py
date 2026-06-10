@@ -72,7 +72,7 @@ class FSIBlogCrawler(Crawler):
         title = self.create_title(query)
         scrape_item.setup_as_album(title)
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ARTICLE):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ARTICLE):
                 self.create_task(self._post_task(new_scrape_item))
 
     _post_task = auto_task_id(post)

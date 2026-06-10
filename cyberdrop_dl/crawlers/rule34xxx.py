@@ -46,7 +46,7 @@ class Rule34XXXCrawler(Crawler):
                 title = self.create_title(tags.strip())
                 scrape_item.setup_as_album(title)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

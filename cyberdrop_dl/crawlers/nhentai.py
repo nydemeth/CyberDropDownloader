@@ -68,7 +68,7 @@ class NHentaiCrawler(Crawler):
                 title = self.create_title(title_tag.get_text(strip=True) + title)
                 scrape_item.setup_as_album(title)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

@@ -70,5 +70,5 @@ class TwPornstarsCrawler(TwimgCrawler):
                 title = self.create_title(name.removesuffix("'s pics and videos"))
                 scrape_item.setup_as_album(title)
 
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.THUMBS):
+            for new_item in self.iter_children(scrape_item, soup, Selector.THUMBS):
                 self.create_task(self.run(new_item))

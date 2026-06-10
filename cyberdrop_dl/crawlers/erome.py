@@ -45,7 +45,7 @@ class EromeCrawler(Crawler):
         scrape_item.setup_as_profile(title)
 
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.ALBUM):
+            for new_item in self.iter_children(scrape_item, soup, Selector.ALBUM):
                 self.create_task(self.run(new_item))
 
     @error_handling_wrapper
@@ -53,7 +53,7 @@ class EromeCrawler(Crawler):
         title = self.create_title(f"{query} [search]")
         scrape_item.setup_as_album(title)
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.ALBUM):
+            for new_item in self.iter_children(scrape_item, soup, Selector.ALBUM):
                 self.create_task(self.run(new_item))
 
     @error_handling_wrapper

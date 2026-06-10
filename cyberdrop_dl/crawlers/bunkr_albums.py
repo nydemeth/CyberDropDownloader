@@ -33,5 +33,5 @@ class BunkrAlbumsCrawler(Crawler):
         title = self.create_title(query)
         scrape_item.setup_as_profile(title)
         async for soup in self.web_pager(scrape_item.url.update_query(per=100)):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, "main section.grid a"):
+            for new_scrape_item in self.iter_children(scrape_item, soup, "main section.grid a"):
                 self.handle_external_links(new_scrape_item)

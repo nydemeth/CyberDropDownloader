@@ -52,7 +52,7 @@ class HotPicCrawler(Crawler):
         title = self.create_title(title, scrape_item.album_id)
         scrape_item.setup_as_profile(title, album_id=album_id)
 
-        for _, new_item in self.iter_children(scrape_item, soup, Selector.ALBUM_ITEM):
+        for new_item in self.iter_children(scrape_item, soup, Selector.ALBUM_ITEM):
             self.create_task(self.run(new_item))
             scrape_item.add_children()
 

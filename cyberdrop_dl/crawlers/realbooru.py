@@ -44,7 +44,7 @@ class RealBooruCrawler(Crawler):
     async def tags(self, scrape_item: ScrapeItem, tags: str) -> None:
         scrape_item.setup_as_album(self.create_title(tags.strip()))
         async for soup in self.web_pager(scrape_item.url, relative_to=scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
+            for new_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
                 self.create_task(self.run(new_item))
 
     @error_handling_wrapper

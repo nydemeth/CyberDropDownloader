@@ -71,7 +71,7 @@ class NoodleMagazineCrawler(Crawler):
             page_url = scrape_item.url.with_query(p=page)
             soup = await self.request_soup(page_url)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
                 if new_scrape_item.url not in seen_urls:
                     seen_urls.add(new_scrape_item.url)
                     n_videos += 1

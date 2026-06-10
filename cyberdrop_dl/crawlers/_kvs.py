@@ -150,7 +150,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
 
     async def _iter_videos(self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None) -> None:
         async for soup in self.web_pager(url or scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.THUMBNAILS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.THUMBNAILS):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -192,7 +192,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         name = css.select_text(soup, Selector.Album.NAME)
         title = self.create_title(f"{name} [album]", album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
-        for _, new_item in self.iter_children(scrape_item, soup, Selector.Album.IMAGES):
+        for new_item in self.iter_children(scrape_item, soup, Selector.Album.IMAGES):
             self.create_task(self.run(new_item))
 
     @error_handling_wrapper

@@ -122,7 +122,7 @@ class PorntrexCrawler(Crawler):
         else:
             last_page = 1
 
-        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_OR_ALBUMS):
+        for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_OR_ALBUMS):
             self.create_task(self.run(new_scrape_item))
 
         await self._ajax_pagination(scrape_item, last_page)
@@ -135,7 +135,7 @@ class PorntrexCrawler(Crawler):
             albums_url = scrape_item.url / "albums"
             soup = await self.request_soup(albums_url)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUMS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUMS):
                 new_scrape_item.append_folders("albums")
                 self.create_task(self.run(new_scrape_item))
 
@@ -176,5 +176,5 @@ class PorntrexCrawler(Crawler):
             page_url = page_url.update_query({from_param_name: page})
             soup = await self.request_soup(page_url)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_OR_ALBUMS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS_OR_ALBUMS):
                 self.create_task(self.run(new_scrape_item))

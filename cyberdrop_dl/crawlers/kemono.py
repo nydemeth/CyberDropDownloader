@@ -555,7 +555,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         async for soup in self._pager(scrape_item.url):
             n_posts = 0
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, _POST_SELECTOR):
+            for new_scrape_item in self.iter_children(scrape_item, soup, _POST_SELECTOR):
                 n_posts += 1
                 self.create_task(self.post_w_no_api_task(new_scrape_item))
 

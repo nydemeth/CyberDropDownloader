@@ -45,7 +45,7 @@ class PimpAndHostCrawler(Crawler):
                 if date_tag := soup.select_one(Selector.DATE):
                     scrape_item.uploaded_at = self.parse_date(css.attr(date_tag, "title"), DATE_FORMAT)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.FILES):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.FILES):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

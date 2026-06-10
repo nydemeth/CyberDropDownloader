@@ -60,7 +60,7 @@ class CyberdropCrawler(Crawler):
         date_str = css.select_text(soup, Selector.ALBUM_DATE)
         scrape_item.uploaded_at = self.parse_date(date_str, "%d.%m.%Y")
 
-        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_ITEM):
+        for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_ITEM):
             self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

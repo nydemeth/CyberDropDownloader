@@ -106,7 +106,7 @@ class CoomerFansCrawler(Crawler):
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem) -> None:
         async for soup in self.web_pager(scrape_item.url):
-            for _, child in self.iter_children(scrape_item, soup, "a.view-post[href]"):
+            for child in self.iter_children(scrape_item, soup, "a.view-post[href]"):
                 self.create_task(self.run(child))
 
 

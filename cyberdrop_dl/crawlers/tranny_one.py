@@ -75,7 +75,7 @@ class TrannyOneCrawler(Crawler):
             page_url = scrape_item.url.with_query(pageId=page)
             soup = await self.request_soup(page_url)
             n_videos = 0
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM_THUMBS):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM_THUMBS):
                 n_videos += 1
                 self.create_task(self.run(new_scrape_item))
 
@@ -100,7 +100,7 @@ class TrannyOneCrawler(Crawler):
 
         ajax_url = self.PRIMARY_URL.with_query(area="pornstarsViewer", ajax=1, id=model_id, tab="albums")
         soup = await self.request_soup(ajax_url)
-        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM_THUMBS):
+        for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM_THUMBS):
             self.create_task(self.run(new_scrape_item))
 
         await self._iter_videos(scrape_item)

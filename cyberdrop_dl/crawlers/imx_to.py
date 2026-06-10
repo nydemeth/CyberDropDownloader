@@ -75,6 +75,5 @@ class ImxToCrawler(Crawler):
         title = self.create_title(name, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
 
-        results = await self.get_album_results(album_id)
-        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.GALLERY_IMAGES, results=results):
+        for new_scrape_item in self.iter_children(scrape_item, soup, Selector.GALLERY_IMAGES):
             self.create_task(self.run(new_scrape_item))
