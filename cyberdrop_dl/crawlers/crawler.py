@@ -116,6 +116,7 @@ class Registry:
     abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
     concrete: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
     generic: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    names: ClassVar[set[str]] = set()
     # generics are concrete crawlers that are not bound to any specific site
     # They can be mapped to a site by just subclassing and setting a PRIMARY URL. ex: Chevereto
 
@@ -257,6 +258,9 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         cdl_user_agent: bool = False,
         **kwargs: Any,
     ) -> None:
+        assert cls.__name__.endswith("Crawler")
+        assert cls.__name__ not in Registry.names
+        Registry.names.add(cls.__name__)
         super().__init_subclass__(**kwargs)
         _check_init_overrides(cls)
         cls.NAME: str = cls.__name__.removesuffix("Crawler")
