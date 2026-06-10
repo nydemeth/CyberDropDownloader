@@ -167,7 +167,7 @@ class Downloader:
     async def _download_context(self, media_item: MediaItem) -> AsyncGenerator[None]:
 
         media_item.attempts = 0
-        await self.client.mark_incomplete(media_item, self.domain)
+        await self.client.mark_incomplete(media_item, media_item.domain)
         if media_item.is_segment:
             yield
             return
@@ -201,7 +201,7 @@ class Downloader:
         # TODO: register database duration from m3u8 info
         # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.path.name
-        await self.manager.database.history.add_download_filename(self.domain, media_item)
+        await self.manager.database.history.add_download_filename(media_item.domain, media_item)
 
         with self.manager.scrape_mapper.tui.downloads.download_hls(
             media_item.filename,
@@ -226,7 +226,7 @@ class Downloader:
             if not ffmpeg_result.success:
                 raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
 
-        await self.client.process_completed(media_item, self.domain)
+        await self.client.process_completed(media_item, media_item.domain)
         await self.client.handle_media_item_completion(media_item, downloaded=True)
         await self.finalize_download(media_item, downloaded=True)
 
@@ -286,9 +286,9 @@ class Downloader:
         try:
             media_item.attempts = media_item.attempts or 1
             if not media_item.is_segment:
-                media_item.duration = await self.manager.database.history.get_duration(self.domain, media_item)
+                media_item.duration = await self.manager.database.history.get_duration(media_item.domain, media_item)
                 await self.check_file_can_download(media_item)
-            downloaded = await self.client.download_file(self.domain, media_item)
+            downloaded = await self.client.download_file(media_item.domain, media_item)
 
         except SkipDownloadError as e:
             if not media_item.is_segment:

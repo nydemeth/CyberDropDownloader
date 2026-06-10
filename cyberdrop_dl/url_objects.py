@@ -8,7 +8,7 @@ import logging
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, final, overload
 
 import yarl
 
@@ -139,7 +139,7 @@ class MediaItem:
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
 
     attempts: int = field(init=False, default=0)
-    partial_file: Path = None  # pyright: ignore[reportAssignmentType]
+    partial_file: Path = field(init=False)
     path: Path = None  # pyright: ignore[reportAssignmentType]
     hash: str | None = None
     downloaded: bool = field(default=False)
@@ -210,6 +210,7 @@ class MediaItem:
         return me
 
 
+@final
 @dataclass(kw_only=True, slots=True)
 class ScrapeItem:
     url: AbsoluteHttpURL

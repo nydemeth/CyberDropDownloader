@@ -83,7 +83,22 @@ class DownloadClient:
         ) as resp:
             return await self._process_response(media_item, domain, resume_point, resp)
 
-    async def _process_response(  # noqa: C901
+    async def _predownload_skip(self, media_item: MediaItem, domain: str) -> bool | None:
+        should_download, should_skip = await self.get_final_file_info(media_item, domain)
+        if should_skip:
+            self.manager.scrape_mapper.tui.files.stats.skipped += 1
+            return False
+        if not should_download:
+            if media_item.is_segment:
+                return True
+            logger.info(f"Skipping {media_item.url} as it has already been downloaded")
+            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
+            await self.process_completed(media_item, domain)
+            await self.handle_media_item_completion(media_item, downloaded=False)
+            return False
+        return None
+
+    async def _process_response(
         self,
         media_item: MediaItem,
         domain: str,
@@ -100,21 +115,13 @@ class DownloadClient:
             _check_content_type(content_type, media_item.ext)
 
         media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
-        if not media_item.path:
-            proceed, skip = await self.get_final_file_info(media_item, domain)
+        try:
+            _ = media_item.path
+        except AttributeError:
             _check_content_length(resp.headers)
-            if skip:
-                self.manager.scrape_mapper.tui.files.stats.skipped += 1
-                return False
-            if not proceed:
-                if media_item.is_segment:
-                    return True
-                logger.info(f"Skipping {media_item.url} as it has already been downloaded")
-                self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
-                await self.process_completed(media_item, domain)
-                await self.handle_media_item_completion(media_item, downloaded=False)
-
-                return False
+            downloaded = await self._predownload_skip(media_item, domain)
+            if downloaded is not None:
+                return downloaded
 
         if resp.status != HTTPStatus.PARTIAL_CONTENT:
             await aio.unlink(media_item.partial_file, missing_ok=True)
@@ -122,31 +129,32 @@ class DownloadClient:
         if (
             not media_item.is_segment
             and not media_item.uploaded_at
-            and (last_modified := get_last_modified(resp.headers))
+            and (last_modified := _get_last_modified(resp.headers))
         ):
             logger.warning(
                 f"Unable to parse upload date for {media_item.url}, using `Last-Modified` header as file datetime"
             )
             media_item.uploaded_at = last_modified
 
-        if media_item.is_segment:
-            hook = self.manager.scrape_mapper.tui.downloads.download_hls_seg()
-
-        else:
-            size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
-            hook = self.manager.scrape_mapper.tui.downloads.download_file(
-                media_item.filename,
-                media_item.domain,
-                size,
-                url=media_item.url,
-            )
-
+        hook = self._make_hook(media_item, resume_point)
         if resume_point:
             hook.advance(resume_point)
 
         with hook:
             await self._append_content(media_item, hook, resp)
         return True
+
+    def _make_hook(self, media_item: MediaItem, resume_point: int) -> ProgressHook:
+        if media_item.is_segment:
+            return self.manager.scrape_mapper.tui.downloads.download_hls_seg()
+
+        size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
+        return self.manager.scrape_mapper.tui.downloads.download_file(
+            media_item.filename,
+            media_item.domain,
+            size,
+            url=media_item.url,
+        )
 
     async def _append_content(self, media_item: MediaItem, hook: ProgressHook, resp: AbstractResponse[Any]) -> None:
         check_free_space = storage.create_free_space_checker(media_item)
@@ -186,21 +194,24 @@ class DownloadClient:
             return False
 
         downloaded = await self._download(domain, media_item)
-
         if downloaded:
             await aio.move(media_item.partial_file, media_item.path)
             if not media_item.is_segment:
-                proceed = not await filter_by_duration(media_item, self.manager.config)
-                await self.manager.database.history.add_duration(domain, media_item)
-                if not proceed:
-                    logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
-                    await aio.unlink(media_item.path)
-                    await self.mark_incomplete(media_item, domain)
-                    self.manager.scrape_mapper.tui.files.stats.skipped += 1
+                if await self.__skip_by_duration(media_item):
                     return False
                 await self.process_completed(media_item, domain)
                 await self.handle_media_item_completion(media_item, downloaded=True)
         return downloaded
+
+    async def __skip_by_duration(self, media_item: MediaItem) -> bool:
+        proceed = not await filter_by_duration(media_item, self.manager.config)
+        await self.manager.database.history.add_duration(media_item.domain, media_item)
+        if not proceed:
+            logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
+            await aio.unlink(media_item.path)
+            await self.mark_incomplete(media_item, media_item.domain)
+            self.manager.scrape_mapper.tui.files.stats.skipped += 1
+        return not proceed
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -219,7 +230,9 @@ class DownloadClient:
         await self.manager.database.history.mark_complete(domain, media_item)
 
     async def add_file_size(self, domain: str, media_item: MediaItem) -> None:
-        if not media_item.path:
+        try:
+            _ = media_item.path
+        except AttributeError:
             media_item.path = self.get_file_location(media_item)
         if await aio.is_file(media_item.path):
             await self.manager.database.history.add_filesize(domain, media_item)
@@ -248,8 +261,7 @@ class DownloadClient:
         return download_folder
 
     def get_file_location(self, media_item: MediaItem) -> Path:
-        download_dir = self.get_download_dir(media_item)
-        return download_dir / media_item.filename
+        return self.get_download_dir(media_item) / media_item.filename
 
     async def get_final_file_info(self, media_item: MediaItem, domain: str) -> tuple[bool, bool]:  # noqa: C901, PLR0912, PLR0915
         """Complicated checker for if a file already exists, and was already downloaded."""
@@ -381,7 +393,7 @@ def _get_content_type(headers: Mapping[str, str]) -> str | None:
     return _CONTENT_TYPES_OVERRIDES.get(override_key) or content_type
 
 
-def get_last_modified(headers: Mapping[str, str]) -> int | None:
+def _get_last_modified(headers: Mapping[str, str]) -> int | None:
     if date_str := headers.get("Last-Modified"):
         return dates.parse_http(date_str)
 
