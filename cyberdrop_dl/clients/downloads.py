@@ -182,9 +182,17 @@ class DownloadClient:
             media_item.partial_file.touch()
 
     async def _post_download_check(self, media_item: MediaItem, *_: Any) -> None:
-        if not await aio.get_size(media_item.partial_file):
+        size = await aio.get_size(media_item.partial_file)
+        if not size:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
+
+        assert media_item.filesize
+        if size < media_item.filesize:
+            await aio.unlink(media_item.partial_file, missing_ok=True)
+            raise DownloadError(
+                "Corrupted File", f"Expected at least {media_item.filesize:,} bytes but only got {size:,} bytes"
+            )
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""

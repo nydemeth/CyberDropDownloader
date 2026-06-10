@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Reject any download without a valid `Content-Length` header.
+- Report any download with size < `Content-Length` as corrupted and delete them
 
 ### Deprecated
 
