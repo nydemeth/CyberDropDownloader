@@ -3,9 +3,9 @@ from __future__ import annotations
 import base64
 import contextlib
 import copy
+import dataclasses
 import datetime
 import logging
-from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, final, overload
@@ -116,7 +116,8 @@ FILE_HOST_ALBUM = ScrapeItemType.FILE_HOST_ALBUM
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True, kw_only=True)
+@final
+@dataclasses.dataclass(slots=True, kw_only=True)
 class MediaItem:
     url: AbsoluteHttpURL
     domain: str
@@ -135,23 +136,23 @@ class MediaItem:
     album_id: str | None = None
     uploaded_at: int | None = None
 
-    parents: list[AbsoluteHttpURL] = field(default_factory=list)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
+    parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set)
 
-    attempts: int = field(init=False, default=0)
-    partial_file: Path = field(init=False)
-    path: Path = None  # pyright: ignore[reportAssignmentType]
+    attempts: int = dataclasses.field(init=False, default=0)
+    partial_file: Path = dataclasses.field(init=False)
+    path: Path = dataclasses.field(init=False)
     hash: str | None = None
-    downloaded: bool = field(default=False)
+    downloaded: bool = dataclasses.field(default=False)
 
-    metadata: object = field(init=False, default_factory=dict)
+    metadata: object = dataclasses.field(init=False, default_factory=dict)
 
-    uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
-    extra_info: dict[str, Any] = field(init=False, default_factory=dict)
+    uploaded_at_date: datetime.datetime | None = dataclasses.field(init=False, default=None)
+    extra_info: dict[str, Any] = dataclasses.field(init=False, default_factory=dict)
 
-    id: tuple[str, ...] = field(init=False)
-    base64_id: str = field(init=False)
-    headers: dict[str, str] = field(default_factory=dict)
+    id: tuple[str, ...] = dataclasses.field(init=False)
+    base64_id: str = dataclasses.field(init=False)
+    headers: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.id = self.domain, self.db_path
@@ -161,7 +162,7 @@ class MediaItem:
             self.id = *self.id, "metadata"
 
         if self.uploaded_at:
-            assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
+            assert type(self.uploaded_at) is int, f"Invalid {self.uploaded_at =!r} from {self.referer}"
             self.uploaded_at_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
 
         self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode().rstrip("=")
@@ -202,7 +203,7 @@ class MediaItem:
         )
 
     def serialize(self) -> dict[str, Any]:
-        me = asdict(self)
+        me = dataclasses.asdict(self)
         if self.hash:
             me["hash"] = f"xxh128:{self.hash}"
         for name in ("is_segment",):
@@ -211,28 +212,28 @@ class MediaItem:
 
 
 @final
-@dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class ScrapeItem:
     url: AbsoluteHttpURL
     part_of_album: bool = False
     album_id: str | None = None
     uploaded_at: int | None = None
     retry_path: Path | None = None
-    folders: list[str] = field(init=False, default_factory=list)
+    folders: list[str] = dataclasses.field(init=False, default_factory=list)
     download_folder: Path = Path("downloads")
 
-    parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, init=False)
+    parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list, init=False)
+    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set, init=False)
 
-    type: ScrapeItemType | None = field(default=None, init=False)
-    completed_at: int | None = field(default=None, init=False)
-    created_at: int | None = field(default=None, init=False)
-    children_limits: list[int] = field(default_factory=list, init=False)
+    type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
+    completed_at: int | None = dataclasses.field(default=None, init=False)
+    created_at: int | None = dataclasses.field(default=None, init=False)
+    children_limits: list[int] = dataclasses.field(default_factory=list, init=False)
 
-    password: str | None = field(default=None, init=False)
+    password: str | None = dataclasses.field(default=None, init=False)
 
-    _children_count: int = field(default=0, init=False)
-    _children_limit: int = field(default=0, init=False)
+    _children_count: int = dataclasses.field(default=0, init=False)
+    _children_limit: int = dataclasses.field(default=0, init=False)
 
     @property
     @contextlib.contextmanager
