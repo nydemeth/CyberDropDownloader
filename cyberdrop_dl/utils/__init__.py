@@ -7,7 +7,6 @@ import inspect
 import itertools
 import logging
 import platform
-import re
 import sys
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, Protocol, TypeVar, cast, overload
@@ -16,14 +15,12 @@ import yarl
 from aiohttp import ClientConnectorError, TooManyRedirects
 from mega.errors import MegaNzError
 from pydantic import ValidationError
-from typing_extensions import TypeIs
 
-from cyberdrop_dl.exceptions import CDLBaseError, ErrorLogMessage, InvalidURLError, create_error_msg, get_origin
-from cyberdrop_dl.utils._dataclasses import DictDataclass as DictDataclass
-from cyberdrop_dl.utils._dataclasses import deserialize as deserialize
-from cyberdrop_dl.utils._dataclasses import filter_data as filter_data
-from cyberdrop_dl.utils._dataclasses import type_adapter as type_adapter
+from cyberdrop_dl.exceptions import CDLBaseError, ErrorLogMessage, create_error_msg, get_origin
+from cyberdrop_dl.utils._dataclasses import DictDataclass, deserialize, filter_data, type_adapter  # noqa: F401
 from cyberdrop_dl.utils._path_traverse import has_partial_files, partial_files
+from cyberdrop_dl.utils._url import is_absolute_http_url, remove_trailing_slash  # noqa: F401
+from cyberdrop_dl.utils._url import parse_http_url as parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Iterable
@@ -31,7 +28,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.downloader.http import Downloader
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
+    from cyberdrop_dl.url_objects import MediaItem, ScrapeItem
 
     class _HasManager(Protocol):
         manager: Manager
@@ -47,13 +44,14 @@ _R = TypeVar("_R")
 logger = logging.getLogger(__name__)
 
 _ERROR_WRAPPER_ATTR = "__cdl_error_wrapped__"
+_ = parse_url
 
 
 def is_error_wrapped(method: object) -> bool:
     return getattr(method, _ERROR_WRAPPER_ATTR, False)
 
 
-def mark_as_safe(fn: _T) -> _T:
+def _mark_as_safe(fn: _T) -> _T:
     setattr(fn, _ERROR_WRAPPER_ATTR, True)
     return fn
 
@@ -192,7 +190,7 @@ def error_handling_wrapper(
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
-        return mark_as_safe(async_wrapper)
+        return _mark_as_safe(async_wrapper)
 
     @functools.wraps(func)
     def wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -201,7 +199,7 @@ def error_handling_wrapper(
             assert not inspect.isawaitable(result)
             return result
 
-    return mark_as_safe(wrapper)
+    return _mark_as_safe(wrapper)
 
 
 def delete_empty_files_and_folders(path: Path) -> None:
@@ -254,60 +252,6 @@ def extr_text(text: str, /, start: str, end: str) -> str:
     start_index = text.index(start) + len(start)
     end_index = text.index(end, start_index)
     return text[start_index:end_index].strip()
-
-
-def _str_to_url(link_str: str) -> yarl.URL:
-    if not link_str:
-        raise InvalidURLError("link_str is empty", url=link_str)
-
-    def fix_query_params_encoding(link: str) -> str:
-        if "?" not in link:
-            return link
-        parts, query_and_frag = link.split("?", 1)
-        query_and_frag = query_and_frag.replace("+", "%20")
-        return f"{parts}?{query_and_frag}"
-
-    def fix_multiple_slashes(link_str: str) -> str:
-        return re.sub(r"(?:https?)?:?(\/{3,})", "//", link_str)
-
-    try:
-        clean_link_str = fix_multiple_slashes(fix_query_params_encoding(link_str))
-        return yarl.URL(clean_link_str, encoded="%" in clean_link_str)
-
-    except (AttributeError, ValueError, TypeError) as e:
-        raise InvalidURLError(str(e), url=link_str) from e
-
-
-def parse_url(
-    link_str: AbsoluteHttpURL | yarl.URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True
-) -> AbsoluteHttpURL:
-    """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
-    Raises:
-        InvalidURLError: If the input string is not a valid URL or if any other error occurs during parsing.
-        TypeError: If `relative_to` is `None` and the parsed URL is relative or has no scheme.
-    """
-
-    url = _str_to_url(link_str) if isinstance(link_str, str) else link_str
-    if not url.absolute:
-        if not relative_to:
-            raise InvalidURLError("Relative URL with no known base", url=link_str)
-        url = relative_to.join(url)
-    if not url.scheme:
-        url = url.with_scheme(relative_to.scheme if relative_to else "https")
-    assert is_absolute_http_url(url)
-    if not trim:
-        return url
-    return remove_trailing_slash(url)
-
-
-def is_absolute_http_url(url: yarl.URL) -> TypeIs[AbsoluteHttpURL]:
-    return url.absolute and url.scheme.startswith("http")
-
-
-def remove_trailing_slash(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-    if url.name or url.path == "/":
-        return url
-    return url.parent.with_fragment(url.fragment).with_query(url.query)
 
 
 def get_system_information() -> dict[str, Any]:
