@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class Selector:
-    STREAM_DATA = ".main-container > script:-soup-contains('var stream_data')"
+    STREAM_DATA = ".main-container script:-soup-contains('var stream_data')"
     PLAYLIST_TITLE = "[data-testid=playlist-title]"
     NEXT_PAGE = ".pagination li.next > a[href]"
 
