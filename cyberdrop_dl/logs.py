@@ -10,14 +10,13 @@ from enum import StrEnum
 from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, TypeVar, final
+from typing import TYPE_CHECKING, ClassVar, final, override
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
 from rich.logging import RichHandler
 from rich.padding import Padding
 from rich.text import Text, TextType
-from typing_extensions import override
 
 from cyberdrop_dl import env
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
@@ -34,7 +33,7 @@ logger = logging.getLogger("cyberdrop_dl")
 for noisy_package in ("aiosqlite", "markdown_it"):
     logging.getLogger(noisy_package).setLevel(logging.ERROR)
 
-_T = TypeVar("_T")
+
 _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
 _MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOG_LISTENER")
@@ -212,7 +211,7 @@ def _threaded_logger(
 
 
 @contextlib.contextmanager
-def _enter_context(context_var: ContextVar[_T], value: _T, /) -> Generator[None]:
+def _enter_context[T](context_var: ContextVar[T], value: T, /) -> Generator[None]:
     token = context_var.set(value)
     try:
         yield

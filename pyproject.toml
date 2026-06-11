@@ -9,7 +9,6 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14"
@@ -54,8 +53,8 @@ license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 maintainers = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
 readme = "README.md"
-requires-python = ">=3.11"
-version = "9.15.1"
+requires-python = ">=3.12"
+version = "10.0.0.dev0"
 
 [project.optional-dependencies]
 apprise = [
@@ -132,7 +131,7 @@ strict_markers = true
 [tool.ruff]
 exclude = ["cyberdrop_dl/dependencies/browser_cookie3.py"]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -169,9 +168,6 @@ ignore = [
 
 [tool.ruff.lint.flake8-boolean-trap]
 extend-allowed-calls = ["cyberdrop_dl.logs._enter_context"]
-
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"typing.override".msg = "Use typing_extensions.override instead."
 
 [tool.ruff.lint.per-file-ignores]
 "**/{tests,docs,scripts}/*" = [
