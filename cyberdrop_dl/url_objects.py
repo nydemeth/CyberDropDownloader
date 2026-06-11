@@ -203,6 +203,9 @@ class MediaItem:
         )
 
     def serialize(self) -> dict[str, Any]:
+        for attr in ("path", "partial_file"):
+            if not hasattr(self, attr):
+                setattr(self, attr, None)
         me = dataclasses.asdict(self)
         if self.hash:
             me["hash"] = f"xxh128:{self.hash}"
