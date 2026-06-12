@@ -1,51 +1,37 @@
 from cyclopts import Parameter
 from pydantic import BaseModel, Field
 
-from cyberdrop_dl.models import AliasModel
+
+class ApiKeyAuth(BaseModel):
+    api_key: str = ""
 
 
-class CoomerAuth(BaseModel):
-    session: str = ""
-
-
-class ImgurAuth(AliasModel):
-    client_id: str = ""
-
-
-class MegaNzAuth(AliasModel):
+class EmailAuth(BaseModel):
     email: str = ""
     password: str = ""
 
 
-class JDownloaderAuth(AliasModel):
+class ImgurAuth(BaseModel):
+    client_id: str = ""
+
+
+class JDownloaderAuth(BaseModel):
     username: str = ""
     password: str = ""
     device: str = ""
 
 
-class KemonoAuth(AliasModel):
+class KemonoAuth(BaseModel):
     session: str = ""
 
 
-class GoFileAuth(AliasModel):
-    api_key: str = ""
-
-
-class PixeldrainAuth(AliasModel):
-    api_key: str = ""
-
-
-class RealDebridAuth(AliasModel):
-    api_key: str = ""
-
-
 @Parameter(show=False)
-class AuthSettings(AliasModel):
-    coomer: CoomerAuth = Field(default_factory=CoomerAuth)
-    gofile: GoFileAuth = Field(default_factory=GoFileAuth)
+class AuthSettings(BaseModel, defer_build=True):
+    coomer: KemonoAuth = Field(default_factory=KemonoAuth)
+    gofile: ApiKeyAuth = Field(default_factory=ApiKeyAuth)
     imgur: ImgurAuth = Field(default_factory=ImgurAuth)
     jdownloader: JDownloaderAuth = Field(default_factory=JDownloaderAuth)
     kemono: KemonoAuth = Field(default_factory=KemonoAuth)
-    meganz: MegaNzAuth = Field(default_factory=MegaNzAuth)
-    pixeldrain: PixeldrainAuth = Field(default_factory=PixeldrainAuth)
-    realdebrid: RealDebridAuth = Field(default_factory=RealDebridAuth)
+    meganz: EmailAuth = Field(default_factory=EmailAuth)
+    pixeldrain: ApiKeyAuth = Field(default_factory=ApiKeyAuth)
+    realdebrid: ApiKeyAuth = Field(default_factory=ApiKeyAuth)
