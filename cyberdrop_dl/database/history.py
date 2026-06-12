@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import contextlib
-import dataclasses
 import logging
 import time
 from sqlite3 import IntegrityError, Row
 from typing import TYPE_CHECKING, Any, cast
 
-from .definitions import create_history, create_media_index
+from cyberdrop_dl.database import table
+from cyberdrop_dl.database.definitions import CREATE_HISTORY, CREATE_MEDIA_INDEX
 
 if TYPE_CHECKING:
     import datetime
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from yarl import URL
 
     from cyberdrop_dl.crawlers.crawler import Crawler
-    from cyberdrop_dl.database import Database
     from cyberdrop_dl.url_objects import MediaItem
 
 
@@ -25,27 +24,15 @@ _FETCH_MANY_SIZE: int = 1000
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class HistoryTable:
-    _database: Database
-
-    @property
-    def db_conn(self) -> aiosqlite.Connection:
-        return self._database.conn
-
+class HistoryTable(table.Table):
     async def create(self) -> None:
-        await self.db_conn.execute(create_history)
-        await self.db_conn.executescript(create_media_index)
+        await self.db_conn.execute(CREATE_HISTORY)
+        await self.db_conn.executescript(CREATE_MEDIA_INDEX)
         await self.db_conn.commit()
 
     async def apply_updates(self) -> None:
         logger.info("Applying database updates. This could take a while...")
         await apply_fixes(self.db_conn)
-
-    async def delete_invalid_rows(self) -> None:
-        query = "DELETE FROM media WHERE download_filename = '' "
-        await self.db_conn.execute(query)
-        await self.db_conn.commit()
 
     async def check_complete(self, domain: str, db_path: str) -> tuple[str, bool]:
         """Checks whether an individual file has completed given its domain and url path."""
@@ -69,8 +56,7 @@ class HistoryTable:
             return {}
 
         query = "SELECT url_path, completed FROM media WHERE domain = ? and album_id = ?"
-        cursor = await self.db_conn.execute(query, (domain, album_id))
-        rows = await cursor.fetchall()
+        rows = await self.db_conn.execute_fetchall(query, (domain, album_id))
         return {row[0]: bool(row[1]) for row in rows}
 
     async def set_album_id(self, domain: str, media_item: MediaItem) -> None:

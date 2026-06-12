@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from cyberdrop_dl import aio, database, scrape_mapper
-from cyberdrop_dl.database import Database
-from cyberdrop_dl.database.tables import schema
+from cyberdrop_dl.database import Database, schema
 from cyberdrop_dl.exceptions import DatabaseError
 from cyberdrop_dl.scrape_mapper import _create_item_from_row
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -190,7 +189,7 @@ async def test_pre_allocation(tmp_cwd: Path) -> None:
         assert size == 0
 
     async with database.connect(db_file) as db:
-        await database._pre_allocate(db)
+        await database.pre_allocate_100mb(db)
 
     size = await aio.get_size(db_file)
     assert size
@@ -199,34 +198,26 @@ async def test_pre_allocation(tmp_cwd: Path) -> None:
 
 async def test_database_version_check(tmp_cwd: Path) -> None:
     db_file = tmp_cwd / "test_db.db"
-    db = Database(db_file)
     db_file.touch()
-    await db._connect()
-    try:
+    async with Database(db_file).connect() as db:
         await db._create_tables()
         assert db._is_new
         await db.conn.execute("DROP TABLE 'schema_version'")
         await db.conn.commit()
-    finally:
-        await db.conn.close()
 
-    db = Database(db_file)
-    await db._connect()
-    try:
+    async with Database(db_file).connect() as db:
         assert not db._is_new
         assert not db.schema.up_to_date
         await db.schema.create()
-        assert db.schema._version is None
-        assert await db.schema._get_version() is None
+        assert db.schema.version is None
+        assert await db.schema.get_version() is None
         version = schema.Version(8, 8, 8)
         await db.schema.update(version)
         assert not db.schema.up_to_date
-        assert await db.schema._get_version() == version
-        assert db.schema._version == version
+        assert await db.schema.get_version() == version
+        assert db.schema.version == version
         with pytest.raises(DatabaseError):
             db.schema.check_version()
-    finally:
-        await db.conn.close()
 
 
 async def test_db_schema_dump(tmp_cwd: Path) -> None:

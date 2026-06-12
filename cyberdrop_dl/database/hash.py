@@ -5,46 +5,32 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from .definitions import create_files, create_hash, create_hash_index
+from cyberdrop_dl.database import table
+from cyberdrop_dl.database.definitions import CREATE_FILES, CREATE_HASH, CREATE_HASH_INDEX
 
 if TYPE_CHECKING:
     import aiosqlite
     from yarl import URL
 
-    from cyberdrop_dl.database import Database
-
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class HashTable:
-    _database: Database
+@dataclasses.dataclass(slots=True)
+class HashTable(table.Table):
     cwd: Path = dataclasses.field(init=False, default_factory=lambda: Path.cwd().expanduser().resolve())
-
-    @property
-    def db_conn(self) -> aiosqlite.Connection:
-        return self._database.conn
 
     async def create(self) -> None:
         for query in (
-            create_files,
-            create_hash,
-            create_hash_index,
+            CREATE_FILES,
+            CREATE_HASH,
+            CREATE_HASH_INDEX,
         ):
             _ = await self.db_conn.execute(query)
 
         await self.db_conn.commit()
 
     async def get_file_hash_exists(self, path: Path | str, hash_type: str) -> str | None:
-        """gets the hash from a complete file path
-
-        Args:
-            full_path: Full path to the file to check.
-
-        Returns:
-            hash if  exists
-        """
         query = "SELECT hash FROM hash WHERE folder=? AND download_filename=? AND hash_type=? AND hash IS NOT NULL"
         try:
             path = self.cwd / path
