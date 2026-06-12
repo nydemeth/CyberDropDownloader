@@ -71,13 +71,10 @@ async def _post_runtime(manager: Manager) -> None:
         file_hashes = await manager.hasher.run()
         await manager.deduper.run(file_hashes)
 
-    if manager.config.settings.sorting.sort_downloads and not manager.cli_args.retry_any:
+    if manager.config.settings.sorting.sort_downloads:
         await manager.sorter.run()
 
     check_partials_and_empty_folders(manager.config)
-
-    if manager.config.settings.runtime_options.update_last_forum_post:
-        await manager.logs.update_last_forum_post(manager.config.settings.files.input_file)
 
 
 def _main(manager: Manager) -> None:
@@ -113,10 +110,8 @@ def download(
     appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
 
     config = Config.create(appdata, cli.config_file).update(config)
-    if cli.retry_all or cli.retry_maintenance:
-        config.settings.runtime_options.ignore_history = True
 
-    if not cli.fullscreen_ui or cli.retry_any or cli.config_file or config.settings.sorting.sort_downloads:
+    if not cli.fullscreen_ui or cli.config_file or config.settings.sorting.sort_downloads:
         cli.download = True
 
     manager = Manager(cli, appdata, config)

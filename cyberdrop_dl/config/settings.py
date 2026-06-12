@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, Self, override
 
 from cyclopts import Parameter
 from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, PrivateAttr, field_validator
@@ -15,7 +15,6 @@ from cyberdrop_dl.constants import (
     DEFAULT_DOWNLOAD_STORAGE,
     LOGS_DATE_FORMAT,
     LOGS_DATETIME_FORMAT,
-    Browser,
     Hashing,
 )
 from cyberdrop_dl.models import AliasModel, AppriseURL, SettingsGroup
@@ -47,14 +46,11 @@ _SORTING_COMMON_FIELDS = {
 
 class DownloadOptions(SettingsGroup):
     block_download_sub_folders: bool = False
-    disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
     include_album_id_in_folder_name: bool = False
     include_thread_id_in_folder_name: bool = False
     maximum_number_of_children: ListNonNegativeInt = []
     remove_domains_from_folder_names: bool = False
-    remove_generated_id_from_filenames: bool = False
-    scrape_single_forum_post: bool = False
     separate_posts_format: NonEmptyStr = "{default}"
     separate_posts: bool = False
     skip_download_mark_completed: bool = False
@@ -75,14 +71,12 @@ class Files(SettingsGroup):
     )
     dump_json: Annotated[bool, Parameter(alias="-j")] = Field(default=False, validation_alias="j")
     input_file: Annotated[Path, Parameter(alias="-i")] = Field(default=Path("URLs.txt"), validation_alias="i")
-    save_pages_html: bool = False
     dump_responses: bool = False
     """Save text/HTML/JSON responses to disk (flaresolverr responses are excluded)"""
 
 
 class Logs(SettingsGroup):  # noqa: PLW1641
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
-    last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
     logs_expire_after: timedelta | None = None
     main_log: MainLogPath = Path("downloader.log")
@@ -289,7 +283,6 @@ class RuntimeOptions(SettingsGroup):
     skip_check_for_empty_folders: bool = False
     skip_check_for_partial_files: bool = False
     slow_download_speed: ByteSizeSerilized = ByteSize(0)
-    update_last_forum_post: bool = True
 
     @field_validator("log_level", "console_log_level", mode="before")
     @classmethod
@@ -374,23 +367,37 @@ class Sorting(SettingsGroup):
         return value
 
 
-class BrowserCookies(SettingsGroup):
-    auto_import: bool = False
-    browser: Browser | None = Browser.firefox
-    sites: list[str] = Field(default_factory=list)
+class Cookies(SettingsGroup):
+    cookies: Path | None = None
+    "File/folder to import cookies from (.txt Netscape files)"
 
 
 class DupeCleanup(SettingsGroup):
-    add_md5_hash: bool = False
-    add_sha256_hash: bool = False
+    hashes: tuple[Literal["xxh128", "md5", "sha256"], ...] = "xxh128", "md5", "sha256"
     auto_dedupe: bool = True
     hashing: Hashing = Hashing.IN_PLACE
     send_deleted_to_trash: bool = True
+    _extra_hashes: tuple[Literal["md5", "sha256"], ...] = ()
+
+    @override
+    def model_post_init(self, *_) -> None:
+        self.re_compute()
+
+    def re_compute(self) -> None:
+        hashes = set(self.hashes)
+        if (xxhash := "xxh128") not in hashes:
+            self.hashes = xxhash, *hashes
+        hashes.discard(xxhash)
+        self._extra_hashes = tuple(sorted(hashes))  # pyright: ignore[reportAttributeAccessIssue]
+
+    @property
+    def extra_hashes(self) -> tuple[Literal["md5", "sha256"], ...]:
+        return self._extra_hashes
 
 
 @Parameter(name="*")
 class ConfigSettings(AliasModel):
-    browser_cookies: BrowserCookies = Field(default_factory=BrowserCookies)
+    cookies: Cookies = Field(default_factory=Cookies)
     download_options: DownloadOptions = Field(default_factory=DownloadOptions)
     dupe_cleanup_options: DupeCleanup = Field(default_factory=DupeCleanup)
     file_size_limits: FileSizeLimits = Field(default_factory=FileSizeLimits)

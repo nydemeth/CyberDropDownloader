@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import datetime
 import logging
 import re
 import time
@@ -27,7 +26,7 @@ from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import dates, filepath, remove_trailing_slash
+from cyberdrop_dl.utils import filepath, remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence
@@ -43,18 +42,6 @@ logger = logging.getLogger(__name__)
 
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
-
-
-def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
-    skip = False
-    item_date = scrape_item.completed_at or scrape_item.created_at
-    if not item_date:
-        return False
-    date = dates.from_timestamp(item_date).date()
-    if (after and date < after) or (before and date > before):
-        skip = True
-
-    return skip
 
 
 def _filter_by_domain(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
@@ -213,10 +200,6 @@ class ScrapeMapper:
         await self._real_debrid.__async_init__()
         await self._direct_http.__async_post_init__()
 
-        item_limit = 0
-        if self.manager.cli_args.retry_any and self.manager.cli_args.max_items_retry:
-            item_limit = self.manager.cli_args.max_items_retry
-
         source_name, source = _source(self.manager)
         async with contextlib.aclosing(source) as items:
             stats = ScrapeStats(source_name)
@@ -234,8 +217,6 @@ class ScrapeMapper:
                 item.children_limits = self.manager.config.settings.download_options.maximum_number_of_children
                 item.download_folder = self.manager.config.settings.files.download_folder
                 if self._should_scrape(item):
-                    if item_limit and stats.count >= item_limit:
-                        break
                     stats.update(item)
                     self.create_task(self._send_to_crawler(item))
 
@@ -310,13 +291,6 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
             return False
 
-        before = self.manager.cli_args.completed_before
-        after = self.manager.cli_args.completed_after
-
-        if _filter_by_date(scrape_item, before, after):
-            logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
-            return False
-
         skip_hosts = self.manager.config.settings.ignore_options.skip_hosts
         if skip_hosts and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
@@ -358,13 +332,6 @@ class ScrapeMapper:
 
 def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     cli_args = manager.cli_args
-
-    if cli_args.retry_failed:
-        return "--retry-failed", load_failed_links(manager)
-    if cli_args.retry_all:
-        return "--retry-all", load_all_links(manager)
-    if cli_args.retry_maintenance:
-        return "--retry-maintenance", load_all_bunkr_failed_links_via_hash(manager)
     if cli_args.links:
         return "--links (CLI args)", _load_cli_links(cli_args.links)
 
@@ -429,12 +396,7 @@ def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:
 def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
     referer: str = row["referer"]
     url = AbsoluteHttpURL(referer, encoded="%" in referer)
-    item = ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
-    if completed_at := row["completed_at"]:
-        item.completed_at = int(datetime.datetime.fromisoformat(completed_at).timestamp())
-    if created_at := row["created_at"]:
-        item.created_at = int(datetime.datetime.fromisoformat(created_at).timestamp())
-    return item
+    return ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
 
 
 def get_crawlers_mapping(*, include_generics: bool = False) -> dict[str, type[Crawler]]:
@@ -541,23 +503,3 @@ def _best_match[T](current_map: dict[str, T], domain: str) -> T | None:
     else:
         current_map[domain] = found = current_map[best_match]
         return found
-
-
-async def load_failed_links(manager: Manager) -> AsyncGenerator[ScrapeItem]:
-    async for rows in manager.database.history.get_failed_items():
-        for row in rows:
-            yield _create_item_from_row(row)
-
-
-async def load_all_links(manager: Manager) -> AsyncGenerator[ScrapeItem]:
-    after = manager.cli_args.completed_after or dates.MIN.date()
-    before = manager.cli_args.completed_before or dates.now_utc().date()
-    async for rows in manager.database.history.get_all_items(after, before):
-        for row in rows:
-            yield _create_item_from_row(row)
-
-
-async def load_all_bunkr_failed_links_via_hash(manager: Manager) -> AsyncGenerator[ScrapeItem]:
-    async for rows in manager.database.history.get_all_bunkr_failed():
-        for row in rows:
-            yield _create_item_from_row(row)
