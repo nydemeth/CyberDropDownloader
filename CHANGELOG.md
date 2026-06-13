@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Update website salt (Gofile)
+- Free space check on network drives (Windows)
 
 ## [9.15.1] - 2026-06-11
 

@@ -68,6 +68,7 @@ def _disk_usage(path: Path) -> int:
 
 
 async def get_free_space(folder: Path) -> int:
+    await _check_nt_network_drive(folder)
     mount = _get_mount_point(folder)
     if not mount:
         return 0
@@ -137,7 +138,7 @@ async def start_loop() -> None:
         if not mountpoints:
             return
 
-        usage = await asyncio.gather(*(asyncio.to_thread(_disk_usage, mount) for mount in mountpoints))
+        usage = await asyncio.gather(*(asyncio.to_thread(_disk_usage, mount) for mount in mountpoints))  # noqa: TID251
         _free_space.update(zip(mountpoints, usage, strict=True))
 
     last_check = -1
