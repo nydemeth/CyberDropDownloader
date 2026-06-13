@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, NotRequired, TypedDict
 
 from typing_extensions import ReadOnly
 
+from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
 from cyberdrop_dl.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
@@ -71,7 +72,7 @@ class GoFileCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "GoFile"
     _RATE_LIMIT: ClassVar[RateLimit] = 4, 10
 
-    _SALT: ClassVar[str] = "9844d94d963d30"
+    _SALT: ClassVar[str] = env.GOFILE_SALT or "9844d94d963d30"
     _BROWSER_LANG: ClassVar[str] = "en-US"
 
     def __post_init__(self) -> None:

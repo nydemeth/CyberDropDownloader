@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Detect and report BasedFlare anti-bot protection
 
+### Fixed
+
+- Update website salt (Gofile)
+
 ## [9.15.1] - 2026-06-11
 
 ### Fixed
