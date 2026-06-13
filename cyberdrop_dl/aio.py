@@ -265,7 +265,7 @@ async def safe_gather[T1, T2, T3](
     This makes errors deterministic"""
 
     coros = filter(None, (coro_1, coro_2, coro_3))
-    results = await asyncio.gather(*coros, return_exceptions=True)
+    results = await asyncio.gather(*coros, return_exceptions=True)  # noqa: TID251
     errors = tuple(r for r in results if isinstance(r, BaseException))
     if errors:
         raise BaseExceptionGroup("", errors)

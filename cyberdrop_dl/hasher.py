@@ -213,7 +213,7 @@ class Hasher:
             if await aio.is_file(item.path):
                 return item
 
-        results = await asyncio.gather(
+        results = await aio.gather(
             *(exists(item) for item in self.manager.completed_downloads if item.id not in self._hashed_items)
         )
         for media_item in results:

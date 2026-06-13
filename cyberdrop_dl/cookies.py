@@ -9,6 +9,7 @@ from http.cookiejar import Cookie, CookieJar, MozillaCookieJar
 from http.cookies import CookieError, SimpleCookie
 from typing import TYPE_CHECKING, Final
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.dependencies import browser_cookie3
 
 if TYPE_CHECKING:
@@ -101,7 +102,7 @@ def split(extracted_cookies: Iterable[Cookie]) -> dict[str, MozillaCookieJar]:
 async def export(cookies: Iterable[Cookie], output_path: Path) -> None:
     cookie_jars = split(cookies)
     await asyncio.to_thread(output_path.mkdir, parents=True, exist_ok=True)
-    _ = await asyncio.gather(
+    _ = await aio.gather(
         *(
             asyncio.to_thread(
                 cj.save,
@@ -118,7 +119,7 @@ async def read_netscape_files(cookie_files: Sequence[Path]) -> AsyncGenerator[Si
     now = int(time.time())
     all_domains: set[str] = set()
     duplicates: set[str] = set()
-    for cookie_jar in await asyncio.gather(*(asyncio.to_thread(_read_netscape_file, file) for file in cookie_files)):
+    for cookie_jar in await aio.gather(*(asyncio.to_thread(_read_netscape_file, file) for file in cookie_files)):
         if not cookie_jar:
             continue
 

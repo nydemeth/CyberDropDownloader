@@ -137,10 +137,7 @@ async def start_loop() -> None:
         if not mountpoints:
             return
 
-        usage = await asyncio.gather(
-            *(asyncio.to_thread(_disk_usage, mount) for mount in mountpoints),
-            return_exceptions=False,
-        )
+        usage = await asyncio.gather(*(asyncio.to_thread(_disk_usage, mount) for mount in mountpoints))
         _free_space.update(zip(mountpoints, usage, strict=True))
 
     last_check = -1

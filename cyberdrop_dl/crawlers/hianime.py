@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import bs4
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.crawlers.megacloud import MegaCloudCrawler
@@ -114,7 +114,7 @@ class HiAnimeCrawler(Crawler):
     async def _request_anime_info(self, web_url: AbsoluteHttpURL, anime_id: int) -> Anime:
         episodes_url = web_url.origin() / "ajax/v2/episode/list/" / str(anime_id)
 
-        anime_soup, episodes_resp = await asyncio.gather(
+        anime_soup, episodes_resp = await aio.safe_gather(
             self.request_soup(web_url),
             self.request_json(episodes_url),
         )

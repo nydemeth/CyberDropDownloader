@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, ClassVar
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, js_unpacker
@@ -58,7 +58,7 @@ class MixDropCrawler(Crawler):
         video_url = self.PRIMARY_URL / "f" / file_id
         embed_url = self.PRIMARY_URL / "e" / file_id
 
-        soup, embed_html = await asyncio.gather(self.request_soup(video_url), self.request_text(embed_url))
+        soup, embed_html = await aio.safe_gather(self.request_soup(video_url), self.request_text(embed_url))
         title = css.select_text(soup, "div.tbl-c.title b")
         md_props = dict(_extract_properties(embed_html))
         return title, self.parse_url(md_props["wurl"])

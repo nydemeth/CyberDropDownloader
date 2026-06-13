@@ -132,7 +132,7 @@ async def _merge_segments(seg_paths: Sequence[Path], output: Path, media_type: s
         await ffmpeg.merge_subs(seg_paths, output)
         return
 
-    ffmpeg_result = await ffmpeg.concat(seg_paths, output, same_folder=False)
+    ffmpeg_result = await ffmpeg.concat(seg_paths, output)
     if not ffmpeg_result.success:
         raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr)
 

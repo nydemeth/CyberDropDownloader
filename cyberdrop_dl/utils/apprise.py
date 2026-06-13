@@ -73,7 +73,7 @@ async def send_notifications(urls: Sequence[AppriseURL], body: str) -> None:
 
 async def _notify(apprise_obj: apprise.Apprise, messages: Iterable[_AppriseMessage]) -> None:
     with borrow_logger("apprise", level=logging.INFO):
-        _ = await asyncio.gather(
+        _ = await aio.gather(
             *(
                 apprise_obj.async_notify(
                     title=msg.title,
