@@ -124,7 +124,7 @@ class VoeSxCrawler(Crawler):
             msg = f"Unable to extract high resolution MP4 formats for {scrape_item.url}. Falling back to HLS"
             self.log.warning(msg)
 
-            m3u8 = await self.get_m3u8_from_index_url(video.hls_url, headers=_HEADERS)
+            m3u8, _ = await self.request_m3u8(video.hls_url, headers=_HEADERS)
 
         VoeSxCrawler._handle_video(self, scrape_item, video, m3u8)
 

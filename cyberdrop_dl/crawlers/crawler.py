@@ -16,8 +16,6 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Self, final
 
-from typing_extensions import deprecated
-
 from cyberdrop_dl import aio, env, signature
 from cyberdrop_dl.clients.http import HTTPClient, HTTPMixin, RequestContext
 from cyberdrop_dl.constants import CDL_USER_AGENT
@@ -875,26 +873,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if info is None:
             raise ScrapeError(422, "Not a variant m3u8", origin=m3u8_playlist_url)
         return playlist, info
-
-    @deprecated("Use self.request_m3u8 instead")
-    async def get_m3u8_from_index_url(
-        self, url: AbsoluteHttpURL, /, headers: Mapping[str, str] | None = None
-    ) -> m3u8.Rendition:
-        """Get m3u8 rendition group from an index that only has 1 rendition, a video (non variant m3u8)"""
-        playlist, info = await self.request_m3u8(url, headers)
-        if info is not None:
-            raise ScrapeError(422, "This is a variant m3u8", origin=url)
-        return playlist
-
-    @deprecated("Use self._request_m3u8 instead")
-    async def _get_m3u8(
-        self,
-        url: AbsoluteHttpURL,
-        /,
-        headers: Mapping[str, str] | None = None,
-        media_type: Literal["video", "audio", "subtitle"] | None = None,
-    ) -> m3u8.M3U8:
-        return await self._request_m3u8(url, headers, media_type)
 
     @final
     def create_custom_filename(  # noqa: PLR0913

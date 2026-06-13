@@ -43,7 +43,7 @@ class GUploadCrawler(Crawler):
 
         config = await self._request_video_config(scrape_item.url)
         m3u8_url = self.parse_url(config["videoUrl"])
-        m3u8 = await self.get_m3u8_from_index_url(m3u8_url)
+        m3u8, _ = await self.request_m3u8(m3u8_url)
 
         filename, ext = self.get_filename_and_ext(video_id + ".mp4")
         custom_filename = self.create_custom_filename(video_id, ext, resolution=Resolution.parse(m3u8_url))
