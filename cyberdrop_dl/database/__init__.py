@@ -1,3 +1,5 @@
-from ._db import Database, connect, pre_allocate_100mb
+from __future__ import annotations
 
-__all__ = ["Database", "connect", "pre_allocate_100mb"]
+from ._db import Database
+
+__all__ = ["Database"]

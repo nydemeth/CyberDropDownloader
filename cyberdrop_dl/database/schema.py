@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, NamedTuple, final
 
 import aiosqlite
 
-from cyberdrop_dl.database import table
-from cyberdrop_dl.database.definitions import CREATE_SCHEMA
 from cyberdrop_dl.exceptions import DatabaseError
+
+from .common import Table
+from .definitions import CREATE_SCHEMA
 
 if TYPE_CHECKING:
     import aiosqlite
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(slots=True)
-class SchemaTable(table.Table, name="schema_version"):
+class SchemaTable(Table, name="schema_version"):
     up_to_date: bool = False
     version: Version | None = None
 

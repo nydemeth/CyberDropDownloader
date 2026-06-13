@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from cyberdrop_dl import aio, database, scrape_mapper
-from cyberdrop_dl.database import Database, schema
+from cyberdrop_dl import aio, scrape_mapper
+from cyberdrop_dl.database import Database, common, schema
 from cyberdrop_dl.exceptions import DatabaseError
 from cyberdrop_dl.scrape_mapper import _create_item_from_row
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -129,7 +129,7 @@ async def test_database_creation(tmp_cwd: Path) -> None:
     async with db:
         pass
 
-    assert db._is_new
+    assert db.is_new
     size = await aio.get_size(db_file)
     assert size
     assert db.schema.up_to_date
@@ -137,12 +137,12 @@ async def test_database_creation(tmp_cwd: Path) -> None:
 
 async def test_pre_allocation(tmp_cwd: Path) -> None:
     db_file = tmp_cwd / "test_db.db"
-    async with database.connect(db_file) as db:
+    async with common.connect(db_file) as db:
         size = await aio.get_size(db_file)
         assert size == 0
 
-    async with database.connect(db_file) as db:
-        await database.pre_allocate_100mb(db)
+    async with common.connect(db_file) as db:
+        await common.pre_allocate_100mb(db)
 
     size = await aio.get_size(db_file)
     assert size
@@ -154,12 +154,12 @@ async def test_database_version_check(tmp_cwd: Path) -> None:
     db_file.touch()
     async with Database(db_file).connect() as db:
         await db._create_tables()
-        assert db._is_new
+        assert db.is_new
         await db.conn.execute("DROP TABLE 'schema_version'")
         await db.conn.commit()
 
     async with Database(db_file).connect() as db:
-        assert not db._is_new
+        assert not db.is_new
         assert not db.schema.up_to_date
         await db.schema.create()
         assert db.schema.version is None

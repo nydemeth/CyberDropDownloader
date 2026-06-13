@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 CREATE_HISTORY = """CREATE TABLE IF NOT EXISTS media (
   domain TEXT,
   url_path TEXT,

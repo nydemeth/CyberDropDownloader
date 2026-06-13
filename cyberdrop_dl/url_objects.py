@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
 
     from cyberdrop_dl import signature
-    from cyberdrop_dl.manager import Manager
 
     class AbsoluteHttpURL(yarl.URL):
         @signature.copy(yarl.URL.__new__)
@@ -266,7 +265,7 @@ class ScrapeItem:
 
         self.folders.append(folder)
 
-    def _set_type(self, scrape_item_type: ScrapeItemType | None, _: Manager | None = None) -> None:
+    def _set_type(self, scrape_item_type: ScrapeItemType | None) -> None:
         self.type = scrape_item_type
         self._children_count = self._children_limit = 0
         if self.type is None:
