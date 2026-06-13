@@ -168,7 +168,7 @@ class DropboxCrawler(Crawler):
     async def _get_web_token(self) -> None:
         with self.catch_errors(self.PRIMARY_URL), self.disable_on_error("Unable to get token from dropbox"):
             async with self.request(self.PRIMARY_URL, method="HEAD"):
-                token = self.get_cookie_value("t")
+                token = self.cookies.get("t")
                 if not token:
                     raise LoginError
                 self._token = token

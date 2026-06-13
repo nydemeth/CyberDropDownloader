@@ -102,7 +102,7 @@ class TikTokCrawler(Crawler):
 
     async def __async_post_init__(self) -> None:
         cookie_name = "sessionid"
-        if value := self.get_cookie_value(cookie_name):
+        if value := self.cookies.get(cookie_name):
             self._headers["x-proxy-cookie"] = f"{cookie_name}={value}"
             self.log.info(f"Found {cookie_name} cookies")
         self.client.cookies.clear_domain(self.PRIMARY_URL.host)

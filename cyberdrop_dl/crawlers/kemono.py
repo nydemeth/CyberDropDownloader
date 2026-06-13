@@ -316,7 +316,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
     @fallback_if_no_api
     @error_handling_wrapper
     async def favorites(self, scrape_item: ScrapeItem, type_: str) -> None:
-        session_cookie = self.get_cookie_value("session")
+        session_cookie = self.cookies.get("session")
         if not session_cookie:
             msg = "No session cookie found, cannot scrape favorites"
             raise ScrapeError(401, msg)

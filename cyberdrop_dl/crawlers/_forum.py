@@ -319,7 +319,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     @error_handling_wrapper
     async def login(self, login_url: AbsoluteHttpURL) -> None:
-        session_cookie = self.get_cookie_value(self.LOGIN_USER_COOKIE_NAME)
+        session_cookie = self.cookies.get(self.LOGIN_USER_COOKIE_NAME)
         msg = f"No cookies found for {self.FOLDER_DOMAIN}"
         if not session_cookie and self.login_required:
             raise LoginError(message=msg)

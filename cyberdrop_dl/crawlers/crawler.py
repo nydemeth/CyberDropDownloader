@@ -46,6 +46,7 @@ from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
     import datetime
+    import http.cookies
     from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator, Iterable, Mapping
     from types import ModuleType
 
@@ -110,6 +111,25 @@ class CrawlerInfo:
     @classmethod
     def generic(cls, name: str, paths: SupportedPaths) -> Self:
         return cls(name, "::GENERIC CRAWLER::", (), paths)  # pyright: ignore[reportArgumentType]
+
+
+@dataclasses.dataclass(slots=True)
+class SiteCookies:
+    raw: http.cookies.BaseCookie[str]
+
+    def get(self, name: str, /) -> str | None:
+        if morsel := self.raw.get(name):
+            return morsel.value
+
+    def __getitem__(self, name: str, /) -> str:
+        value = self.get(name)
+        if value is None:
+            raise KeyError(name)
+        return value
+
+    def keys(self) -> tuple[str, ...]:
+        # dict protocol
+        return tuple(self.raw.keys())
 
 
 class Registry:
@@ -722,9 +742,13 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         return parse_url(url, base, trim=trim)
 
     @final
-    def get_cookie_value(self, name: str) -> str | None:
-        if morsel := self.client.cookies.filter_cookies(self.PRIMARY_URL).get(name):
-            return morsel.value
+    @property
+    def cookies(self) -> SiteCookies:
+        return self.filter_cookies(self.PRIMARY_URL)
+
+    @final
+    def filter_cookies(self, url: AbsoluteHttpURL) -> SiteCookies:
+        return SiteCookies(self.client.cookies.filter_cookies(url))
 
     @final
     def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
