@@ -1,14 +1,25 @@
 # ruff: noqa: RUF012
 import dataclasses
 import logging
+import random
 import re
 from datetime import date, datetime, timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self, override
 
+import aiohttp
 from cyclopts import Parameter
-from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, PrivateAttr, field_validator
+from pydantic import (
+    BaseModel,
+    ByteSize,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    PrivateAttr,
+    field_validator,
+)
 
 from cyberdrop_dl.constants import (
     DEFAULT_APP_STORAGE,
@@ -17,11 +28,12 @@ from cyberdrop_dl.constants import (
     LOGS_DATETIME_FORMAT,
     Hashing,
 )
-from cyberdrop_dl.models import AliasModel, AppriseURL, SettingsGroup
+from cyberdrop_dl.models import AppriseURL, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
     ListNonNegativeInt,
+    ListPydanticURL,
     LogPath,
     MainLogPath,
     NonEmptyStr,
@@ -46,16 +58,16 @@ _SORTING_COMMON_FIELDS = {
 
 class DownloadOptions(SettingsGroup):
     block_download_sub_folders: bool = False
-    disable_file_timestamps: bool = False
+    mtime: bool = True
     include_album_id_in_folder_name: bool = False
     include_thread_id_in_folder_name: bool = False
-    maximum_number_of_children: ListNonNegativeInt = []
+    max_number_of_children: ListNonNegativeInt = []
     remove_domains_from_folder_names: bool = False
     separate_posts_format: NonEmptyStr = "{default}"
     separate_posts: bool = False
     skip_download_mark_completed: bool = False
-    maximum_thread_depth: NonNegativeInt = 0
-    maximum_thread_folder_depth: NonNegativeInt | None = None
+    max_thread_depth: NonNegativeInt = 0
+    max_thread_folder_depth: NonNegativeInt | None = None
 
     @field_validator("separate_posts_format", mode="after")
     @classmethod
@@ -63,16 +75,6 @@ class DownloadOptions(SettingsGroup):
         valid_keys = {"default", "title", "id", "number", "date"}
         validate_format_string(value, valid_keys)
         return value
-
-
-class Files(SettingsGroup):
-    download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = Field(
-        default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d"
-    )
-    dump_json: Annotated[bool, Parameter(alias="-j")] = Field(default=False, validation_alias="j")
-    input_file: Annotated[Path, Parameter(alias="-i")] = Field(default=Path("URLs.txt"), validation_alias="i")
-    dump_responses: bool = False
-    """Save text/HTML/JSON responses to disk (flaresolverr responses are excluded)"""
 
 
 class Logs(SettingsGroup):  # noqa: PLW1641
@@ -168,27 +170,27 @@ class FileSizeRanges:
 
 
 class FileSizeLimits(SettingsGroup):
-    maximum_image_size: ByteSizeSerilized = ByteSize(0)
-    maximum_other_size: ByteSizeSerilized = ByteSize(0)
-    maximum_video_size: ByteSizeSerilized = ByteSize(0)
-    minimum_image_size: ByteSizeSerilized = ByteSize(0)
-    minimum_other_size: ByteSizeSerilized = ByteSize(0)
-    minimum_video_size: ByteSizeSerilized = ByteSize(0)
+    max_image_size: ByteSizeSerilized = ByteSize(0)
+    max_other_size: ByteSizeSerilized = ByteSize(0)
+    max_video_size: ByteSizeSerilized = ByteSize(0)
+    min_image_size: ByteSizeSerilized = ByteSize(0)
+    min_other_size: ByteSizeSerilized = ByteSize(0)
+    min_video_size: ByteSizeSerilized = ByteSize(0)
 
     @cached_property
     def ranges(self) -> FileSizeRanges:
         return FileSizeRanges(
             video=Range(
-                self.minimum_video_size,
-                self.maximum_video_size,
+                self.min_video_size,
+                self.max_video_size,
             ),
             image=Range(
-                self.minimum_image_size,
-                self.maximum_image_size,
+                self.min_image_size,
+                self.max_image_size,
             ),
             other=Range(
-                self.minimum_other_size,
-                self.maximum_other_size,
+                self.min_other_size,
+                self.max_other_size,
             ),
         )
 
@@ -200,10 +202,10 @@ class MediaDurationRanges:
 
 
 class MediaDurationLimits(SettingsGroup):
-    maximum_video_duration: timedelta = timedelta(seconds=0)
-    maximum_audio_duration: timedelta = timedelta(seconds=0)
-    minimum_video_duration: timedelta = timedelta(seconds=0)
-    minimum_audio_duration: timedelta = timedelta(seconds=0)
+    max_video_duration: timedelta = timedelta(seconds=0)
+    max_audio_duration: timedelta = timedelta(seconds=0)
+    min_video_duration: timedelta = timedelta(seconds=0)
+    min_audio_duration: timedelta = timedelta(seconds=0)
 
     @field_validator("*", mode="before")
     @staticmethod
@@ -221,22 +223,19 @@ class MediaDurationLimits(SettingsGroup):
     @property
     def needs_ffmpeg(self) -> bool:
         return bool(
-            self.minimum_video_duration
-            or self.maximum_video_duration
-            or self.minimum_audio_duration
-            or self.maximum_audio_duration
+            self.min_video_duration or self.max_video_duration or self.min_audio_duration or self.max_audio_duration
         )
 
     @cached_property
     def ranges(self) -> MediaDurationRanges:
         return MediaDurationRanges(
             video=Range.parse(
-                self.minimum_video_duration.total_seconds(),
-                self.maximum_video_duration.total_seconds(),
+                self.min_video_duration.total_seconds(),
+                self.max_video_duration.total_seconds(),
             ),
             audio=Range.parse(
-                self.minimum_audio_duration.total_seconds(),
-                self.maximum_audio_duration.total_seconds(),
+                self.min_audio_duration.total_seconds(),
+                self.max_audio_duration.total_seconds(),
             ),
         )
 
@@ -395,40 +394,51 @@ class DupeCleanup(SettingsGroup):
         return self._extra_hashes
 
 
-@Parameter(name="*")
-class ConfigSettings(AliasModel):
-    cookies: Cookies = Field(default_factory=Cookies)
-    download_options: DownloadOptions = Field(default_factory=DownloadOptions)
-    dupe_cleanup_options: DupeCleanup = Field(default_factory=DupeCleanup)
-    file_size_limits: FileSizeLimits = Field(default_factory=FileSizeLimits)
-    media_duration_limits: MediaDurationLimits = Field(default_factory=MediaDurationLimits)
-    files: Files = Field(default_factory=Files)
-    ignore_options: IgnoreOptions = Field(default_factory=IgnoreOptions)
-    logs: Logs = Field(default_factory=Logs)
-    runtime_options: RuntimeOptions = Field(default_factory=RuntimeOptions)
-    sorting: Sorting = Field(default_factory=Sorting)
-    _resolved: bool = False
+class RateLimiting(SettingsGroup):
+    download_attempts: PositiveInt = 2
+    download_delay: NonNegativeFloat = 0.0
+    download_speed_limit: ByteSizeSerilized = ByteSize(0)
+    jitter: NonNegativeFloat = 0
+    max_simultaneous_downloads_per_domain: PositiveInt = 5
+    max_simultaneous_downloads: PositiveInt = 15
+    rate_limit: PositiveFloat = 25
 
-    def resolve_paths(self) -> None:
-        if self._resolved:
-            return
+    connection_timeout: PositiveFloat = 15
+    read_timeout: PositiveFloat | None = 300
+    concurrent_segments: PositiveInt = 10
+    """Allow up to `<N>` HLS segments to be downloaded concurrently"""
 
-        self.logs.resolve_filenames()
-        self._resolve_paths(self)
-        self.logs.delete_old_logs_and_folders()
-        self._resolved = True
-
+    @field_validator("read_timeout", mode="before")
     @classmethod
-    def _resolve_paths(cls, model: BaseModel) -> None:
+    def parse_timeouts(cls, value: object) -> object | None:
+        return falsy_as_none(value)
 
-        for name, value in vars(model).items():
-            if isinstance(value, Path):
-                if "{config}" in str(value):
-                    raise RuntimeError(
-                        f"Using '{{config}}' as reference on a path is no longer supported: {value} ({name})"
-                    )
+    @property
+    def curl_timeout(self) -> float | tuple[float, float]:
+        if self.read_timeout is None:
+            return self.connection_timeout
+        return self.connection_timeout, self.read_timeout
 
-                object.__setattr__(model, name, value.expanduser().resolve().absolute())
+    @property
+    def aiohttp_timeout(self) -> aiohttp.ClientTimeout:
+        return aiohttp.ClientTimeout(
+            total=None,
+            sock_connect=self.connection_timeout,
+            sock_read=self.read_timeout,
+        )
 
-            elif isinstance(value, BaseModel):
-                cls._resolve_paths(value)
+    @property
+    def total_delay(self) -> NonNegativeFloat:
+        """download_delay + jitter"""
+        return self.download_delay + random.uniform(0, self.jitter)
+
+
+class UIOptions(SettingsGroup):
+    refresh_rate: PositiveFloat = 10.0
+
+
+class GenericCrawlers(SettingsGroup):
+    wordpress_media: ListPydanticURL = []
+    wordpress_html: ListPydanticURL = []
+    discourse: ListPydanticURL = []
+    chevereto: ListPydanticURL = []

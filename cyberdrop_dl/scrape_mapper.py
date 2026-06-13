@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     import aiosqlite
 
-    from cyberdrop_dl.config._global import GenericCrawlerInstances
+    from cyberdrop_dl.config.settings import GenericCrawlers
     from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.manager import Manager
 
@@ -147,10 +147,10 @@ class ScrapeMapper:
 
         self.crawlers.update(get_crawlers_mapping())
 
-        for crawler in _create_generic_crawlers(self.manager.config.global_settings.generic_crawlers_instances):
+        for crawler in _create_generic_crawlers(self.manager.config.generic_crawlers):
             register_crawler(self.crawlers, crawler, from_user=True)
 
-        _disable_crawlers_by_config(self.crawlers, *self.manager.config.global_settings.general.disable_crawlers)
+        _disable_crawlers_by_config(self.crawlers, *self.manager.config.disable_crawlers)
 
         plugins.load(self.manager)
 
@@ -158,14 +158,14 @@ class ScrapeMapper:
     async def __call__(self) -> AsyncGenerator[Self]:
         assert not self._done.is_set()
         config = self.manager.config
-        _ = filepath.MAX_FILE_LEN.set(config.global_settings.general.max_file_name_length)
-        _ = filepath.MAX_FOLDER_LEN.set(config.global_settings.general.max_folder_name_length)
-        _ = CONCURRENT_SEGMENTS.set(config.global_settings.rate_limiting_options.concurrent_segments)
-        _ = ALLOW_NO_EXT.set(not config.settings.ignore_options.exclude_files_with_no_extension)
+        _ = filepath.MAX_FILE_LEN.set(config.max_file_name_length)
+        _ = filepath.MAX_FOLDER_LEN.set(config.max_folder_name_length)
+        _ = CONCURRENT_SEGMENTS.set(config.rate_limits.concurrent_segments)
+        _ = ALLOW_NO_EXT.set(not config.ignore.exclude_files_with_no_extension)
 
-        config.settings.files.download_folder.mkdir(parents=True, exist_ok=True)
-        if config.settings.sorting.sort_downloads:
-            config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
+        config.download_folder.mkdir(parents=True, exist_ok=True)
+        if config.sorting.sort_downloads:
+            config.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
         logger.debug(
             "Using %s as chunk size", ByteSize(self.manager.download_client.chunk_size).human_readable(decimal=True)
@@ -176,7 +176,7 @@ class ScrapeMapper:
         with self.tui():
             async with (
                 self.manager.http_client,
-                storage.monitor(config.global_settings.general.required_free_space),
+                storage.monitor(config.min_free_space),
                 self.manager.logs.task_group,
                 self._task_groups.downloads,
             ):
@@ -214,8 +214,8 @@ class ScrapeMapper:
             self.create_download_task(wait_until_scrape_is_done())
 
             async for item in items:
-                item.children_limits = self.manager.config.settings.download_options.maximum_number_of_children
-                item.download_folder = self.manager.config.settings.files.download_folder
+                item.children_limits = self.manager.config.downloads.max_number_of_children
+                item.download_folder = self.manager.config.download_folder
                 if self._should_scrape(item):
                     stats.update(item)
                     self.create_task(self._send_to_crawler(item))
@@ -253,7 +253,7 @@ class ScrapeMapper:
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
             download_folder = scrape_item.compose_download_path("jdownloader")
-            relative_download_dir = download_folder.relative_to(self.manager.config.settings.files.download_folder)
+            relative_download_dir = download_folder.relative_to(self.manager.config.download_folder)
             try:
                 await self._jdownloader.send(
                     scrape_item.url,
@@ -291,12 +291,12 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
             return False
 
-        skip_hosts = self.manager.config.settings.ignore_options.skip_hosts
+        skip_hosts = self.manager.config.ignore.skip_hosts
         if skip_hosts and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
             return False
 
-        only_hosts = self.manager.config.settings.ignore_options.only_hosts
+        only_hosts = self.manager.config.ignore.only_hosts
         if only_hosts and not _filter_by_domain(scrape_item, only_hosts):
             logger.info(f"Skipping {scrape_item.url} by only_hosts config")
             return False
@@ -335,7 +335,7 @@ def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     if cli_args.links:
         return "--links (CLI args)", _load_cli_links(cli_args.links)
 
-    return str(manager.config.settings.files.input_file), _load_urls_from_file(manager.config.settings.files.input_file)
+    return str(manager.config.input_file), _load_urls_from_file(manager.config.input_file)
 
 
 async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
@@ -448,7 +448,7 @@ def register_crawler(
         crawlers_map[domain] = crawler
 
 
-def _create_generic_crawlers(generics_config: GenericCrawlerInstances) -> Generator[type[Crawler]]:
+def _create_generic_crawlers(generics_config: GenericCrawlers) -> Generator[type[Crawler]]:
 
     for domains, cls in (
         (generics_config.wordpress_html, WordPressHTMLCrawler),
