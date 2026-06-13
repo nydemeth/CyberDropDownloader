@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Concatenate, Protocol, cast, overload
 
 import yarl
 from aiohttp import ClientConnectorError, TooManyRedirects
+from curl_cffi.requests import exceptions as curl_exceptions
 from mega.errors import MegaNzError
 from pydantic import ValidationError
 
@@ -41,7 +42,7 @@ def _mark_as_safe[T](fn: T) -> T:
 
 
 @contextlib.contextmanager
-def group_exceptions(message: str | None = None) -> Generator[None]:
+def _group_exceptions(message: str | None = None) -> Generator[None]:
     try:
         yield
     except ExceptionGroup as e:
@@ -56,14 +57,18 @@ def _exc_group_msg(e: ExceptionGroup) -> str:
     return getattr(first, "ui_failure", None) or str(first)
 
 
+def _clean_curl_error(e: object) -> str:
+    return str(e).partition(". See https://curl.se/")[0]
+
+
 @contextlib.contextmanager
-def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:  # noqa: C901, PLR0912
+def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:  # noqa: C901, PLR0912, PLR0915
     link: yarl.URL = item if isinstance(item, yarl.URL) else item.url
     error_log_msg = origin = exc_info = None
     link_to_show: yarl.URL | str = ""
     is_segment: bool = getattr(item, "is_segment", False)
     try:
-        with group_exceptions():
+        with _group_exceptions():
             yield
     except ExceptionGroup as e:
         error_log_msg = ErrorLogMessage(_exc_group_msg(e), str(e))
@@ -102,12 +107,21 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
 
         error_log_msg = ErrorLogMessage(ui_failure, f"{ui_failure} {e!s}")
 
-    except TimeoutError as e:
-        error_log_msg = ErrorLogMessage("Timeout", repr(e))
+    except (TimeoutError, curl_exceptions.Timeout) as e:
+        log_msg = _clean_curl_error(repr(e))
+        error_log_msg = ErrorLogMessage("Timeout", log_msg)
     except ClientConnectorError as e:
         ui_failure = "Client Connector Error"
         suffix = "" if (link.host or "").startswith(e.host) else f" from {link}"
         log_msg = f"{e}{suffix}. If you're using a VPN, try turning it off"
+        error_log_msg = ErrorLogMessage(ui_failure, log_msg)
+    except curl_exceptions.DNSError as e:
+        ui_failure = "Client Connector Error"
+        log_msg = _clean_curl_error(repr(e))
+        error_log_msg = ErrorLogMessage(ui_failure, log_msg)
+    except curl_exceptions.RequestException as e:
+        ui_failure = f"Curl Error ({e.code})"
+        log_msg = _clean_curl_error(e)
         error_log_msg = ErrorLogMessage(ui_failure, log_msg)
     except ValidationError as e:
         exc_info = e
