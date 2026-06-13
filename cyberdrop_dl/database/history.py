@@ -3,14 +3,14 @@ from __future__ import annotations
 import contextlib
 import logging
 import time
-from sqlite3 import IntegrityError, Row
-from typing import TYPE_CHECKING, Any, cast
+from sqlite3 import IntegrityError
+from typing import TYPE_CHECKING, Any
 
 from .common import Table
 from .definitions import CREATE_HISTORY, CREATE_MEDIA_INDEX
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator
+    from collections.abc import Callable, Generator
 
     import aiosqlite
     from yarl import URL
@@ -38,10 +38,10 @@ class HistoryTable(Table, name="media"):
         if self.ignore_history:
             return "", False
 
-        query = "SELECT referer, completed FROM media WHERE domain = ? and url_path = ? LIMIT 1"
+        query = "SELECT referer, completed FROM media WHERE domain = ? and url_path = ? LIMIT 1;"
         cursor = await self.db_conn.execute(query, (domain, db_path))
         if row := await cursor.fetchone():
-            return row[0], bool(row[1])
+            return row["referer"], bool(row["completed"])
         return "", False
 
     async def update_referer(self, domain: str, db_path: str, referer: URL) -> None:
@@ -49,24 +49,20 @@ class HistoryTable(Table, name="media"):
         await self.db_conn.execute(query, (str(referer), domain, db_path))
         await self.db_conn.commit()
 
-    async def check_album(self, domain: str, album_id: str) -> dict[str, bool]:
-        """Checks whether an album has completed given its domain and album id."""
+    async def query_album(self, domain: str, album_id: str) -> dict[str, bool]:
         if self.ignore_history:
             return {}
 
         query = "SELECT url_path, completed FROM media WHERE domain = ? and album_id = ?"
         rows = await self.db_conn.execute_fetchall(query, (domain, album_id))
-        return {row[0]: bool(row[1]) for row in rows}
+        return {row["url_path"]: bool(row["completed"]) for row in rows}
 
     async def set_album_id(self, domain: str, media_item: MediaItem) -> None:
-        """Sets an album_id in the database."""
-
         query = "UPDATE media SET album_id = ? WHERE domain = ? and url_path = ?"
         await self.db_conn.execute(query, (media_item.album_id, domain, media_item.db_path))
         await self.db_conn.commit()
 
     async def check_complete_by_referer(self, domain: str | None, referer: URL) -> bool:
-        """Checks whether an individual file has completed given its domain and url path."""
         if self.ignore_history:
             return False
 
@@ -81,8 +77,6 @@ class HistoryTable(Table, name="media"):
         return await cursor.fetchone() is not None
 
     async def insert_incompleted(self, domain: str, media_item: MediaItem) -> None:
-        """Inserts an uncompleted file into the database."""
-
         url_path = media_item.db_path
         download_filename = media_item.download_filename or ""
         cursor = await self.db_conn.cursor()
@@ -94,9 +88,15 @@ class HistoryTable(Table, name="media"):
             await cursor.execute(delete_query, (url_path,))
 
         insert_query = """
-        INSERT OR IGNORE INTO media (domain, url_path, referer, album_id, download_path,
-        download_filename, original_filename, completed, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
+        INSERT OR IGNORE INTO media (
+          domain, url_path, referer, album_id,
+          download_path, download_filename,
+          original_filename, completed, created_at
+        )
+        VALUES
+          (
+            ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+          );
         """
 
         await cursor.execute(
@@ -118,16 +118,11 @@ class HistoryTable(Table, name="media"):
         await self.db_conn.commit()
 
     async def mark_complete(self, domain: str, media_item: MediaItem) -> None:
-        """Mark a download as completed in the database."""
-
-        url_path = media_item.db_path
         query = "UPDATE media SET completed = 1, completed_at = CURRENT_TIMESTAMP WHERE domain = ? and url_path = ?"
-        await self.db_conn.execute(query, (domain, url_path))
+        await self.db_conn.execute(query, (domain, media_item.db_path))
         await self.db_conn.commit()
 
     async def add_filesize(self, domain: str, media_item: MediaItem) -> None:
-        """Adds the file size to the db."""
-
         url_path = media_item.db_path
         file_size = media_item.path.stat().st_size
         query = """UPDATE media SET file_size=? WHERE domain = ? and url_path = ?"""
@@ -135,15 +130,11 @@ class HistoryTable(Table, name="media"):
         await self.db_conn.commit()
 
     async def add_duration(self, domain: str, media_item: MediaItem) -> None:
-        """Adds the duration to the db."""
-
-        url_path = media_item.db_path
         query = "UPDATE media SET duration=? WHERE domain = ? and url_path = ?"
-        await self.db_conn.execute(query, (media_item.duration, domain, url_path))
+        await self.db_conn.execute(query, (media_item.duration, domain, media_item.db_path))
         await self.db_conn.commit()
 
     async def get_duration(self, domain: str, media_item: MediaItem) -> float | None:
-        """Returns the duration from the database."""
         if media_item.is_segment:
             return None
 
@@ -151,17 +142,15 @@ class HistoryTable(Table, name="media"):
         query = "SELECT duration FROM media WHERE domain = ? and url_path = ? LIMIT 1"
         cursor = await self.db_conn.execute(query, (domain, url_path))
         if row := await cursor.fetchone():
-            return row[0]
+            return row["duration"]
 
     async def add_download_filename(self, domain: str, media_item: MediaItem) -> None:
-        """Add the download_filename to the db."""
         url_path = media_item.db_path
         query = "UPDATE media SET download_filename=? WHERE domain = ? and url_path = ? and download_filename = ''"
         await self.db_conn.execute(query, (media_item.download_filename, domain, url_path))
         await self.db_conn.commit()
 
     async def check_filename_exists(self, filename: str) -> bool:
-        """Checks whether a downloaded filename exists in the database."""
         query = "SELECT 1 FROM media WHERE download_filename = ? LIMIT 1"
         cursor = await self.db_conn.execute(query, (filename,))
         return await cursor.fetchone() is not None
@@ -176,14 +165,7 @@ class HistoryTable(Table, name="media"):
         query = "SELECT download_filename FROM media WHERE domain = ? and url_path = ? LIMIT 1"
         cursor = await self.db_conn.execute(query, (domain, url_path))
         if row := await cursor.fetchone():
-            return row[0]
-
-    async def get_unique_download_paths(self) -> AsyncGenerator[list[Row]]:
-        """Returns a list of unique download paths."""
-        query = "SELECT DISTINCT download_path FROM media"
-        cursor = await self.db_conn.execute(query)
-        while rows := await cursor.fetchmany(_FETCH_MANY_SIZE):
-            yield cast("list[Row]", rows)
+            return row["download_filename"]
 
 
 async def apply_fixes(db_conn: aiosqlite.Connection) -> None:

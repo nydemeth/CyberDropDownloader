@@ -635,7 +635,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @final
     async def get_album_results(self, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
-        return await self.database.history.check_album(self.DOMAIN, album_id)
+        return await self.database.history.query_album(self.DOMAIN, album_id)
 
     @final
     def handle_external_links(self, scrape_item: ScrapeItem, *, reset: bool = True) -> None:
