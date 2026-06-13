@@ -147,7 +147,7 @@ class Config(BaseModel):
         return sorted(set(value))
 
     @field_serializer("flaresolverr", "proxy")
-    def _serialize[T](self, value: T) -> T | None:
+    def _serialize(self, value: object) -> object:
         return falsy_as(value, None)
 
     @field_validator("flaresolverr", "proxy", mode="before")

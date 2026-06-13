@@ -160,6 +160,7 @@ class M3U8(_M3U8):
             f"{type(self)}(media_type={self.media_type!r}, base_uri={self.base_uri!r}, is_variant={self.is_variant!r})"
         )
 
+    @property
     def total_duration(self) -> datetime.timedelta:
         total_duration: float = sum(duration for segment in self.segments if (duration := segment.duration))
         return datetime.timedelta(seconds=total_duration)
