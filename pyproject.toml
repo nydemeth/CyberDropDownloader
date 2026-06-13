@@ -169,6 +169,26 @@ ignore = [
 [tool.ruff.lint.flake8-boolean-trap]
 extend-allowed-calls = ["cyberdrop_dl.logs._enter_context"]
 
+[tool.ruff.lint.flake8-import-conventions]
+banned-from = [
+    "base64",
+    "cyberdrop_dl.aio",
+    "cyberdrop_dl.stats",
+    "datetime",
+    "functools",
+    "hashlib",
+    "itertools",
+    "json",
+    "math",
+    "os",
+    "re",
+    "sys",
+    "time",
+    "urllib.parse",
+    "uuid",
+    "yarl"
+]
+
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "asyncio.gather".msg = "Use aio.gather or aio.safe_gather instead"
 
@@ -177,7 +197,8 @@ extend-allowed-calls = ["cyberdrop_dl.logs._enter_context"]
     "E402",  # imports not at the top of the file.
     "INP001",  # implicit-namespace-package
     "PT011",  # pytest-raises-too-broad
-    "T20"  # flake8-print
+    "T20",  # flake8-print
+    "TID251"  # banned API
 ]
 "__init__.py" = ["E402"]  # imports not at the top of the file.
 "tests/crawlers/test_cases/*" = [

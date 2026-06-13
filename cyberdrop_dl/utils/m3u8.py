@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import logging
-from datetime import timedelta
 from enum import StrEnum
-from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import m3u8.model
@@ -161,10 +160,9 @@ class M3U8(_M3U8):
             f"{type(self)}(media_type={self.media_type!r}, base_uri={self.base_uri!r}, is_variant={self.is_variant!r})"
         )
 
-    @cached_property
-    def total_duration(self) -> timedelta:
+    def total_duration(self) -> datetime.timedelta:
         total_duration: float = sum(duration for segment in self.segments if (duration := segment.duration))
-        return timedelta(seconds=total_duration)
+        return datetime.timedelta(seconds=total_duration)
 
 
 class _LazyRenditionLog:

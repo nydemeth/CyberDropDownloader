@@ -15,11 +15,9 @@ from cyberdrop_dl.constants import Hashing, TempExt
 from cyberdrop_dl.progress.hashing import HashingStats, HashingUI
 
 if TYPE_CHECKING:
-    from yarl import URL
-
     from cyberdrop_dl.config.settings import DupeCleanup
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.url_objects import MediaItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 
 FileHashes = dict[str, dict[int, set[Path]]]
 
@@ -129,7 +127,7 @@ class Hasher:
         self,
         file: Path | str,
         original_filename: str | None = None,
-        referer: URL | None = None,
+        referer: AbsoluteHttpURL | None = None,
     ) -> str | None:
         file = Path(file)
 
@@ -159,7 +157,7 @@ class Hasher:
         self,
         file: Path,
         original_filename: str | None,
-        referer: URL | None,
+        referer: AbsoluteHttpURL | None,
         hash_type: Literal["xxh128", "md5", "sha256"],
     ) -> str | None:
         """Generates hash of a file."""

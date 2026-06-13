@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
-from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
@@ -191,7 +190,7 @@ class YandexFolder(YandexItem):
     resources: dict[str, Any]
     children_ids: list[str]
 
-    @cached_property
+    @property
     def public_id(self) -> str:
         return self.short_url.name
 
@@ -216,7 +215,7 @@ class YandexFolder(YandexItem):
                 continue
         raise NotImplementedError
 
-    @cached_property
+    @property
     def url(self) -> AbsoluteHttpURL:
         return _PRIMARY_URL / "d" / self.id
 
@@ -243,7 +242,7 @@ class YandexFile(YandexItem):
     parent_folder_public_id: str = ""
     file_url: AbsoluteHttpURL | None = None
 
-    @cached_property
+    @property
     def url(self) -> AbsoluteHttpURL:
         if self.parent_folder_public_id:
             return _PRIMARY_URL / "d" / self.parent_folder_public_id / self.name

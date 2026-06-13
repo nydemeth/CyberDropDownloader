@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import datetime
 import logging
 import os
 import sys
 import time
-from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, final
 
@@ -28,7 +28,6 @@ from cyberdrop_dl.utils import get_system_information
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from os import PathLike
     from types import NotImplementedType
 
     from cyberdrop_dl.cli import CLIargs
@@ -134,7 +133,7 @@ class Manager:
 
     def __print_stats(self, scrape_stats: ScrapeStats) -> None:
 
-        elapsed = timedelta(seconds=int(time.monotonic() - scrape_stats.start_time))
+        elapsed = datetime.timedelta(seconds=int(time.monotonic() - scrape_stats.start_time))
         total_data_written = ByteSize(self.scrape_mapper.tui.downloads.bytes_downloaded).human_readable(decimal=True)
 
         logger.info("Run Stats:", extra={"color": "cyan"})
@@ -246,7 +245,7 @@ class AppData:
             db_file=cache / "cyberdrop.db",
         )
 
-    def __truediv__(self, other: PathLike[str]) -> Path | NotImplementedType:
+    def __truediv__(self, other: os.PathLike[str]) -> Path | NotImplementedType:
         try:
             return self.path / other
         except TypeError:

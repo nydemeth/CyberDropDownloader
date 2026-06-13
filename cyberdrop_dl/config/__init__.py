@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self
 from cyclopts import App, Parameter
 from cyclopts.bind import normalize_tokens
 from pydantic import BaseModel, ByteSize, Field, PositiveInt, field_serializer, field_validator
-from yarl import URL  # noqa: TC002
 
 from cyberdrop_dl import yaml
 from cyberdrop_dl.config.merge import merge_models
@@ -148,7 +147,7 @@ class Config(BaseModel):
         return sorted(set(value))
 
     @field_serializer("flaresolverr", "proxy")
-    def _serialize(self, value: URL | str) -> URL | str | None:
+    def _serialize[T](self, value: T) -> T | None:
         return falsy_as(value, None)
 
     @field_validator("flaresolverr", "proxy", mode="before")

@@ -23,8 +23,8 @@ from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.utils import dates
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Callable, Generator, Iterable
-    from datetime import datetime
 
     from rich.console import ConsoleRenderable
 
@@ -228,8 +228,8 @@ class NoPaddingLogRender(LogRender):
         self,
         console: Console,
         renderables: Iterable[ConsoleRenderable],
-        log_time: datetime | None = None,
-        time_format: str | Callable[[datetime], Text] | None = None,
+        log_time: datetime.datetime | None = None,
+        time_format: str | Callable[[datetime.datetime], Text] | None = None,
         level: TextType = "",
         path: str | None = None,
         line_no: int | None = None,

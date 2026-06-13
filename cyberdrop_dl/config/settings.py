@@ -1,10 +1,10 @@
 # ruff: noqa: RUF012
 import dataclasses
+import datetime
+import functools
 import logging
 import random
 import re
-from datetime import date, datetime, timedelta
-from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self, override
 
@@ -80,14 +80,14 @@ class DownloadOptions(SettingsGroup):
 class Logs(SettingsGroup):  # noqa: PLW1641
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
-    logs_expire_after: timedelta | None = None
+    logs_expire_after: datetime.timedelta | None = None
     main_log: MainLogPath = Path("downloader.log")
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
     webhook: Annotated[AppriseURL | None, Parameter(show=False)] = None
 
-    _created_at: datetime = PrivateAttr(default_factory=datetime.now)
+    _created_at: datetime.datetime = PrivateAttr(default_factory=datetime.datetime.now)
 
     @field_validator("webhook", mode="before")
     @classmethod
@@ -96,7 +96,7 @@ class Logs(SettingsGroup):  # noqa: PLW1641
 
     @field_validator("logs_expire_after", mode="before")
     @staticmethod
-    def parse_logs_duration(input_date: timedelta | str | int | None) -> timedelta | str | None:
+    def parse_logs_duration(input_date: datetime.timedelta | str | int | None) -> datetime.timedelta | str | None:
         if value := falsy_as(input_date, None):
             return to_timedelta(value)
 
@@ -124,7 +124,7 @@ class Logs(SettingsGroup):  # noqa: PLW1641
             if file.suffix.lower() not in {".log", ".csv"}:
                 continue
 
-            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:  # noqa: DTZ006
+            if (self._created_at - datetime.datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:  # noqa: DTZ006
                 file.unlink()
 
         delete_empty_files_and_folders(self.log_folder)
@@ -177,7 +177,7 @@ class FileSizeLimits(SettingsGroup):
     min_other_size: ByteSizeSerilized = ByteSize(0)
     min_video_size: ByteSizeSerilized = ByteSize(0)
 
-    @cached_property
+    @functools.cached_property
     def ranges(self) -> FileSizeRanges:
         return FileSizeRanges(
             video=Range(
@@ -202,14 +202,14 @@ class MediaDurationRanges:
 
 
 class MediaDurationLimits(SettingsGroup):
-    max_video_duration: timedelta = timedelta(seconds=0)
-    max_audio_duration: timedelta = timedelta(seconds=0)
-    min_video_duration: timedelta = timedelta(seconds=0)
-    min_audio_duration: timedelta = timedelta(seconds=0)
+    max_video_duration: datetime.timedelta = datetime.timedelta(seconds=0)
+    max_audio_duration: datetime.timedelta = datetime.timedelta(seconds=0)
+    min_video_duration: datetime.timedelta = datetime.timedelta(seconds=0)
+    min_audio_duration: datetime.timedelta = datetime.timedelta(seconds=0)
 
     @field_validator("*", mode="before")
     @staticmethod
-    def parse_runtime_duration(input_date: timedelta | str | int | None) -> timedelta | str:
+    def parse_runtime_duration(input_date: datetime.timedelta | str | int | None) -> datetime.timedelta | str:
         """Parses `datetime.timedelta`, `str` or `int` into a timedelta format.
         for `str`, the expected format is `value unit`, ex: `5 days`, `10 minutes`, `1 year`
         valid units:
@@ -217,7 +217,7 @@ class MediaDurationLimits(SettingsGroup):
         for `int`, value is assumed as `days`
         """
         if input_date is None:
-            return timedelta(seconds=0)
+            return datetime.timedelta(seconds=0)
         return to_timedelta(input_date)
 
     @property
@@ -226,7 +226,7 @@ class MediaDurationLimits(SettingsGroup):
             self.min_video_duration or self.max_video_duration or self.min_audio_duration or self.max_audio_duration
         )
 
-    @cached_property
+    @functools.cached_property
     def ranges(self) -> MediaDurationRanges:
         return MediaDurationRanges(
             video=Range.parse(
@@ -251,8 +251,8 @@ class IgnoreOptions(SettingsGroup):
     only_hosts: ListNonEmptyStr = []
     skip_hosts: ListNonEmptyStr = []
     exclude_files_with_no_extension: bool = True
-    exclude_before: date | None = None
-    exclude_after: date | None = None
+    exclude_before: datetime.date | None = None
+    exclude_after: datetime.date | None = None
 
     @field_validator("filename_regex_filter")
     @classmethod

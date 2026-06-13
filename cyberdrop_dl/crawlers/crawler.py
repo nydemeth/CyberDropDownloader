@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import importlib
 import logging
 import pkgutil
@@ -11,7 +12,6 @@ import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
 from contextvars import ContextVar
-from functools import wraps
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Self, final
@@ -1040,7 +1040,7 @@ def auto_task_id[CrawlerT: Crawler, **P, R](
 ) -> Callable[Concatenate[CrawlerT, ScrapeItem, P], Coroutine[None, None, R]]:
     """Autocreate a new `task_id` from the scrape_item of the method"""
 
-    @wraps(func)
+    @functools.wraps(func)
     async def wrapper(self: CrawlerT, scrape_item: ScrapeItem, *args: P.args, **kwargs: P.kwargs) -> R:
         with self.new_task_id(scrape_item.url):
             return await func(self, scrape_item, *args, **kwargs)

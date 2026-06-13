@@ -17,8 +17,6 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Iterable, Iterator
 
-    from yarl import URL
-
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
@@ -107,7 +105,7 @@ class CSVLogsManager:
 
             await asyncio.to_thread(write)
 
-    def write_unsupported(self, url: URL, origin: URL | None = None) -> None:
+    def write_unsupported(self, url: AbsoluteHttpURL, origin: AbsoluteHttpURL | None = None) -> None:
         """Writes to the unsupported urls log."""
         _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls_log, url=url, origin=origin))
 
@@ -124,7 +122,12 @@ class CSVLogsManager:
             )
         )
 
-    def write_scrape_error(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
+    def write_scrape_error(
+        self,
+        url: AbsoluteHttpURL | str,
+        error_message: str,
+        origin: AbsoluteHttpURL | Path | None = None,
+    ) -> None:
         """Writes to the scrape error log."""
         _ = self.task_group.create_task(
             self._write_to_csv(self.files.scrape_error_log, url=url, error=error_message, origin=origin)

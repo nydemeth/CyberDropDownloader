@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import datetime  # noqa: TC003
 import functools
 import itertools
 import re
 from collections import defaultdict
 from collections.abc import Generator
-from datetime import datetime  # noqa: TC003
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Concatenate, NamedTuple
 
@@ -87,9 +87,9 @@ class Post(AliasModel):
     content: str = ""
     file: FileOrNone = None
     attachments: list[File] = []  # noqa: RUF012
-    published: datetime | None = None
-    added: datetime | None = None
-    edited: datetime | None = None
+    published: datetime.datetime | None = None
+    added: datetime.datetime | None = None
+    edited: datetime.datetime | None = None
     timestamp: int | None = None
     tags: Tags = []  # noqa: RUF012
     embed: EmbedOrNone = None

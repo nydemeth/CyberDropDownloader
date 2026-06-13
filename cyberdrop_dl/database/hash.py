@@ -12,7 +12,8 @@ from .definitions import CREATE_FILES, CREATE_HASH, CREATE_HASH_INDEX
 
 if TYPE_CHECKING:
     import aiosqlite
-    from yarl import URL
+
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ class HashTable(Table, name="hash"):
         hash_algo: str,
         file: Path | str,
         original_filename: str | None,
-        referer: URL | None,
+        referer: AbsoluteHttpURL | None,
     ) -> None:
         await self.insert_or_update_hashes(hash_value, hash_algo, file)
         await self.insert_or_update_file(original_filename, referer, file)
@@ -123,7 +124,7 @@ class HashTable(Table, name="hash"):
     async def insert_or_update_file(
         self,
         original_filename: str | None,
-        referer: URL | str | None,
+        referer: AbsoluteHttpURL | str | None,
         file: Path | str,
     ) -> None:
         query = """

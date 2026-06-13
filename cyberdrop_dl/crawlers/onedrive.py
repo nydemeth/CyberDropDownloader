@@ -4,16 +4,14 @@
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
-from datetime import datetime
-from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_wrapper
-from cyberdrop_dl.utils.dates import to_timestamp
+from cyberdrop_dl.utils import dates, error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -164,7 +162,7 @@ class OneDriveCrawler(Crawler):
 
         subfolders: list[AccessDetails] = []
         old_ad = folder.access_details
-        new_access_details = partial(AccessDetails, auth_key=old_ad.auth_key, redeem=old_ad.redeem)
+        new_access_details = functools.partial(AccessDetails, auth_key=old_ad.auth_key, redeem=old_ad.redeem)
 
         for item in folder.children:
             if is_folder(item):
@@ -234,7 +232,7 @@ def parse_api_response(json_resp: dict[str, Any], access_details: AccessDetails)
         "url": create_api_url(new_access_details),
         "web_url": AbsoluteHttpURL(web_url_str, encoded="%" in web_url_str),
         "name": json_resp["name"],
-        "date": to_timestamp(datetime.fromisoformat(date_str)),
+        "date": dates.to_timestamp(dates.parse_iso(date_str)),
         "access_details": new_access_details,
     }
 

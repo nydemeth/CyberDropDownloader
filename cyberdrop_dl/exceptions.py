@@ -5,7 +5,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from yarl import URL
+import yarl
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -65,7 +65,7 @@ class CDLBaseError(Exception):
         *,
         message: str | None = None,
         status: str | int | None = None,
-        origin: ScrapeItem | MediaItem | URL | Path | None = None,
+        origin: ScrapeItem | MediaItem | yarl.URL | Path | None = None,
     ) -> None:
         self.ui_failure = ui_failure
         self.message = message or ui_failure
@@ -86,7 +86,7 @@ class FlaresolverrError(CDLBaseError):
 
 
 class InvalidContentTypeError(CDLBaseError):
-    def __init__(self, *, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, *, message: str | None = None, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when the content type isn't as expected."""
         ui_failure = "Invalid Content Type"
         super().__init__(ui_failure, message=message, origin=origin)
@@ -96,7 +96,7 @@ class FileNameError(CDLBaseError): ...
 
 
 class NoExtensionError(FileNameError):
-    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when no extension is given for a file."""
         ui_failure = "No File Extension"
         super().__init__(ui_failure, message=filename, origin=origin)
@@ -106,7 +106,7 @@ class NoExtensionError(FileNameError):
 
 
 class InvalidExtensionError(NoExtensionError):
-    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when no extension is given for a file."""
         super().__init__(filename=filename, origin=origin)
         self.ui_failure = "Invalid File Extension"
@@ -120,7 +120,7 @@ class PathTraversalError(CDLBaseError):
 
 
 class PasswordProtectedError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when a file is password protected."""
         ui_failure = "Password Protected"
         msg = message or "File/Folder is password protected"
@@ -128,7 +128,7 @@ class PasswordProtectedError(CDLBaseError):
 
 
 class MaxChildrenError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when an scrape item reaches its max number or children."""
         ui_failure = "Max Children Reached"
         msg = message or "Max number of children reached"
@@ -136,7 +136,7 @@ class MaxChildrenError(CDLBaseError):
 
 
 class DDOSGuardError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when DDoS-Guard is detected."""
         ui_failure = "DDoS-Guard"
         msg = message or "DDoS-Guard detected"
@@ -148,7 +148,7 @@ class DownloadError(CDLBaseError):
         self,
         status: str | int,
         message: str | None = None,
-        origin: ScrapeItem | MediaItem | URL | None = None,
+        origin: ScrapeItem | MediaItem | yarl.URL | None = None,
         *,
         retry: bool = False,
     ) -> None:
@@ -160,14 +160,14 @@ class DownloadError(CDLBaseError):
 
 
 class SlowDownloadError(DownloadError):
-    def __init__(self, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when a file will be skipped do to a low download speed."""
         ui_failure = "Slow Download"
         super().__init__(ui_failure, origin=origin)
 
 
 class InsufficientFreeSpaceError(CDLBaseError):
-    def __init__(self, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when no enough storage is available."""
         ui_failure = "Insufficient Free Space"
         super().__init__(ui_failure, origin=origin)
@@ -203,7 +203,7 @@ class RestrictedDateRangeError(SkipDownloadError):
 
 class ScrapeError(CDLBaseError):
     def __init__(
-        self, status: str | int, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None
+        self, status: str | int, message: str | None = None, origin: ScrapeItem | MediaItem | yarl.URL | None = None
     ) -> None:
         """This error will be thrown when a scrape fails."""
         ui_failure = create_error_msg(status)
@@ -211,21 +211,24 @@ class ScrapeError(CDLBaseError):
 
     @staticmethod
     def unsupported() -> ScrapeError:
-        return ScrapeError("Unknown URL path")
+        return ScrapeError("Unknown yarl.URL path")
 
 
 class InvalidURLError(ScrapeError):
     def __init__(
-        self, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None, url: URL | str = ""
+        self,
+        message: str | None = None,
+        origin: ScrapeItem | MediaItem | yarl.URL | None = None,
+        url: yarl.URL | str = "",
     ) -> None:
-        """This error will be thrown when parsed URL is not valid."""
-        ui_failure = "Invalid URL"
+        """This error will be thrown when parsed yarl.URL is not valid."""
+        ui_failure = "Invalid yarl.URL"
         self.url = url
         super().__init__(ui_failure, message=message, origin=origin)
 
 
 class LoginError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | yarl.URL | None = None) -> None:
         """This error will be thrown when the login fails for a site."""
         ui_failure = "Failed Login"
         super().__init__(ui_failure, message=message, origin=origin)
@@ -271,8 +274,8 @@ def create_error_msg(error: int | str) -> str:
     return f"Unknown ({error})"
 
 
-def get_origin(origin: ScrapeItem | Path | MediaItem | URL | None = None) -> Path | URL | None:
-    if origin and not isinstance(origin, URL | Path):
+def get_origin(origin: ScrapeItem | Path | MediaItem | yarl.URL | None = None) -> Path | yarl.URL | None:
+    if origin and not isinstance(origin, yarl.URL | Path):
         return origin.parents[0] if origin.parents else None
     return origin
 

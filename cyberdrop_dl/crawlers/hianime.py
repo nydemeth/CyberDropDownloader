@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import bs4
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.crawlers.megacloud import MegaCloudCrawler
 from cyberdrop_dl.exceptions import ScrapeError
@@ -67,7 +66,7 @@ class HiAnimeCrawler(Crawler):
 
     def __post_init__(self) -> None:
         self._animes: dict[int, Anime] = {}
-        self._anime_locks = WeakAsyncLocks[int]()
+        self._anime_locks: aio.WeakAsyncLocks[int] = aio.WeakAsyncLocks()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         episode = int(scrape_item.url.query.get("ep", 0)) or None

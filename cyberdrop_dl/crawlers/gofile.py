@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import itertools
 import time
-from hashlib import sha256
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
 
 from typing_extensions import ReadOnly
@@ -187,7 +187,7 @@ class GoFileCrawler(Crawler):
         )
 
         if password:
-            sha256_password = sha256(password.encode(), usedforsecurity=False).hexdigest()
+            sha256_password = hashlib.sha256(password.encode(), usedforsecurity=False).hexdigest()
             api_url = api_url.update_query(password=sha256_password)
 
         for page in itertools.count(1):
@@ -265,4 +265,4 @@ def _has_single_not_nested_file(scrape_item: ScrapeItem, folder: Folder) -> bool
 def _create_web_token(user_agent: str, brower_lang: str, api_key: str, salt: str) -> str:
     # https://gofile.io/dist/js/wt.obf.js
     token = f"{user_agent}::{brower_lang}::{api_key}::{int(time.time() // 14400)}::{salt}"
-    return sha256(token.encode()).hexdigest()
+    return hashlib.sha256(token.encode()).hexdigest()

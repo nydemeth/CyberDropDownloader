@@ -13,10 +13,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     import aiosqlite
-    from yarl import URL
 
     from cyberdrop_dl.crawlers.crawler import Crawler
-    from cyberdrop_dl.url_objects import MediaItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 
 
 _FETCH_MANY_SIZE: int = 1000
@@ -44,7 +43,7 @@ class HistoryTable(Table, name="media"):
             return row["referer"], bool(row["completed"])
         return "", False
 
-    async def update_referer(self, domain: str, db_path: str, referer: URL) -> None:
+    async def update_referer(self, domain: str, db_path: str, referer: AbsoluteHttpURL) -> None:
         query = "UPDATE media SET referer = ? WHERE domain = ? and url_path = ?"
         await self.db_conn.execute(query, (str(referer), domain, db_path))
         await self.db_conn.commit()
@@ -62,7 +61,7 @@ class HistoryTable(Table, name="media"):
         await self.db_conn.execute(query, (media_item.album_id, domain, media_item.db_path))
         await self.db_conn.commit()
 
-    async def check_complete_by_referer(self, domain: str | None, referer: URL) -> bool:
+    async def check_complete_by_referer(self, domain: str | None, referer: AbsoluteHttpURL) -> bool:
         if self.ignore_history:
             return False
 

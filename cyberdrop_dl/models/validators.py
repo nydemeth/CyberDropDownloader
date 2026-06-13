@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import datetime
 import re
-from datetime import timedelta
 from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt
 
 from pydantic import ByteSize, TypeAdapter
@@ -44,7 +44,7 @@ def change_path_suffix(suffix: str) -> Callable[[Path], Path]:
     return with_suffix
 
 
-def _str_to_timedelta(input_date: str) -> timedelta:
+def _str_to_timedelta(input_date: str) -> datetime.timedelta:
     time_str = input_date.casefold()
     matches: list[str] = re.findall(_DATE_PATTERN, time_str)
     seen_units: set[str] = set()
@@ -72,10 +72,10 @@ def _str_to_timedelta(input_date: str) -> timedelta:
     if not matches:
         msg = f"Unable to convert '{input_date}' to timedelta object"
         raise ValueError(msg)
-    return timedelta(**time_dict)
+    return datetime.timedelta(**time_dict)
 
 
-def to_timedelta(input_date: timedelta | str | int) -> timedelta | str:
+def to_timedelta(input_date: datetime.timedelta | str | int) -> datetime.timedelta | str:
     """Parses `datetime.timedelta`, `str` or `int` into a timedelta format.
 
     For `str`, the expected format is `<value> <unit>`, ex: `5 days`, `10 minutes`, `1 year`
@@ -85,11 +85,11 @@ def to_timedelta(input_date: timedelta | str | int) -> timedelta | str:
 
     For `int`, `input_date` is assumed as `days`
     """
-    input_date = falsy_as(input_date, timedelta(0))
-    if isinstance(input_date, timedelta):
+    input_date = falsy_as(input_date, datetime.timedelta(0))
+    if isinstance(input_date, datetime.timedelta):
         return input_date
     if isinstance(input_date, int):
-        return timedelta(days=input_date)
+        return datetime.timedelta(days=input_date)
     try:
         return _str_to_timedelta(input_date)
     except Exception:  # noqa: BLE001

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+import datetime
 from enum import Enum
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any
 
 import yaml
-from yarl import URL
+import yarl
 
 from cyberdrop_dl.exceptions import InvalidYamlError
 
@@ -25,7 +25,7 @@ def _enum(dumper: yaml.Dumper, value: Enum) -> ScalarNode:
     return dumper.represent_str(value.name)
 
 
-def _date(dumper: yaml.Dumper, value: date) -> ScalarNode:
+def _date(dumper: yaml.Dumper, value: datetime.date) -> ScalarNode:
     return dumper.represent_str(value.isoformat())
 
 
@@ -35,10 +35,10 @@ def _list(dumper: yaml.Dumper, value: Iterable[Any]):
 
 yaml.add_multi_representer(PurePath, _str)
 yaml.add_multi_representer(Enum, _enum)
-yaml.add_multi_representer(date, _date)
+yaml.add_multi_representer(datetime.date, _date)
 yaml.add_representer(tuple, _list)
-yaml.add_representer(timedelta, _str)
-yaml.add_representer(URL, _str)
+yaml.add_representer(datetime.timedelta, _str)
+yaml.add_representer(yarl.URL, _str)
 
 
 def save(file: Path, /, data: BaseModel | dict[str, Any]) -> None:
