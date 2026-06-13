@@ -3,9 +3,9 @@ from __future__ import annotations
 import base64
 import dataclasses
 import json
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from cyberdrop_dl.utils.m3u8 import M3U8
 
 
-_GQL_ENDPOINT = AbsoluteHttpURL("https://gql.twitch.tv/gql")
 _CLIPS_URL = AbsoluteHttpURL("https://clips.twitch.tv")
 _M3U8_BASE = AbsoluteHttpURL("https://usher.ttvnw.net")
 
@@ -66,7 +65,7 @@ class TwitchCrawler(Crawler):
                 raise ValueError
 
     def __post_init__(self) -> None:
-        self.api = TwitchAPI(self)
+        self.api: TwitchAPI = TwitchAPI.from_crawler(self)
 
     async def _request_m3u8(
         self,
@@ -161,16 +160,11 @@ class TwitchCrawler(Crawler):
         await self.handle_file(source, scrape_item, title, custom_filename=filename)
 
 
-class TwitchAPI:
+class TwitchAPI(API):
     """GraphQL API interface for twitch"""
 
-    _CLIENT_ID: Final = "kimne78kx3ncx6brgo4mv6wki5h1ko"
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(client_id={self._CLIENT_ID})"
-
-    def __init__(self, crawler: Crawler) -> None:
-        self._crawler = crawler
+    GQL_ENDPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://gql.twitch.tv/gql")
+    CLIENT_ID: ClassVar[str] = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
     @classmethod
     def _prepare_query(cls, name: str, variables: dict[str, Any], query_hash: str) -> dict[str, Any]:
@@ -186,12 +180,12 @@ class TwitchAPI:
         }
 
     async def _request_many(self, queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return await self._crawler.request_json(
-            _GQL_ENDPOINT,
+        return await self.request_json(
+            self.GQL_ENDPOINT,
             method="POST",
             headers={
                 "Content-Type": "text/plain;charset=UTF-8",
-                "Client-ID": self._CLIENT_ID,
+                "Client-ID": self.CLIENT_ID,
             },
             json=queries,
         )
