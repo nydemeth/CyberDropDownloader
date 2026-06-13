@@ -2,27 +2,26 @@ from __future__ import annotations
 
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     import aiosqlite
 
-    from cyberdrop_dl.database import Database
-
 
 @dataclasses.dataclass(slots=True)
 class Table(ABC):
-    _database: Database = dataclasses.field(repr=False)
+    NAME: ClassVar[str]
+    db_conn: aiosqlite.Connection
+    ignore_history: bool = False
 
-    @property
-    def db_conn(self) -> aiosqlite.Connection:
-        return self._database.conn
+    def __init_subclass__(cls, name: str | None = None) -> None:
+        if name:
+            cls.NAME = name
 
     @abstractmethod
     async def create(self) -> None: ...
 
-
-async def exists(db_conn: aiosqlite.Connection, table: str) -> bool:
-    query = "SELECT 1 FROM sqlite_master WHERE type='table' AND name= ? ;"
-    cursor = await db_conn.execute(query, (table,))
-    return await cursor.fetchone() is not None
+    async def exists(self) -> bool:
+        query = "SELECT 1 FROM sqlite_master WHERE type='table' AND name= ? LIMIT 1;"
+        cursor = await self.db_conn.execute(query, (self.NAME,))
+        return await cursor.fetchone() is not None

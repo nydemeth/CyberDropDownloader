@@ -43,11 +43,6 @@ class Database:
     _conn: aiosqlite.Connection = dataclasses.field(init=False)
     _is_new: bool = dataclasses.field(init=False)
 
-    def __post_init__(self) -> None:
-        self.history = HistoryTable(self)
-        self.hash = HashTable(self)
-        self.schema = SchemaTable(self)
-
     @property
     def conn(self) -> aiosqlite.Connection:
         return self._conn
@@ -55,6 +50,9 @@ class Database:
     async def _connect(self) -> None:
         self._is_new = not await aio.get_size(self.path)
         self._conn = await _connect(self.path)
+        self.history = HistoryTable(self._conn, self.ignore_history)
+        self.hash = HashTable(self._conn, self.ignore_history)
+        self.schema = SchemaTable(self._conn, self.ignore_history)
 
     @contextlib.asynccontextmanager
     async def connect(self) -> AsyncGenerator[Self]:

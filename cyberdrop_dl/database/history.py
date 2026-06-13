@@ -23,7 +23,7 @@ _FETCH_MANY_SIZE: int = 1000
 logger = logging.getLogger(__name__)
 
 
-class HistoryTable(table.Table):
+class HistoryTable(table.Table, name="media"):
     async def create(self) -> None:
         await self.db_conn.execute(CREATE_HISTORY)
         await self.db_conn.executescript(CREATE_MEDIA_INDEX)
@@ -35,7 +35,7 @@ class HistoryTable(table.Table):
 
     async def check_complete(self, domain: str, db_path: str) -> tuple[str, bool]:
         """Checks whether an individual file has completed given its domain and url path."""
-        if self._database.ignore_history:
+        if self.ignore_history:
             return "", False
 
         query = "SELECT referer, completed FROM media WHERE domain = ? and url_path = ? LIMIT 1"
@@ -51,7 +51,7 @@ class HistoryTable(table.Table):
 
     async def check_album(self, domain: str, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
-        if self._database.ignore_history:
+        if self.ignore_history:
             return {}
 
         query = "SELECT url_path, completed FROM media WHERE domain = ? and album_id = ?"
@@ -67,7 +67,7 @@ class HistoryTable(table.Table):
 
     async def check_complete_by_referer(self, domain: str | None, referer: URL) -> bool:
         """Checks whether an individual file has completed given its domain and url path."""
-        if self._database.ignore_history:
+        if self.ignore_history:
             return False
 
         if domain is None:

@@ -38,12 +38,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(slots=True)
-class SchemaTable(table.Table):
+class SchemaTable(table.Table, name="schema_version"):
     up_to_date: bool = False
     version: Version | None = None
 
     async def get_version(self) -> Version | None:
-        if not await table.exists(self.db_conn, "schema_version"):
+        if not await self.exists():
             return None
         query = "SELECT version FROM schema_version ORDER BY ROWID DESC LIMIT 1;"
         cursor = await self.db_conn.execute(query)
@@ -78,8 +78,7 @@ class SchemaTable(table.Table):
 
 async def dump(db_conn: aiosqlite.Connection) -> str:
     query = "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name"
-    cursor = await db_conn.execute(query)
-    rows = await cursor.fetchall()
+    rows = await db_conn.execute_fetchall(query)
     index_queries: list[str] = []
     table_queries: list[str] = []
 

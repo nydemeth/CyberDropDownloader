@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(slots=True)
-class HashTable(table.Table):
+class HashTable(table.Table, name="hash"):
     cwd: Path = dataclasses.field(init=False, default_factory=lambda: Path.cwd().expanduser().resolve())
 
     async def create(self) -> None:
@@ -72,15 +72,15 @@ class HashTable(table.Table):
             """
 
         try:
-            cursor = await self.db_conn.execute(query, (hash_value, size, hash_type))
-            return cast("list[aiosqlite.Row]", await cursor.fetchall())
+            rows = await self.db_conn.execute_fetchall(query, (hash_value, size, hash_type))
+            return cast("list[aiosqlite.Row]", rows)
 
         except Exception:
             logger.exception("Error retrieving folder and filename")
             return []
 
     async def check_hash_exists(self, hash_type: str, hash_value: str) -> bool:
-        if self._database.ignore_history:
+        if self.ignore_history:
             return False
 
         query = "SELECT 1 FROM hash WHERE hash.hash_type = ? AND hash.hash = ? LIMIT 1"
