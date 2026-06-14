@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import itertools
 import logging
 import platform
@@ -16,12 +17,22 @@ from cyberdrop_dl.utils._url import remove_trailing_slash  # noqa: F401
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
+    from contextvars import ContextVar
     from pathlib import Path
 
     from cyberdrop_dl.config import Config
 
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def enter_context[T](context_var: ContextVar[T], value: T, /) -> Generator[None]:
+    token = context_var.set(value)
+    try:
+        yield
+    finally:
+        context_var.reset(token)
 
 
 def delete_empty_files_and_folders(path: Path) -> None:

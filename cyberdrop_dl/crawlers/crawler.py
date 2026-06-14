@@ -17,20 +17,24 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Self, final
 
 from cyberdrop_dl import aio, env, signature
-from cyberdrop_dl.clients.http import HTTPClient, HTTPMixin, RequestContext
+from cyberdrop_dl.clients.http import JSON_CHECK, HTTPClient, HTTPMixin, RequestContext
 from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.crawlers._hls import HLSMixin
 from cyberdrop_dl.downloader.http import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
-from cyberdrop_dl.filepath import (
-    check_dangerous_filename,
-    check_path_traversal,
-    compose_filename,
-    get_filename_and_ext,
-)
+from cyberdrop_dl.filepath import check_dangerous_filename, check_path_traversal, compose_filename, get_filename_and_ext
 from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
-from cyberdrop_dl.utils import css, dates, error_handling_context, is_blob_or_svg, m3u8, parse_url, unique
+from cyberdrop_dl.utils import (
+    css,
+    dates,
+    enter_context,
+    error_handling_context,
+    is_blob_or_svg,
+    m3u8,
+    parse_url,
+    unique,
+)
 from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
@@ -321,7 +325,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if impersonate is None:
             impersonate = self._IMPERSONATE
 
-        with self.client.json_context(self.__json_resp_check__):
+        with enter_context(JSON_CHECK, self.__json_resp_check__):
             async with (
                 self.client.rate_limits[self.DOMAIN],
                 self.client.global_rate_limiter,

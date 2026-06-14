@@ -21,7 +21,7 @@ from rich.text import Text, TextType
 from cyberdrop_dl import env
 from cyberdrop_dl.constants import MAIN_LOG_FILE
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
-from cyberdrop_dl.utils import dates
+from cyberdrop_dl.utils import dates, enter_context
 
 if TYPE_CHECKING:
     import datetime
@@ -195,7 +195,7 @@ def _threaded_logger(
     q_listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
     q_listener.start()
 
-    with _enter_context(context_var, q_listener) if context_var else contextlib.nullcontext():
+    with enter_context(context_var, q_listener) if context_var else contextlib.nullcontext():
         logging.getLogger().addHandler(q_handler)
         try:
             yield q_handler
@@ -207,15 +207,6 @@ def _threaded_logger(
                 q_listener.stop()
                 for handler in q_listener.handlers[:]:
                     handler.close()
-
-
-@contextlib.contextmanager
-def _enter_context[T](context_var: ContextVar[T], value: T, /) -> Generator[None]:
-    token = context_var.set(value)
-    try:
-        yield
-    finally:
-        context_var.reset(token)
 
 
 @final
@@ -333,9 +324,9 @@ def setup_file_logging(file: Path, /, *, level: int = logging.DEBUG) -> Generato
     with (
         _setup_debug_logger() as debug_log_file,
         file.open("w", encoding="utf8") as fp,
-        _enter_context(MAIN_LOG_FILE, file),
-        _enter_context(mega.LOG_HTTP_TRAFFIC, True),
-        _enter_context(mega.LOG_FILE_PROGRESS, False),
+        enter_context(MAIN_LOG_FILE, file),
+        enter_context(mega.LOG_HTTP_TRAFFIC, True),
+        enter_context(mega.LOG_FILE_PROGRESS, False),
         _threaded_logger(
             log_handler=LogHandler(
                 level=logging.DEBUG,
@@ -351,11 +342,11 @@ def setup_file_logging(file: Path, /, *, level: int = logging.DEBUG) -> Generato
         try:
             yield
         except CDLConfigRuntimeErrorsGroup as e:
-            with _enter_context(_LOG_TO_CONSOLE, False):
+            with enter_context(_LOG_TO_CONSOLE, False):
                 logger.critical("Unrecoverable error", exc_info=e.with_traceback(None))
             raise
         except Exception:
-            with _enter_context(_LOG_TO_CONSOLE, False):
+            with enter_context(_LOG_TO_CONSOLE, False):
                 logger.critical("Unrecoverable error", exc_info=True)
             raise
 
@@ -433,7 +424,7 @@ def disable_console_logging():
     else:
         listener.stop()
         listener.start()
-    return _enter_context(_LOG_TO_CONSOLE, False)
+    return enter_context(_LOG_TO_CONSOLE, False)
 
 
 @contextlib.contextmanager

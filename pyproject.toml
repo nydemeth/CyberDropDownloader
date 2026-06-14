@@ -167,7 +167,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.flake8-boolean-trap]
-extend-allowed-calls = ["cyberdrop_dl.logs._enter_context"]
+extend-allowed-calls = ["cyberdrop_dl.utils.enter_context"]
 
 [tool.ruff.lint.flake8-import-conventions]
 banned-from = [

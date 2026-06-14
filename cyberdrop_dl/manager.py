@@ -21,10 +21,10 @@ from cyberdrop_dl.database import Database
 from cyberdrop_dl.dedupe import Czkawka
 from cyberdrop_dl.dependencies import ALL_DEPENDENCIES
 from cyberdrop_dl.hasher import Hasher
-from cyberdrop_dl.logs import _enter_context, capture_logs, log_spacer
+from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.progress import REFRESH_RATE, TUI_DISABLED
 from cyberdrop_dl.sorter import Sorter
-from cyberdrop_dl.utils import get_system_information
+from cyberdrop_dl.utils import enter_context, get_system_information
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -93,8 +93,8 @@ class Manager:
         self.sorter = Sorter.from_manager(self)
         with (
             _cache_context(self.appdata.cache_file, self.cache),
-            _enter_context(REFRESH_RATE, self.config.ui_options.refresh_rate),
-            _enter_context(TUI_DISABLED, self.cli_args.ui.is_disabled),
+            enter_context(REFRESH_RATE, self.config.ui_options.refresh_rate),
+            enter_context(TUI_DISABLED, self.cli_args.ui.is_disabled),
         ):
             try:
                 yield self

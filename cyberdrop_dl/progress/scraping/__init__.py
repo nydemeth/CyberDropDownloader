@@ -19,6 +19,7 @@ from cyberdrop_dl.progress.scraping.downloads import DownloadsPanel
 from cyberdrop_dl.progress.scraping.errors import DownloadErrorsPanel, ScrapeErrorsPanel
 from cyberdrop_dl.progress.scraping.files import FileStatsPanel
 from cyberdrop_dl.progress.scraping.panel import ScrapingPanel, StatusMessage
+from cyberdrop_dl.utils import enter_context
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -82,14 +83,13 @@ class ScrapingUI(LiveUI):
 
     @contextlib.contextmanager
     def __call__(self, *, transient: bool = True, force: bool = False) -> Generator[None]:
-        token = _STATUS.set(self.status)
-        if self.mode is not UIOptions.FULLSCREEN:
-            transient = False
-        try:
-            with super(ScrapingUI, self).__call__(transient=transient, force=force):
-                yield
-        finally:
-            _STATUS.reset(token)
+        with (
+            enter_context(_STATUS, self.status),
+            super(ScrapingUI, self).__call__(
+                transient=transient if self.mode is UIOptions.FULLSCREEN else False, force=force
+            ),
+        ):
+            yield
 
     def _create_screen(self) -> Screen:
         horizontal, vertical = Layout(), Layout()

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
-_JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("_JSON_CHECK", default=None)
+JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("JSON_CHECK", default=None)
 RequestContext = contextlib._AsyncGeneratorContextManager[AbstractResponse[Any]]  # pyright: ignore[reportPrivateUsage]
 
 logger = logging.getLogger(__name__)
@@ -318,20 +318,12 @@ class HTTPClient:
         flaresolverr.verify_solution(self.config.user_agent, solution)
         return AbstractResponse.create(solution)
 
-    @contextlib.contextmanager
-    def json_context(self, check: Callable[[Any, AbstractResponse[Any]], None], /):
-        token = _JSON_CHECK.set(check)
-        try:
-            yield
-        finally:
-            _JSON_CHECK.reset(token)
-
 
 async def _check_json(response: AbstractResponse[Any]) -> None:
     if "json" not in response.content_type:
         return
 
-    if check := _JSON_CHECK.get():
+    if check := JSON_CHECK.get():
         check(await response.json(), response)
         return
 
