@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl import signature
 
+    @final
     class AbsoluteHttpURL(yarl.URL):  # pyright: ignore[reportGeneralTypeIssues]
         @signature.copy(yarl.URL.__new__)
         def __new__(cls) -> Self: ...
@@ -302,7 +303,7 @@ class ScrapeItem:
         assert is_absolute_http_url(url)
 
         if add_parent:
-            new_parent = add_parent if isinstance(add_parent, AbsoluteHttpURL) else self.url
+            new_parent = self.url if add_parent is True else add_parent
             assert is_absolute_http_url(new_parent)
             scrape_item.parents.append(new_parent)
 

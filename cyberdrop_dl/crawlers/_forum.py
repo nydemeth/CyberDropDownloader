@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from aiohttp import ClientResponse
 
-    from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 LINK_TRASH_MAPPING = {".th.": ".", ".md.": ".", "ifr": "watch"}
 HTTP_REGEX_LINKS = re.compile(
@@ -514,7 +514,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         await self.handle_link(scrape_item, link)
 
     async def get_absolute_link(self, link: str | AbsoluteHttpURL) -> AbsoluteHttpURL | None:
-        absolute_link = self.parse_url(clean_link_str(link)) if isinstance(link, str) else link
+        absolute_link = link if type(link) is AbsoluteHttpURL else self.parse_url(clean_link_str(link))
         if is_confirmation_link(absolute_link):
             return await self.resolve_confirmation_link(absolute_link)
         return absolute_link

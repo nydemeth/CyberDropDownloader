@@ -65,7 +65,7 @@ class MediaFireCrawler(Crawler, db_path="name"):
 
     @classmethod
     def __json_resp_check__(cls, json_resp: Any, _) -> None:
-        if not isinstance(json_resp, dict) or "response" not in json_resp:
+        if type(json_resp) is not dict or "response" not in json_resp:
             return
 
         resp: dict[str, Any] = json_resp["response"]

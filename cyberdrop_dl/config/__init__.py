@@ -15,6 +15,7 @@ from cyberdrop_dl.constants import DEFAULT_DOWNLOAD_STORAGE
 from cyberdrop_dl.models import AppriseURL  # noqa: TC001
 from cyberdrop_dl.models.types import ByteSizeSerilized, HttpURL, ListNonEmptyStr, NonEmptyStr  # noqa: TC001
 from cyberdrop_dl.models.validators import falsy_as, to_bytesize
+from cyberdrop_dl.utils import delete_empty_files_and_folders
 
 from .auth import AuthSettings
 from .settings import (
@@ -117,6 +118,7 @@ class Config(BaseModel):
         self.logs.resolve_filenames()
         self._resolve_paths(self)
         self.logs.delete_old_logs_and_folders()
+        delete_empty_files_and_folders(self.logs.log_folder)
         self._resolved = True
 
     @classmethod
@@ -167,7 +169,7 @@ def _load_config_file(file: Path, *, save_if_not_found: bool = False) -> Config:
     except FileNotFoundError:
         default = Config()
         if save_if_not_found:
-            yaml.save(file, default)
+            yaml.save(file, default.model_dump())
         return default
     else:
         config = Config.model_validate(content, extra="forbid")

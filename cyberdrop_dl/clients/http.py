@@ -178,11 +178,7 @@ class HTTPClient:
         async for cookie in cookies.read_netscape_files(cookie_files):
             self.cookies.update_cookies(cookie)
 
-    async def check_http_status(self, response: aiohttp.ClientResponse | CurlResponse | AbstractResponse[Any]) -> None:
-        """Checks the HTTP status code and raises an exception if it's not acceptable."""
-        if not isinstance(response, AbstractResponse):
-            response = AbstractResponse.create(response)
-
+    async def check_http_status(self, response: AbstractResponse[Any]) -> None:
         if HTTPStatus.OK <= response.status < HTTPStatus.BAD_REQUEST:
             # Check DDosGuard even on successful pages
             await ddos_guard.check_resp(response)
@@ -190,7 +186,7 @@ class HTTPClient:
 
         await _check_json(response)
         await ddos_guard.check_resp(response)
-        raise DownloadError(status=response.status)
+        raise DownloadError(response.status)
 
     @contextlib.asynccontextmanager
     async def request(  # noqa: PLR0913

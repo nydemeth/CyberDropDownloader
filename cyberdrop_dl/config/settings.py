@@ -41,7 +41,6 @@ from cyberdrop_dl.models.types import (
     PathOrNone,
 )
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_timedelta
-from cyberdrop_dl.utils import delete_empty_files_and_folders
 from cyberdrop_dl.utils.strings import validate_format_string
 
 _SORTING_COMMON_FIELDS = {
@@ -101,7 +100,7 @@ class Logs(SettingsGroup):  # noqa: PLW1641
             return to_timedelta(value)
 
     def resolve_filenames(self) -> None:
-        object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
+        self.log_folder = self.log_folder.expanduser().resolve().absolute()
         now_file_iso: str = self._created_at.strftime(LOGS_DATETIME_FORMAT)
         now_folder_iso: str = self._created_at.strftime(LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
@@ -126,8 +125,6 @@ class Logs(SettingsGroup):  # noqa: PLW1641
 
             if (self._created_at - datetime.datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:  # noqa: DTZ006
                 file.unlink()
-
-        delete_empty_files_and_folders(self.log_folder)
 
     def __eq__(self, other: object) -> bool:
         # Exclude _created_at from compare (AKA __pydantic_private__)

@@ -13,7 +13,6 @@ from cyberdrop_dl.exceptions import InvalidYamlError
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from pydantic import BaseModel
     from yaml.nodes import ScalarNode
 
 
@@ -41,11 +40,7 @@ yaml.add_representer(datetime.timedelta, _str)
 yaml.add_representer(yarl.URL, _str)
 
 
-def save(file: Path, /, data: BaseModel | dict[str, Any]) -> None:
-    """Saves a dict to a yaml file."""
-    if not isinstance(data, dict):
-        data = data.model_dump()
-
+def save(file: Path, /, data: dict[str, Any]) -> None:
     file.parent.mkdir(parents=True, exist_ok=True)
     with file.open("w", encoding="utf8") as file_io:
         yaml.dump(data, file_io, default_flow_style=False)

@@ -276,13 +276,12 @@ def create_error_msg(error: int | str) -> str:
     if phrase := HTTP_ERROR_CODES.get(error):
         return f"{error} {phrase}"
 
-    if isinstance(error, int):
-        if 300 <= error < 400:
-            return f"HTTP Redirection ({error})"
-        if 400 <= error < 500:
-            return f"HTTP Client Error ({error})"
-        if 500 <= error < 600:
-            return f"HTTP Server Error ({error})"
+    if 300 <= error < 400:
+        return f"HTTP Redirection ({error})"
+    if 400 <= error < 500:
+        return f"HTTP Client Error ({error})"
+    if 500 <= error < 600:
+        return f"HTTP Server Error ({error})"
 
     return f"Unknown ({error})"
 
@@ -290,7 +289,9 @@ def create_error_msg(error: int | str) -> str:
 def get_origin(origin: HasParents | Path | yarl.URL | None = None) -> Path | yarl.URL | None:
     if origin is None:
         return None
-    if isinstance(origin, yarl.URL | Path):
+    if type(origin) is yarl.URL:
+        return origin
+    if isinstance(origin, Path):
         return origin
     return origin.parents[0] if origin.parents else None
 

@@ -277,7 +277,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         scrape_item.setup_as_profile("")
         api_url = self.__make_api_url_w_offset(scrape_item.url, f"discord/channel/{channel_id}")
         async for posts in self._pager(api_url, step_size=_DISCORD_CHANNEL_PAGE_SIZE):
-            if not isinstance(posts, list):
+            if type(posts) is list:
                 error_msg = (
                     f"[{self.NAME}] Invalid API response for Discord channel '{channel_id}' posts (URL: {api_url}). "
                     f"Expected a list, but got type {type(posts).__name__}. "
