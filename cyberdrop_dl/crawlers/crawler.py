@@ -542,9 +542,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             album_id=scrape_item.album_id,
             ext=ext or Path(filename).suffix,
             original_filename=filename,
-            parents=scrape_item.parents.copy(),
+            parents=tuple(scrape_item.parents),
             uploaded_at=scrape_item.uploaded_at,
-            parent_threads=scrape_item.parent_threads.copy(),
             debrid_link=debrid_link,
         )
 

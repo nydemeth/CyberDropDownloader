@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl import signature
 
-    class AbsoluteHttpURL(yarl.URL):
+    class AbsoluteHttpURL(yarl.URL):  # pyright: ignore[reportGeneralTypeIssues]
         @signature.copy(yarl.URL.__new__)
         def __new__(cls) -> Self: ...
 
@@ -135,9 +135,7 @@ class MediaItem:
     album_id: str | None = None
     uploaded_at: int | None = None
 
-    parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list)
-    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set)
-
+    parents: tuple[AbsoluteHttpURL, ...] = dataclasses.field(default_factory=tuple)
     attempts: int = dataclasses.field(init=False, default=0)
     partial_file: Path = dataclasses.field(init=False)
     path: Path = dataclasses.field(init=False)
@@ -196,9 +194,8 @@ class MediaItem:
             album_id=origin.album_id,
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
-            parents=origin.parents.copy(),
+            parents=tuple(origin.parents),
             uploaded_at=origin.uploaded_at,
-            parent_threads=origin.parent_threads.copy(),
         )
 
     def serialize(self) -> dict[str, Any]:
@@ -219,7 +216,7 @@ class ScrapeItem:
     url: AbsoluteHttpURL
     part_of_album: bool = False
     album_id: str | None = None
-    uploaded_at: int | None = None
+    uploaded_at: int | None = dataclasses.field(init=False, default=None)
     retry_path: Path | None = None
     folders: list[str] = dataclasses.field(init=False, default_factory=list)
     download_folder: Path = Path("downloads")
@@ -228,12 +225,15 @@ class ScrapeItem:
     parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set, init=False)
 
     type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
-    children_limits: list[int] = dataclasses.field(default_factory=list, init=False)
+    children_limits: tuple[int, ...] = dataclasses.field(default_factory=tuple, init=False)
 
-    password: str | None = dataclasses.field(default=None, init=False)
+    password: str | None = dataclasses.field(init=False)
 
     _children_count: int = dataclasses.field(default=0, init=False)
     _children_limit: int = dataclasses.field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        self.password = self.url.query.get("password")
 
     @property
     @contextlib.contextmanager
@@ -247,9 +247,6 @@ class ScrapeItem:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(url={self.url!r}, folders={self.folders!r}, uploaded_at={self.uploaded_at!r}"
-
-    def __post_init__(self) -> None:
-        self.password = self.url.query.get("password")
 
     def append_folders(self, *folders: str) -> None:
         for folder in folders:
