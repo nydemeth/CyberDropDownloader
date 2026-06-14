@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Detect and report BasedFlare anti-bot protection
 
+### Removed
+
+- Posts filtering by URL params (Wordpress)
+
 ### Fixed
 
 - Update website salt (Gofile)
