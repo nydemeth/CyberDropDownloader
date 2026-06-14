@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import is_absolute_http_url, remove_trailing_slash
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, is_absolute_http_url
+from cyberdrop_dl.utils import remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

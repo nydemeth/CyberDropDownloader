@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 from cyberdrop_dl.utils._dataclasses import DictDataclass, deserialize, filter_data, type_adapter  # noqa: F401
 from cyberdrop_dl.utils._errors import error_handling_context, error_handling_wrapper  # noqa: F401
 from cyberdrop_dl.utils._path_traverse import has_partial_files, partial_files
-from cyberdrop_dl.utils._url import is_absolute_http_url, remove_trailing_slash  # noqa: F401
 from cyberdrop_dl.utils._url import parse_http_url as parse_url  # noqa: F401
+from cyberdrop_dl.utils._url import remove_trailing_slash  # noqa: F401
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable

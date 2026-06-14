@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, final, overload
 
 import yarl
+from typing_extensions import TypeIs
 
 from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.filepath import sanitize_folder
@@ -103,6 +104,10 @@ else:
 
     def _FakePath():  # noqa: N802
         return None
+
+
+def is_absolute_http_url(url: yarl.URL) -> TypeIs[AbsoluteHttpURL]:
+    return url.absolute and url.scheme in {"http", "https"}
 
 
 class ScrapeItemType(IntEnum):
@@ -295,7 +300,6 @@ class ScrapeItem:
         add_parent: AbsoluteHttpURL | bool | None = None,
     ) -> Self:
         """Creates a scrape item."""
-        from cyberdrop_dl.utils import is_absolute_http_url
 
         scrape_item = self.copy()
         assert is_absolute_http_url(url)

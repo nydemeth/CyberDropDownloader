@@ -2,16 +2,11 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING
 
 import yarl
-from typing_extensions import TypeIs
 
 from cyberdrop_dl.exceptions import InvalidURLError
-
-if TYPE_CHECKING:
-    from cyberdrop_dl.url_objects import AbsoluteHttpURL
-
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, is_absolute_http_url
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +55,6 @@ def parse_http_url(
     if not trim:
         return url
     return remove_trailing_slash(url)
-
-
-def is_absolute_http_url(url: yarl.URL) -> TypeIs[AbsoluteHttpURL]:
-    return url.absolute and url.scheme.startswith("http")
 
 
 def remove_trailing_slash(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
