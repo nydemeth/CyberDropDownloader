@@ -122,25 +122,25 @@ class MediaItem:
     domain: str
     referer: AbsoluteHttpURL
     download_folder: Path
+    db_path: str
     filename: str
+
     original_filename: str = ""
     download_filename: str | None = None
-    filesize: int | None = None
-    ext: str
-    db_path: str
-
-    debrid_link: AbsoluteHttpURL | None = None
+    ext: str = ""
+    size: int | None = None
+    debrid_url: AbsoluteHttpURL | None = None
     duration: float | None = None
     is_segment: bool = False
     album_id: str | None = None
     uploaded_at: int | None = None
+    xxhash: str | None = None
 
     parents: tuple[AbsoluteHttpURL, ...] = dataclasses.field(default_factory=tuple)
     attempts: int = dataclasses.field(init=False, default=0)
     partial_file: Path = dataclasses.field(init=False)
     path: Path = dataclasses.field(init=False)
-    hash: str | None = None
-    downloaded: bool = dataclasses.field(default=False)
+    downloaded: bool = dataclasses.field(init=False, default=False)
 
     metadata: object = dataclasses.field(init=False, default_factory=dict)
 
@@ -149,9 +149,10 @@ class MediaItem:
 
     id: tuple[str, ...] = dataclasses.field(init=False)
     base64_id: str = dataclasses.field(init=False)
-    headers: dict[str, str] = dataclasses.field(default_factory=dict)
+    headers: dict[str, str] = dataclasses.field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
+        self.ext = self.ext or Path(self.filename).suffix
         self.id = self.domain, self.db_path
         self.original_filename = self.original_filename or self.filename
         if self.url.scheme == "metadata":
@@ -169,7 +170,7 @@ class MediaItem:
 
     @property
     def real_url(self) -> AbsoluteHttpURL:
-        return self.debrid_link or self.url
+        return self.debrid_url or self.url
 
     @staticmethod
     def from_item(  # noqa: PLR0913
@@ -192,7 +193,7 @@ class MediaItem:
             db_path=db_path,
             referer=origin.url,
             album_id=origin.album_id,
-            ext=ext or Path(filename).suffix,
+            ext=ext,
             original_filename=original_filename or filename,
             parents=tuple(origin.parents),
             uploaded_at=origin.uploaded_at,
@@ -203,8 +204,8 @@ class MediaItem:
             if not hasattr(self, attr):
                 setattr(self, attr, None)
         me = dataclasses.asdict(self)
-        if self.hash:
-            me["hash"] = f"xxh128:{self.hash}"
+        if self.xxhash:
+            me["xxhash"] = f"xxh128:{self.xxhash}"
         for name in ("is_segment",):
             del me[name]
         return me
@@ -219,14 +220,14 @@ class ScrapeItem:
     download_folder: Path = Path("downloads")
 
     folders: list[str] = dataclasses.field(init=False, default_factory=list)
-    parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list, init=False)
-    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set, init=False)
-    children_limits: tuple[int, ...] = dataclasses.field(default_factory=tuple, init=False)
+    parents: list[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
+    children_limits: tuple[int, ...] = dataclasses.field(init=False, default_factory=tuple)
     password: str | None = dataclasses.field(init=False)
 
-    _children_count: int = dataclasses.field(default=0, init=False)
-    _children_limit: int = dataclasses.field(default=0, init=False)
-    _type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
+    _children_count: int = dataclasses.field(init=False, default=0)
+    _children_limit: int = dataclasses.field(init=False, default=0)
+    _type: ScrapeItemType | None = dataclasses.field(init=False, default=None)
     _uploaded_at: int | None = dataclasses.field(init=False, default=None)
 
     def __post_init__(self) -> None:

@@ -197,7 +197,7 @@ class Hasher:
         assert size
         self.hashed_media_items.append(media_item)
         if hash_value:
-            media_item.hash = hash_value
+            media_item.xxhash = hash_value
         self.hashes_dict[hash_value][size].add(absolute_path)
         self._hashed_items.add(media_item.id)
 

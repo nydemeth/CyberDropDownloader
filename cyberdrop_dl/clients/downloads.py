@@ -115,7 +115,7 @@ class DownloadClient:
             _check_content_type(content_type, media_item.ext)
 
         try:
-            media_item.filesize = int(resp.headers[hdrs.CONTENT_LENGTH])
+            media_item.size = int(resp.headers[hdrs.CONTENT_LENGTH])
         except KeyError:
             msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
             raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None
@@ -152,7 +152,7 @@ class DownloadClient:
         if media_item.is_segment:
             return self.manager.scrape_mapper.tui.downloads.download_hls_seg()
 
-        size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
+        size = (media_item.size + resume_point) if media_item.size is not None else None
         return self.manager.scrape_mapper.tui.downloads.download_file(
             media_item.filename,
             media_item.domain,
@@ -189,11 +189,11 @@ class DownloadClient:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
 
-        assert media_item.filesize
-        if size < media_item.filesize:
+        assert media_item.size
+        if size < media_item.size:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(
-                "Corrupted File", f"Expected at least {media_item.filesize:,} bytes but only got {size:,} bytes"
+                "Corrupted File", f"Expected at least {media_item.size:,} bytes but only got {size:,} bytes"
             )
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
@@ -277,7 +277,7 @@ class DownloadClient:
         part_suffix = media_item.path.suffix + constants.TempExt.PART
         media_item.partial_file = media_item.path.with_suffix(part_suffix)
 
-        expected_size = media_item.filesize
+        expected_size = media_item.size
         proceed = True
         skip = False
 
@@ -293,7 +293,7 @@ class DownloadClient:
             if not media_item.path.exists() and not media_item.partial_file.exists():
                 break
 
-            if media_item.path.exists() and media_item.path.stat().st_size == media_item.filesize:
+            if media_item.path.exists() and media_item.path.stat().st_size == media_item.size:
                 logger.info(f"Found {media_item.path.name} locally, skipping download")
                 proceed = False
                 break
@@ -312,13 +312,13 @@ class DownloadClient:
             if media_item.filename == downloaded_filename:
                 if media_item.partial_file.exists():
                     logger.info(f"Found {downloaded_filename} locally, trying to resume")
-                    assert media_item.filesize
+                    assert media_item.size
                     size = media_item.partial_file.stat().st_size
-                    if size >= media_item.filesize:
+                    if size >= media_item.size:
                         logger.info(f"Deleting partial file {media_item.partial_file}. Size is out of bound")
                         media_item.partial_file.unlink()
 
-                    elif size == media_item.filesize:
+                    elif size == media_item.size:
                         if media_item.path.exists():
                             logger.warning(
                                 f"Found conflicting complete file '{media_item.path}' locally, iterating filename"
@@ -339,7 +339,7 @@ class DownloadClient:
                             f"Renaming found partial file '{media_item.partial_file}' to complete file {media_item.path}"
                         )
                 elif media_item.path.exists():
-                    if media_item.path.stat().st_size == media_item.filesize:
+                    if media_item.path.stat().st_size == media_item.size:
                         logger.info(f"Found complete file '{media_item.path}' locally, skipping download")
                         proceed = False
                     else:
@@ -377,13 +377,13 @@ class DownloadClient:
         """Checks if the file size is within the limits."""
         limits = self.manager.config.file_size_limits.ranges
 
-        assert media.filesize is not None
+        assert media.size is not None
         if media.ext in FileExt.IMAGE:
-            return media.filesize in limits.image
+            return media.size in limits.image
         if media.ext in FileExt.VIDEO:
-            return media.filesize in limits.video
+            return media.size in limits.video
 
-        return media.filesize in limits.other
+        return media.size in limits.other
 
 
 def _check_content_type(content_type: str, ext: str) -> str | None:
