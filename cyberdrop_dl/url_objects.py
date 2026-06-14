@@ -117,12 +117,6 @@ class ScrapeItemType(IntEnum):
     FILE_HOST_ALBUM = 3
 
 
-FORUM = ScrapeItemType.FORUM
-FORUM_POST = ScrapeItemType.FORUM_POST
-FILE_HOST_PROFILE = ScrapeItemType.FILE_HOST_PROFILE
-FILE_HOST_ALBUM = ScrapeItemType.FILE_HOST_ALBUM
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -318,16 +312,16 @@ class ScrapeItem:
         return self.create_new(url, part_of_album=True, add_parent=True)
 
     def setup_as_album(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, FILE_HOST_ALBUM, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FILE_HOST_ALBUM, album_id=album_id)
 
     def setup_as_profile(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, FILE_HOST_PROFILE, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FILE_HOST_PROFILE, album_id=album_id)
 
     def setup_as_forum(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, FORUM, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FORUM, album_id=album_id)
 
     def setup_as_post(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, FORUM_POST, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FORUM_POST, album_id=album_id)
 
     def create_children(self, urls: Iterable[AbsoluteHttpURL]) -> Generator[Self]:
         for url in urls:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.url_objects import FILE_HOST_PROFILE, AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 
@@ -49,7 +49,7 @@ class ToonilyCrawler(Crawler):
 
         *_, series_name, chapter_title = (css.text(bc) for bc in soup.select(Selector.NAV_BREADCUMBS))
 
-        if scrape_item.type != FILE_HOST_PROFILE:
+        if scrape_item.type != ScrapeItemType.FILE_HOST_PROFILE:
             series_title = self.create_title(series_name)
             scrape_item.append_folders(series_title)
 

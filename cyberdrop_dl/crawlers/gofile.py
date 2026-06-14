@@ -10,7 +10,7 @@ from typing_extensions import ReadOnly
 from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
-from cyberdrop_dl.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -259,7 +259,11 @@ def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:
 
 
 def _has_single_not_nested_file(scrape_item: ScrapeItem, folder: Folder) -> bool:
-    return folder["childrenCount"] == 1 and folder["name"] == folder["code"] and scrape_item.type != FILE_HOST_ALBUM
+    return (
+        folder["childrenCount"] == 1
+        and folder["name"] == folder["code"]
+        and scrape_item.type != ScrapeItemType.FILE_HOST_ALBUM
+    )
 
 
 def _create_web_token(user_agent: str, brower_lang: str, api_key: str, salt: str) -> str:
