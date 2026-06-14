@@ -7,9 +7,10 @@ import platform
 import sys
 from typing import TYPE_CHECKING, Any
 
+from cyberdrop_dl.constants import MAIN_LOG_FILE
+from cyberdrop_dl.utils import _path_traverse
 from cyberdrop_dl.utils._dataclasses import DictDataclass, deserialize, filter_data, type_adapter  # noqa: F401
 from cyberdrop_dl.utils._errors import error_handling_context, error_handling_wrapper  # noqa: F401
-from cyberdrop_dl.utils._path_traverse import has_partial_files, partial_files
 from cyberdrop_dl.utils._url import parse_http_url as parse_url  # noqa: F401
 from cyberdrop_dl.utils._url import remove_trailing_slash  # noqa: F401
 
@@ -25,21 +26,17 @@ logger = logging.getLogger(__name__)
 
 def delete_empty_files_and_folders(path: Path) -> None:
     """walks and removes in place"""
-
-    from cyberdrop_dl.logs import MAIN_LOG_FILE
-    from cyberdrop_dl.utils._path_traverse import delete_empty_files_and_folders_in_place
-
     if not path.is_dir():
         return
 
-    _ = delete_empty_files_and_folders_in_place(path, exclude=[MAIN_LOG_FILE.get(None)])
+    _ = _path_traverse.delete_empty_files_and_folders_in_place(path, exclude=[MAIN_LOG_FILE.get(None)])
 
 
 def check_partials_and_empty_folders(config: Config) -> None:
     download_folder = config.download_folder
 
     logger.info("Checking for partial downloads...")
-    if has_partial_files(download_folder):
+    if _path_traverse.has_partial_files(download_folder):
         logger.warning("There are partial downloads in the downloads folder")
 
     settings = config.runtime
@@ -59,7 +56,7 @@ def check_partials_and_empty_folders(config: Config) -> None:
 
 
 def delete_partial_files(path: Path) -> None:
-    for file in partial_files(path):
+    for file in _path_traverse.partial_files(path):
         try:
             file.unlink()
         except OSError as e:

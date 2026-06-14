@@ -19,6 +19,7 @@ from rich.padding import Padding
 from rich.text import Text, TextType
 
 from cyberdrop_dl import env
+from cyberdrop_dl.constants import MAIN_LOG_FILE
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.utils import dates
 
@@ -39,8 +40,6 @@ _DEFAULT_CONSOLE_WIDTH = 240
 _MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOG_LISTENER")
 _CONSOLE_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_CONSOLE_LOG_LISTENER")
 _LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
-
-MAIN_LOG_FILE: ContextVar[Path] = ContextVar("MAIN_LOG_FILE")
 
 
 class HandlerName(StrEnum):

@@ -7,7 +7,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.logs import MAIN_LOG_FILE, borrow_logger, export_logs, log_spacer
+from cyberdrop_dl.constants import MAIN_LOG_FILE
+from cyberdrop_dl.logs import borrow_logger, export_logs, log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence

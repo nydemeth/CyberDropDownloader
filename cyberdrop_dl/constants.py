@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+from contextvars import ContextVar
 from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import final
@@ -9,12 +10,13 @@ from rich.text import Text
 
 from cyberdrop_dl import __version__, env
 
-# TIME
 STARTUP_TIME_UTC = datetime.datetime.now(datetime.UTC)
 LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = datetime.datetime.now().strftime(LOGS_DATETIME_FORMAT)  # noqa: DTZ005
 CDL_USER_AGENT = f"cyberdrop-dl/{__version__}"
+
+MAIN_LOG_FILE: ContextVar[Path] = ContextVar("MAIN_LOG_FILE")
 
 
 class CIStrEnum(StrEnum):
