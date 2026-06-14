@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, final, overloa
 
 import yarl
 
+from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.utils.filepath import sanitize_folder
 
 if TYPE_CHECKING:
@@ -261,8 +262,6 @@ class ScrapeItem:
     def add_children(self, number: int = 1) -> None:
         self._children_count += number
         if self._children_limit and self._children_count >= self._children_limit:
-            from cyberdrop_dl.exceptions import MaxChildrenError
-
             raise MaxChildrenError(origin=self)
 
     def reset(self, *, reset_parents: bool = False, reset_parent_title: bool = False) -> None:

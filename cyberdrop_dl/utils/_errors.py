@@ -187,17 +187,17 @@ def _log_error(  # noqa: PLR0913
     if is_downloader:
         self, item = cast("Downloader", self), cast("MediaItem", item)
         logger.error(
-            f"{self.log_prefix} Failed: {item.url} ({app_error.main_log_msg}) \n -> Referer: {item.referer}",
+            f"{self.log_prefix} Failed: {item.url} ({app_error.msg}) \n -> Referer: {item.referer}",
             exc_info=exc,
         )
-        self.manager.logs.write_download_error(item, app_error.csv_log_msg)
+        self.manager.logs.write_download_error(item, app_error.csv_msg)
         self.manager.scrape_mapper.tui.files.stats.failed += 1
-        self.manager.scrape_mapper.tui.download_errors.add(app_error.ui_failure)
+        self.manager.scrape_mapper.tui.download_errors.add(app_error.ui_error)
         return
 
-    logger.error(f"Scrape Failed: {url} ({app_error.main_log_msg})", exc_info=exc)
-    self.manager.logs.write_scrape_error(url, app_error.csv_log_msg, origin)  # pyright: ignore[reportArgumentType]
-    self.manager.scrape_mapper.tui.scrape_errors.add(app_error.ui_failure)
+    logger.error(f"Scrape Failed: {url} ({app_error.msg})", exc_info=exc)
+    self.manager.logs.write_scrape_error(url, app_error.csv_msg, origin)  # pyright: ignore[reportArgumentType]
+    self.manager.scrape_mapper.tui.scrape_errors.add(app_error.ui_error)
 
 
 @overload
