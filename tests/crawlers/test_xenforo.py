@@ -12,7 +12,7 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 
 
 def _item(url: str) -> ScrapeItem:
-    return ScrapeItem(url=AbsoluteHttpURL(url))
+    return ScrapeItem.from_url(url)
 
 
 manager = Manager()

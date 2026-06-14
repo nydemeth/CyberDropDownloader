@@ -194,19 +194,22 @@ class ScrapeItem:
     album_id: str | None = None
     download_folder: Path = Path("downloads")
 
-    folders: list[str] = dataclasses.field(init=False, default_factory=list)
-    parents: list[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=list)
-    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
-    children_limits: tuple[int, ...] = dataclasses.field(init=False, default_factory=tuple)
-    password: str | None = dataclasses.field(init=False)
+    folders: list[str] = dataclasses.field(default_factory=list)
+    parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set)
+    children_limits: tuple[int, ...] = dataclasses.field(default_factory=tuple)
+    password: str | None = None
 
-    _children_count: int = dataclasses.field(init=False, default=0)
-    _children_limit: int = dataclasses.field(init=False, default=0)
-    _type: ScrapeItemType | None = dataclasses.field(init=False, default=None)
-    _uploaded_at: int | None = dataclasses.field(init=False, default=None)
+    _children_count: int = 0
+    _children_limit: int = 0
+    _type: ScrapeItemType | None = None
+    _uploaded_at: int | None = None
 
-    def __post_init__(self) -> None:
-        self.password = self.url.query.get("password")
+    @classmethod
+    def from_url(cls, url: yarl.URL | str) -> Self:
+        url = AbsoluteHttpURL(url)
+        assert is_absolute_http_url(url)
+        return cls(url=url, password=url.query.get("password"))
 
     @property
     def uploaded_at(self) -> int | None:

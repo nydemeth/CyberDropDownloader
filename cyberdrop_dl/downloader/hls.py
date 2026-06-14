@@ -76,8 +76,8 @@ def _create_media_segments(
             ext=media_item.ext,
             parents=media_item.parents,
             uploaded_at=media_item.uploaded_at,
+            is_segment=True,
         )
-        seg_media_item.is_segment = True
         seg_media_item.headers = media_item.headers.copy()
         yield seg_media_item
 

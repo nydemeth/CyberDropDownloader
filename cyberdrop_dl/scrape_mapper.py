@@ -338,7 +338,7 @@ def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
 async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
     async for group_name, urls in _parse_input_file_groups(file):
         for url in urls:
-            item = ScrapeItem(url=url)
+            item = ScrapeItem.from_url(url)
             if group_name:
                 item.append_folders(group_name)
                 item.part_of_album = True
@@ -368,7 +368,7 @@ async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str
 
 async def _load_cli_links(links: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem]:
     for url in links:
-        yield ScrapeItem(url=url)
+        yield ScrapeItem.from_url(url)
 
 
 def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:
