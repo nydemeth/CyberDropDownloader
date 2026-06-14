@@ -6,7 +6,6 @@ import dataclasses
 import logging
 import re
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic.types import ByteSize
@@ -30,8 +29,7 @@ from cyberdrop_dl.utils import filepath, remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence
-
-    import aiosqlite
+    from pathlib import Path
 
     from cyberdrop_dl.config.settings import GenericCrawlers
     from cyberdrop_dl.crawlers.crawler import Crawler
@@ -253,13 +251,11 @@ class ScrapeMapper:
         if self._jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
-            download_folder = scrape_item.compose_download_path("jdownloader")
-            relative_download_dir = download_folder.relative_to(self.manager.config.download_folder)
             try:
                 await self._jdownloader.send(
                     scrape_item.url,
                     scrape_item.path.as_posix(),
-                    relative_download_dir,
+                    scrape_item.path,
                 )
 
             except JDownloaderError as e:
@@ -392,12 +388,6 @@ def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:
             yield AbsoluteHttpURL(link, encoded=encoded)
         except Exception as e:  # noqa: BLE001
             logger.error(f"Unable to parse URL from input file: {link} {e:!r}")
-
-
-def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
-    referer: str = row["referer"]
-    url = AbsoluteHttpURL(referer, encoded="%" in referer)
-    return ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
 
 
 def get_crawlers_mapping(*, include_generics: bool = False) -> dict[str, type[Crawler]]:

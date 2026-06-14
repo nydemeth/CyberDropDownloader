@@ -217,14 +217,13 @@ class ScrapeItem:
     part_of_album: bool = False
     album_id: str | None = None
     uploaded_at: int | None = dataclasses.field(init=False, default=None)
-    retry_path: Path | None = None
     folders: list[str] = dataclasses.field(init=False, default_factory=list)
     download_folder: Path = Path("downloads")
 
     parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list, init=False)
     parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set, init=False)
 
-    type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
+    _type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
     children_limits: tuple[int, ...] = dataclasses.field(default_factory=tuple, init=False)
 
     password: str | None = dataclasses.field(init=False)
@@ -253,7 +252,7 @@ class ScrapeItem:
             self._append_folder(folder)
 
     def _append_folder(self, folder: str, /) -> None:
-        if not folder or self.retry_path:
+        if not folder:
             return
 
         folder = sanitize_folder(folder)
@@ -262,8 +261,13 @@ class ScrapeItem:
 
         self.folders.append(folder)
 
-    def _set_type(self, scrape_item_type: ScrapeItemType | None) -> None:
-        self.type = scrape_item_type
+    @property
+    def type(self) -> ScrapeItemType | None:
+        return self._type
+
+    @type.setter  # noqa: A003
+    def type(self, item_type: ScrapeItemType | None) -> None:
+        self._type = item_type
         self._children_count = self._children_limit = 0
         if self.type is None:
             return
@@ -285,7 +289,7 @@ class ScrapeItem:
         Reset `part_of_album` back to `False`
         """
         self.album_id = self.uploaded_at = None
-        self._set_type(None)
+        self.type = None
         self.part_of_album = False
         if reset_parents:
             self.parents = []
@@ -293,12 +297,12 @@ class ScrapeItem:
         if reset_parent_title:
             self.folders.clear()
 
-    def setup_as(self, title: str, type_: ScrapeItemType, /, *, album_id: str | None = None) -> None:
+    def setup_as(self, title: str, item_type: ScrapeItemType, /, *, album_id: str | None = None) -> None:
         self.part_of_album = True
         if album_id:
             self.album_id = album_id
-        if self.type != type_:
-            self._set_type(type_)
+        if self.type != item_type:
+            self.type = item_type
         self.append_folders(title)
 
     def create_new(
@@ -361,17 +365,7 @@ class ScrapeItem:
 
     @property
     def path(self) -> Path:
-        if self.retry_path:
-            return self.retry_path
         return Path(*self.folders)
-
-    def compose_download_path(self, domain: str) -> Path:
-        if self.retry_path:
-            return self.retry_path
-        path = self.download_folder / self.path
-        if self.is_loose_file:
-            path = path / f"Loose Files ({domain})"
-        return path
 
     def copy(self) -> Self:
         """Returns a deep copy of this scrape_item"""

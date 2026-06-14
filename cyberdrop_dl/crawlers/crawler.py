@@ -495,7 +495,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         """Write general metadata (not specific to a single file) to json output"""
 
         filename = f"{name}.metadata"  # we won't write to fs, so we skip name sanitization
-        download_folder = scrape_item.compose_download_path(self.FOLDER_DOMAIN)
+        download_folder = _prepare_download_path(scrape_item, self.FOLDER_DOMAIN)
         url = AbsoluteHttpURL(scrape_item.url.with_scheme("metadata"))
         media_item = MediaItem.from_item(
             scrape_item,
@@ -535,7 +535,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         media_item = MediaItem(
             url=url,
             domain=self.DOMAIN,
-            download_folder=scrape_item.compose_download_path(self.FOLDER_DOMAIN),
+            download_folder=_prepare_download_path(scrape_item, self.FOLDER_DOMAIN),
             filename=custom_filename or filename,
             db_path=self.__db_path__(url),
             referer=referer,
@@ -551,8 +551,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if metadata:
             media_item.metadata = metadata
 
-        if not scrape_item.retry_path:
-            check_path_traversal(self.config.download_folder, media_item.download_folder)
+        check_path_traversal(self.config.download_folder, media_item.download_folder)
 
         check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
@@ -1064,6 +1063,13 @@ def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
         return True
 
     return False
+
+
+def _prepare_download_path(item: ScrapeItem, domain: str) -> Path:
+    path = item.download_folder / item.path
+    if item.is_loose_file:
+        path = path / f"Loose Files ({domain})"
+    return path
 
 
 def create_title(
