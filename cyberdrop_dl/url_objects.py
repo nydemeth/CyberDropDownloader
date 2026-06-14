@@ -95,8 +95,13 @@ if TYPE_CHECKING:
         @signature.copy(yarl.URL.joinpath)
         def joinpath(self) -> AbsoluteHttpURL: ...
 
+    class _FakePath(Path): ...
+
 else:
     AbsoluteHttpURL = yarl.URL
+
+    def _FakePath():  # noqa: N802
+        return None
 
 
 class ScrapeItemType(IntEnum):
@@ -138,8 +143,8 @@ class MediaItem:
 
     parents: tuple[AbsoluteHttpURL, ...] = dataclasses.field(default_factory=tuple)
     attempts: int = dataclasses.field(init=False, default=0)
-    partial_file: Path = dataclasses.field(init=False)
-    path: Path = dataclasses.field(init=False)
+    partial_file: Path = dataclasses.field(init=False, default=_FakePath())
+    path: Path = dataclasses.field(init=False, default=_FakePath())
     downloaded: bool = dataclasses.field(init=False, default=False)
 
     metadata: object = dataclasses.field(init=False, default_factory=dict)
@@ -173,9 +178,6 @@ class MediaItem:
         return self.debrid_url or self.url
 
     def serialize(self) -> dict[str, Any]:
-        for attr in ("path", "partial_file"):
-            if not hasattr(self, attr):
-                setattr(self, attr, None)
         me = dataclasses.asdict(self)
         if self.xxhash:
             me["xxhash"] = f"xxh128:{self.xxhash}"

@@ -119,9 +119,7 @@ class DownloadClient:
         except KeyError:
             msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
             raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None
-        try:
-            _ = media_item.path
-        except AttributeError:
+        if not media_item.path:
             _check_content_length(resp.headers)
             downloaded = await self._predownload_skip(media_item, domain)
             if downloaded is not None:
@@ -242,9 +240,7 @@ class DownloadClient:
         await self.manager.database.history.mark_complete(domain, media_item)
 
     async def add_file_size(self, domain: str, media_item: MediaItem) -> None:
-        try:
-            _ = media_item.path
-        except AttributeError:
+        if not media_item.path:
             media_item.path = self.get_file_location(media_item)
         if await aio.is_file(media_item.path):
             await self.manager.database.history.add_filesize(domain, media_item)
