@@ -64,14 +64,18 @@ def _create_media_segments(
     for segment in segments:
         # TODO: segments download should bypass the downloads slots limits.
         # They count as a single download
-        seg_media_item = MediaItem.from_item(
-            media_item,
-            segment.url,
-            media_item.domain,
-            db_path=media_item.db_path,
+
+        seg_media_item = MediaItem(
+            url=segment.url,
+            domain=media_item.domain,
             download_folder=download_folder,
             filename=segment.name,
+            db_path=media_item.db_path,
+            referer=media_item.url,
+            album_id=media_item.album_id,
             ext=media_item.ext,
+            parents=media_item.parents,
+            uploaded_at=media_item.uploaded_at,
         )
         seg_media_item.is_segment = True
         seg_media_item.headers = media_item.headers.copy()

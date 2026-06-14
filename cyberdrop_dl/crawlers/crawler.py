@@ -494,16 +494,16 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     async def write_metadata(self, scrape_item: ScrapeItem, name: str, metadata: object) -> None:
         """Write general metadata (not specific to a single file) to json output"""
 
-        filename = f"{name}.metadata"  # we won't write to fs, so we skip name sanitization
-        download_folder = _prepare_download_path(scrape_item, self.FOLDER_DOMAIN)
-        url = AbsoluteHttpURL(scrape_item.url.with_scheme("metadata"))
-        media_item = MediaItem.from_item(
-            scrape_item,
-            url,
-            self.DOMAIN,
+        media_item = MediaItem(
+            url=AbsoluteHttpURL(scrape_item.url.with_scheme("metadata")),
+            domain=self.DOMAIN,
+            download_folder=_prepare_download_path(scrape_item, self.FOLDER_DOMAIN),
+            filename=f"{name}.metadata",  # we won't write to fs, so we skip name sanitization
             db_path="",
-            download_folder=download_folder,
-            filename=filename,
+            referer=scrape_item.url,
+            album_id=scrape_item.album_id,
+            parents=tuple(scrape_item.parents),
+            uploaded_at=scrape_item.uploaded_at,
         )
         media_item.metadata = metadata
         await self.__write_to_jsonl(media_item)
@@ -544,7 +544,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             original_filename=filename,
             parents=tuple(scrape_item.parents),
             uploaded_at=scrape_item.uploaded_at,
-            debrid_link=debrid_link,
+            debrid_url=debrid_link,
         )
 
         media_item.headers.update(self._prepare_headers(scrape_item))

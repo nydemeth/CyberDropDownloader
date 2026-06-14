@@ -172,33 +172,6 @@ class MediaItem:
     def real_url(self) -> AbsoluteHttpURL:
         return self.debrid_url or self.url
 
-    @staticmethod
-    def from_item(  # noqa: PLR0913
-        origin: ScrapeItem | MediaItem,
-        url: AbsoluteHttpURL,
-        domain: str,
-        /,
-        *,
-        download_folder: Path,
-        filename: str,
-        db_path: str,
-        original_filename: str | None = None,
-        ext: str = "",
-    ) -> MediaItem:
-        return MediaItem(
-            url=url,
-            domain=domain,
-            download_folder=download_folder,
-            filename=filename,
-            db_path=db_path,
-            referer=origin.url,
-            album_id=origin.album_id,
-            ext=ext,
-            original_filename=original_filename or filename,
-            parents=tuple(origin.parents),
-            uploaded_at=origin.uploaded_at,
-        )
-
     def serialize(self) -> dict[str, Any]:
         for attr in ("path", "partial_file"):
             if not hasattr(self, attr):
