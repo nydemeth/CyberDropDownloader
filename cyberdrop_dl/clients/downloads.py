@@ -39,7 +39,7 @@ _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
 
 @final
 class DownloadClient:
-    """Low level class that performs the actual HTTP download operations"""
+    """Low level class that performs the actual HTTP download operations."""
 
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
@@ -114,7 +114,11 @@ class DownloadClient:
         if not media_item.is_segment and (content_type := _get_content_type(resp.headers)):
             _check_content_type(content_type, media_item.ext)
 
-        media_item.filesize = int(resp.headers[hdrs.CONTENT_LENGTH])
+        try:
+            media_item.filesize = int(resp.headers[hdrs.CONTENT_LENGTH])
+        except KeyError:
+            msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
+            raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None
         try:
             _ = media_item.path
         except AttributeError:
@@ -132,7 +136,7 @@ class DownloadClient:
             and (last_modified := _get_last_modified(resp.headers))
         ):
             logger.warning(
-                f"Unable to parse upload date for {media_item.url}, using `Last-Modified` header as file datetime"
+                f"Unable to parse upload date for {media_item.url}, using `{hdrs.LAST_MODIFIED}` header as file datetime"
             )
             media_item.uploaded_at = last_modified
 
