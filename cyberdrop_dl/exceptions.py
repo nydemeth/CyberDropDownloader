@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 from http import HTTPStatus
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
 
 import yarl
 
@@ -280,8 +280,9 @@ def get_origin(origin: ScrapeItem | Path | MediaItem | yarl.URL | None = None) -
     return origin
 
 
+@final
 @dataclasses.dataclass(slots=True)
-class ErrorLogMessage:
+class CDLAppError(RuntimeError):
     ui_failure: str
     main_log_msg: str = ""
     csv_log_msg: str = ""
@@ -293,12 +294,13 @@ class ErrorLogMessage:
             self.csv_log_msg = "See logs for details"
 
     @staticmethod
-    def from_unknown_exc(e: Exception) -> ErrorLogMessage:
+    def from_unknown_exc(e: Exception) -> CDLAppError:
+        assert type(e) is not CDLAppError
         e_status = getattr(e, "status", None)
         e_message = getattr(e, "message", None)
         ui_failure = create_error_msg(e_status) if e_status else "Unknown"
         log_msg = _format_error(ui_failure, e_message or str(e), _notes(e))
-        return ErrorLogMessage(ui_failure, log_msg)
+        return CDLAppError(ui_failure, log_msg)
 
 
 class CDLConfigRuntimeErrorsGroup(ExceptionGroup): ...
