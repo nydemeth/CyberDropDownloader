@@ -356,16 +356,6 @@ class ScrapeItem:
             self.add_children()
 
     @property
-    def origin(self) -> AbsoluteHttpURL | None:
-        if self.parents:
-            return self.parents[0]
-
-    @property
-    def parent(self) -> AbsoluteHttpURL | None:
-        if self.parents:
-            return self.parents[-1]
-
-    @property
     def is_loose_file(self) -> bool:
         return not self.folders or not self.part_of_album
 

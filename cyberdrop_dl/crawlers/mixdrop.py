@@ -51,7 +51,7 @@ class MixDropCrawler(Crawler):
             ext,
             custom_filename=filename,
             debrid_link=link,
-            referer=scrape_item.parent or scrape_item.url,
+            referer=scrape_item.parents[-1] if scrape_item.parents else scrape_item.url,
         )
 
     async def _request_file_info(self, file_id: str) -> tuple[str, AbsoluteHttpURL]:

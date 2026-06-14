@@ -259,12 +259,13 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     def _check_thread_recursion(self, scrape_item: ScrapeItem) -> None:
         if self.stop_thread_recursion(scrape_item):
-            parents = f"{len(scrape_item.parent_threads)} parent thread(s)"
+            threads = f"{len(scrape_item.parent_threads)} parent thread(s)"
+            origin, parent = (scrape_item.parents[0], scrape_item.parents[-1]) if scrape_item.parents else (None, None)
             msg = (
-                f"Skipping nested thread URL with {parents}:"
+                f"Skipping nested thread URL with {threads}:"
                 f"URL: {scrape_item.url}\n"
-                f"Parent:  {scrape_item.parent}\n"
-                f"Origin:  {scrape_item.origin}\n"
+                f"Parent:  {parent}\n"
+                f"Origin:  {origin}\n"
             )
             raise MaxChildrenError(msg)
 
