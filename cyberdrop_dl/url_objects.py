@@ -216,23 +216,44 @@ class ScrapeItem:
     url: AbsoluteHttpURL
     part_of_album: bool = False
     album_id: str | None = None
-    uploaded_at: int | None = dataclasses.field(init=False, default=None)
-    folders: list[str] = dataclasses.field(init=False, default_factory=list)
     download_folder: Path = Path("downloads")
 
+    folders: list[str] = dataclasses.field(init=False, default_factory=list)
     parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list, init=False)
     parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set, init=False)
-
-    _type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
     children_limits: tuple[int, ...] = dataclasses.field(default_factory=tuple, init=False)
-
     password: str | None = dataclasses.field(init=False)
 
     _children_count: int = dataclasses.field(default=0, init=False)
     _children_limit: int = dataclasses.field(default=0, init=False)
+    _type: ScrapeItemType | None = dataclasses.field(default=None, init=False)
+    _uploaded_at: int | None = dataclasses.field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self.password = self.url.query.get("password")
+
+    @property
+    def uploaded_at(self) -> int | None:
+        return self._uploaded_at
+
+    @uploaded_at.setter
+    def uploaded_at(self, value: float | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
+        self._uploaded_at = None if value is None else int(value)
+
+    @property
+    def type(self) -> ScrapeItemType | None:
+        return self._type
+
+    @type.setter  # noqa: A003
+    def type(self, item_type: ScrapeItemType | None) -> None:
+        self._type = item_type
+        self._children_count = self._children_limit = 0
+        if item_type is None:
+            return
+        try:
+            self._children_limit = self.children_limits[item_type]
+        except (IndexError, TypeError):
+            pass
 
     @property
     @contextlib.contextmanager
@@ -260,21 +281,6 @@ class ScrapeItem:
             folder = _remove_domain_if_duplicate(folder, last_domain)
 
         self.folders.append(folder)
-
-    @property
-    def type(self) -> ScrapeItemType | None:
-        return self._type
-
-    @type.setter  # noqa: A003
-    def type(self, item_type: ScrapeItemType | None) -> None:
-        self._type = item_type
-        self._children_count = self._children_limit = 0
-        if self.type is None:
-            return
-        try:
-            self._children_limit = self.children_limits[self.type]
-        except (IndexError, TypeError):
-            pass
 
     def add_children(self, number: int = 1) -> None:
         self._children_count += number
