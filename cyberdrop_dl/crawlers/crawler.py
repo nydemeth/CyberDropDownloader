@@ -22,6 +22,12 @@ from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.crawlers._hls import HLSMixin
 from cyberdrop_dl.downloader.http import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
+from cyberdrop_dl.filepath import (
+    check_dangerous_filename,
+    check_path_traversal,
+    compose_filename,
+    get_filename_and_ext,
+)
 from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.utils import (
@@ -33,12 +39,6 @@ from cyberdrop_dl.utils import (
     m3u8,
     parse_url,
     unique,
-)
-from cyberdrop_dl.utils.filepath import (
-    check_dangerous_filename,
-    check_path_traversal,
-    compose_filename,
-    get_filename_and_ext,
 )
 from cyberdrop_dl.utils.strings import safe_format
 

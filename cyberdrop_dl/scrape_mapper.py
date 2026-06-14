@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic.types import ByteSize
 
-from cyberdrop_dl import aio, plugins, storage
+from cyberdrop_dl import aio, filepath, plugins, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -25,7 +25,7 @@ from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import filepath, remove_trailing_slash
+from cyberdrop_dl.utils import remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence

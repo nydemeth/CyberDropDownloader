@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDomains, SupportedPaths
+from cyberdrop_dl.filepath import remove_file_id
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
-from cyberdrop_dl.utils.filepath import remove_file_id
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem

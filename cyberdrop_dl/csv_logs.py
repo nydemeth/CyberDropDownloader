@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.exceptions import get_origin
+from cyberdrop_dl.filepath import sanitize_filename
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.filepath import sanitize_filename
 
 if TYPE_CHECKING:
     import datetime

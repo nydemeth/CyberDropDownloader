@@ -11,9 +11,9 @@ from cyberdrop_dl import database
 from cyberdrop_dl.database import common
 from cyberdrop_dl.database.history import apply_fixes
 from cyberdrop_dl.database.schema import CURRENT_VERSION, Version
+from cyberdrop_dl.filepath import sanitize_filename
 from cyberdrop_dl.logs import setup_console_logging
 from cyberdrop_dl.utils import dates
-from cyberdrop_dl.utils.filepath import sanitize_filename
 
 logger = logging.getLogger(__name__)
 

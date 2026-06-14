@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
-from cyberdrop_dl.utils.filepath import get_filename_and_ext
+from cyberdrop_dl.filepath import get_filename_and_ext
 
 
 class TestGetFilenameAndExt:

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, final, overloa
 import yarl
 
 from cyberdrop_dl.exceptions import MaxChildrenError
-from cyberdrop_dl.utils.filepath import sanitize_folder
+from cyberdrop_dl.filepath import sanitize_folder
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
