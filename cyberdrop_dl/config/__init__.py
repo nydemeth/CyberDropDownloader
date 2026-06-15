@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from cyclopts import App, Parameter
 from cyclopts.bind import normalize_tokens
-from pydantic import BaseModel, ByteSize, Field, PositiveInt, field_serializer, field_validator
+from pydantic import BaseModel, ByteSize, Field, PositiveInt, field_validator
 
 from cyberdrop_dl import yaml
 from cyberdrop_dl.config.merge import merge_models
@@ -147,10 +147,6 @@ class Config(BaseModel):
     @classmethod
     def _unique_list(cls, value: list[str]) -> list[str]:
         return sorted(set(value))
-
-    @field_serializer("flaresolverr", "proxy")
-    def _serialize(self, value: object) -> object:
-        return falsy_as(value, None)
 
     @field_validator("flaresolverr", "proxy", mode="before")
     @classmethod

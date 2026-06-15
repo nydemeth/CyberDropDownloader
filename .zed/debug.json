@@ -10,7 +10,7 @@
       "--download",
       "--ignore-history",
       "--dump-json",
-      "--required-free-space",
+      "--min-free-space",
       "512MB",
       "--no-ignore-coomer-post-content",
       "--max-simultaneous-downloads",

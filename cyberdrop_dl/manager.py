@@ -292,10 +292,10 @@ def _log_cli_args(cli_args: CLIargs) -> None:
 
 
 def _log_config(config: Config) -> None:
-    data = config.model_dump(mode="json")
-    data["auth"] = {site: all(credentials.values()) for site, credentials in data.pop("auth").items()}
+    auth = {site: all(credentials.values()) for site, credentials in config.auth.model_dump().items()}
     logger.debug("Config file: %s", config.source)
-    logger.debug(data)
+    logger.debug("Auth: \n%s", auth)
+    logger.debug(config.model_dump_json(exclude={"auth"}, indent=2))
 
 
 def _log_ffmpeg() -> None:

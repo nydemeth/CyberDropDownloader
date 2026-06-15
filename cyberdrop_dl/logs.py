@@ -71,18 +71,23 @@ class JsonLogRecord(logging.LogRecord):
     @override
     def getMessage(self) -> str:
         msg = str(self._proccess_msg(self.msg))
-        if self.args:
-            args = tuple(map(self._proccess_msg, self.args))
-            if "%" in msg:
-                try:
-                    return msg % args
-                except TypeError as e:
-                    if not e.args or "not all arguments converted" in e.args[0]:
-                        raise
+        args = self.args
+        if not args:
+            return msg
 
-            return msg.format(*args)
+        if type(self.args) is dict:
+            # Override std special case for mappings
+            args = [self.args]
 
-        return msg
+        args = tuple(map(self._proccess_msg, args))
+        if "%" in msg:
+            try:
+                return msg % args
+            except TypeError as e:
+                if not e.args or "not all arguments converted" in e.args[0]:
+                    raise
+
+        return msg.format(*args)
 
     @staticmethod
     def _proccess_msg(obj: object) -> object:
@@ -163,8 +168,8 @@ class LogHandler(RichHandler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             return super().emit(record)
-        except Exception:  # noqa: BLE001
-            self.handleError(record)
+        except Exception:
+            logger.critical("Unable to log", exc_info=True)
 
 
 class BareQueueHandler(QueueHandler):
