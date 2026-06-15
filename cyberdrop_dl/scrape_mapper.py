@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic.types import ByteSize
 
-from cyberdrop_dl import aio, filepath, plugins, storage
+from cyberdrop_dl import aio, filepath, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -149,8 +149,6 @@ class ScrapeMapper:
             register_crawler(self.crawlers, crawler, from_user=True)
 
         _disable_crawlers_by_config(self.crawlers, *self.manager.config.disable_crawlers)
-
-        plugins.load(self.manager)
 
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
