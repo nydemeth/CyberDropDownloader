@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from cyberdrop_dl.constants import MAIN_LOG_FILE, TempExt
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Container, Generator
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +83,11 @@ def rm_empty_dirs(path: Path) -> None:
     if not path.is_dir():
         return
 
-    _ = _rm_empty_dirs(path, exclude=[MAIN_LOG_FILE.get(None)])
+    exclude: set[str] = {str(log_file)} if (log_file := MAIN_LOG_FILE.get(None)) else set()
+    _ = _rm_empty_dirs(path, exclude=exclude)
 
 
-def _rm_empty_dirs(dirname: Path | str, *, exclude: Iterable[Path | None] | None = None) -> bool:
-    to_exclude: set[str] = set() if exclude is None else set(map(str, filter(None, exclude)))
-    return _walk_and_delete_empty(dirname, to_exclude)
-
-
-def _walk_and_delete_empty(dirname: Path | str, exclude: set[str]) -> bool:
+def _rm_empty_dirs(dirname: Path | str, exclude: Container[str] = ()) -> bool:
     is_empty = True
 
     try:
@@ -101,7 +97,7 @@ def _walk_and_delete_empty(dirname: Path | str, exclude: set[str]) -> bool:
                 continue
 
             if _safe_is_dir(entry):
-                deleted = _walk_and_delete_empty(entry.path, exclude)
+                deleted = _rm_empty_dirs(entry.path, exclude)
                 if not deleted:
                     is_empty = False
             elif _safe_get_size(entry) == 0:
