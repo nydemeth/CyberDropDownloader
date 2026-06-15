@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cyberdrop_dl.constants import TempExt
+from cyberdrop_dl.constants import MAIN_LOG_FILE, TempExt
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -47,11 +47,11 @@ def _safe_rmdir(dirname: Path | str) -> bool:
         return True
 
 
-def partial_files(path: Path | str, /) -> Generator[Path]:
+def _partial_files(path: Path | str, /) -> Generator[Path]:
     try:
         for entry in os.scandir(path):
             if _safe_is_dir(entry):
-                yield from partial_files(entry.path)
+                yield from _partial_files(entry.path)
                 continue
 
             suffix = entry.name.rpartition(".")[-1]
@@ -62,42 +62,57 @@ def partial_files(path: Path | str, /) -> Generator[Path]:
 
 
 def has_partial_files(path: Path) -> bool:
-    return bool(next(partial_files(path), False))
+    return bool(next(_partial_files(path), False))
 
 
-def delete_empty_files_and_folders_in_place(
-    dirname: Path | str, *, exclude: Iterable[Path | None] | None = None
-) -> bool:
-    """Recursively delete empty files and directories from *dirname*.
+def rm_partial_files(path: Path) -> None:
+    for file in _partial_files(path):
+        try:
+            file.unlink()
+        except OSError as e:
+            logger.error(f"Unable to delete '{file}' ({e!r})")
+        else:
+            logger.debug(f"Deleted '{file}'")
 
-    Every empty file is removed immediately, and a directory is removed only when all of its children have already been
+
+def rm_empty_dirs(path: Path) -> None:
+    """Recursively delete empty files and directories in <path>.
+
+    Every empty file is removed immediately. Dirs are removed only if all of its children have already been
     walked and the dir itself is also empty"""
+    if not path.is_dir():
+        return
+
+    _ = _rm_empty_dirs(path, exclude=[MAIN_LOG_FILE.get(None)])
+
+
+def _rm_empty_dirs(dirname: Path | str, *, exclude: Iterable[Path | None] | None = None) -> bool:
     to_exclude: set[str] = set() if exclude is None else set(map(str, filter(None, exclude)))
-    return _delete_empty_files_and_folders_in_place(dirname, to_exclude)
+    return _walk_and_delete_empty(dirname, to_exclude)
 
 
-def _delete_empty_files_and_folders_in_place(dirname: Path | str, exclude: set[str]) -> bool:
-    has_on_empty_children = False
+def _walk_and_delete_empty(dirname: Path | str, exclude: set[str]) -> bool:
+    is_empty = True
 
     try:
         for entry in os.scandir(dirname):
             if entry.name.startswith(".") or entry.path in exclude:
-                has_on_empty_children = True
+                is_empty = False
                 continue
 
             if _safe_is_dir(entry):
-                deleted = _delete_empty_files_and_folders_in_place(entry.path, exclude)
+                deleted = _walk_and_delete_empty(entry.path, exclude)
                 if not deleted:
-                    has_on_empty_children = True
+                    is_empty = False
             elif _safe_get_size(entry) == 0:
                 deleted = _safe_delete(entry)
                 if not deleted:
-                    has_on_empty_children = True
+                    is_empty = False
             else:
-                has_on_empty_children = True
+                is_empty = False
 
     except OSError as e:
         logger.error(f"Unexpected error while walking '{dirname}' ({e!r})")
         return False
 
-    return (not has_on_empty_children) and _safe_rmdir(dirname)
+    return is_empty and _safe_rmdir(dirname)

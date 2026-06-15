@@ -13,17 +13,15 @@ from typing import TYPE_CHECKING, Any, Literal, Self, final, overload
 import yarl
 from typing_extensions import TypeIs
 
+from cyberdrop_dl import signature
 from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.filepath import sanitize_folder
-from cyberdrop_dl.signature import simple_repr
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
 
-    from cyberdrop_dl import signature
-
     @final
-    class AbsoluteHttpURL(yarl.URL):  # pyright: ignore[reportGeneralTypeIssues]
+    class AbsoluteHttpURL(yarl.URL):
         @signature.copy(yarl.URL.__new__)
         def __new__(cls) -> Self: ...
 
@@ -172,7 +170,7 @@ class MediaItem:
 
         self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode().rstrip("=")
 
-    __repr__ = simple_repr("url", "id", "debrid_url", "uploaded_at_date")
+    __repr__ = signature.simple_repr("url", "id", "debrid_url", "uploaded_at_date")
 
     def __hash__(self) -> int:
         return hash(self.id)
@@ -209,7 +207,7 @@ class ScrapeItem:
     _type: ScrapeItemType | None = None
     _uploaded_at: int | None = None
 
-    __repr__ = simple_repr("url", "folders", "uploaded_at")
+    __repr__ = signature.simple_repr("url", "folders", "uploaded_at")
 
     @classmethod
     def from_url(cls, url: yarl.URL | str) -> Self:

@@ -15,7 +15,7 @@ from cyberdrop_dl.constants import DEFAULT_DOWNLOAD_STORAGE
 from cyberdrop_dl.models import AppriseURL  # noqa: TC001
 from cyberdrop_dl.models.types import ByteSizeSerilized, HttpURL, ListNonEmptyStr, NonEmptyStr  # noqa: TC001
 from cyberdrop_dl.models.validators import falsy_as, to_bytesize
-from cyberdrop_dl.utils import delete_empty_files_and_folders
+from cyberdrop_dl.utils import cleanup
 
 from .auth import AuthSettings
 from .settings import (
@@ -118,7 +118,7 @@ class Config(BaseModel):
         self.logs.resolve_filenames()
         self._resolve_paths(self)
         self.logs.delete_old_logs_and_folders()
-        delete_empty_files_and_folders(self.logs.log_folder)
+        cleanup.rm_empty_dirs(self.logs.log_folder)
         self._resolved = True
 
     @classmethod

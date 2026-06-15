@@ -15,7 +15,7 @@ import imagesize
 from cyberdrop_dl import aio, ffmpeg
 from cyberdrop_dl.constants import FileExt, TempExt
 from cyberdrop_dl.progress.sorting import SortingUI, SortStats
-from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
+from cyberdrop_dl.utils import cleanup, strings
 
 if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
@@ -84,7 +84,7 @@ class Sorter:
                     _ = tg.create_task(sort_subfolder(path))
 
         logger.info("DONE!", extra={"color": "green"})
-        delete_empty_files_and_folders(self.input_dir)
+        cleanup.rm_empty_dirs(self.input_dir)
 
     async def _sort_file(self, folder_name: str, file: Path) -> None:
         ext = file.suffix.lower()

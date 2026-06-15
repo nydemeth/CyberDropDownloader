@@ -10,6 +10,7 @@ from cyberdrop_dl.config import Config
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
+from cyberdrop_dl.utils import cleanup
 
 logger = logging.getLogger("cyberdrop_dl")
 
@@ -59,8 +60,6 @@ async def _scrape(manager: Manager) -> None:
 
 async def _post_runtime(manager: Manager) -> None:
     """Actions to complete after main runtime, and before UI shutdown."""
-    from cyberdrop_dl.utils import check_partials_and_empty_folders
-
     logger.info("Running Post-Download Processes\n", extra={"color": "green"})
 
     if (
@@ -74,7 +73,7 @@ async def _post_runtime(manager: Manager) -> None:
     if manager.config.sorting.sort_downloads:
         await manager.sorter.run()
 
-    check_partials_and_empty_folders(manager.config)
+    _check_partials_and_empty_folders(manager.config)
 
 
 def _main(manager: Manager) -> None:
@@ -133,3 +132,28 @@ def _check_ffmpeg(config: Config) -> None:
 
     if errors:
         raise CDLConfigRuntimeErrorsGroup("Some config options are impossible to fulfill", errors)
+
+
+def _check_partials_and_empty_folders(config: Config) -> None:
+    logger.info("Checking for partial downloads...")
+    if cleanup.has_partial_files(config.download_folder):
+        logger.warning("There are partial downloads in the downloads folder")
+
+    settings = config.runtime
+    if settings.delete_partial_files:
+        logger.info("Deleting partial downloads...")
+        cleanup.rm_partial_files(config.download_folder)
+
+    if settings.skip_check_for_empty_folders:
+        return
+
+    _delete_empty_files(config)
+
+
+def _delete_empty_files(config: Config) -> None:
+    logger.info("Deleting empty files and folders...")
+    cleanup.rm_empty_dirs(config.download_folder)
+
+    sorted_folder = config.sorting.sort_folder
+    if sorted_folder and config.sorting.sort_downloads:
+        cleanup.rm_empty_dirs(sorted_folder)

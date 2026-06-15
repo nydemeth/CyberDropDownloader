@@ -4,6 +4,8 @@ from typing import Annotated
 
 from cyclopts import App, Parameter, validators
 
+from cyberdrop_dl.utils import cleanup
+
 app = App(name="cleanup", help="Perform maintenance tasks")
 logger = logging.getLogger(__name__)
 
@@ -21,11 +23,9 @@ def files(
 ) -> None:
     """Delete partial (`.cdl_hls` and `.part`) files, empty folders and empty files inside `dir` (recursive)"""
 
-    from cyberdrop_dl.utils import delete_empty_files_and_folders, delete_partial_files
-
     path = path.expanduser().resolve().absolute()
     logger.info("Deleting partial downloads...")
-    delete_partial_files(path)
+    cleanup.rm_partial_files(path)
     logger.info("Deleting empty files and folders...")
-    delete_empty_files_and_folders(path)
+    cleanup.rm_empty_dirs(path)
     logger.info("DONE!", extra={"color": "green"})
