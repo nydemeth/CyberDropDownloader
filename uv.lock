@@ -625,7 +625,6 @@ dependencies = [
     { name = "idna" },
     { name = "imagesize" },
     { name = "inquirer" },
-    { name = "jeepney", marker = "'bsd' in sys_platform or sys_platform == 'linux'" },
     { name = "m3u8" },
     { name = "myjdapi" },
     { name = "propcache" },
@@ -680,7 +679,6 @@ requires-dist = [
     { name = "idna", specifier = ">=3.18" },
     { name = "imagesize", specifier = ">=2.0.0" },
     { name = "inquirer", specifier = ">=3.4.1" },
-    { name = "jeepney", marker = "'bsd' in sys_platform or sys_platform == 'linux'", specifier = ">=0.9.0" },
     { name = "m3u8", specifier = ">=6.0.0" },
     { name = "myjdapi", specifier = ">=1.1.10" },
     { name = "propcache", specifier = ">=0.5.2" },
@@ -876,15 +874,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c1/79/165579fdcd3c2439503732ae76394bf77f5542f3dd18135b60e808e4813c/inquirer-3.4.1.tar.gz", hash = "sha256:60d169fddffe297e2f8ad54ab33698249ccfc3fc377dafb1e5cf01a0efb9cbe5", size = 14069, upload-time = "2025-08-02T18:36:27.901Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f0/fd/7c404169a3e04a908df0644893a331f253a7f221961f2b6c0cf44430ae5a/inquirer-3.4.1-py3-none-any.whl", hash = "sha256:717bf146d547b595d2495e7285fd55545cff85e5ce01decc7487d2ec6a605412", size = 18152, upload-time = "2025-08-02T18:36:26.753Z" },
-]
-
-[[package]]
-name = "jeepney"
-version = "0.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7b/6f/357efd7602486741aa73ffc0617fb310a29b588ed0fd69c2399acbb85b0c/jeepney-0.9.0.tar.gz", hash = "sha256:cf0e9e845622b81e4a28df94c40345400256ec608d0e55bb8a3feaa9163f5732", size = 106758, upload-time = "2025-02-27T18:51:01.684Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/a3/e137168c9c44d18eff0376253da9f1e9234d0239e0ee230d2fee6cea8e55/jeepney-0.9.0-py3-none-any.whl", hash = "sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683", size = 49010, upload-time = "2025-02-27T18:51:00.104Z" },
 ]
 
 [[package]]

@@ -12,14 +12,13 @@ from typing import TYPE_CHECKING, Any, Self, final
 
 from pydantic.types import ByteSize
 
-from cyberdrop_dl import __version__, aio, env, ffmpeg, stats, yaml
+from cyberdrop_dl import ALL_DEPENDENCIES, __version__, aio, env, ffmpeg, stats, yaml
 from cyberdrop_dl.clients.downloads import DownloadClient
 from cyberdrop_dl.clients.http import HTTPClient
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.csv_logs import CSVLogsManager
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.dedupe import Czkawka
-from cyberdrop_dl.dependencies import ALL_DEPENDENCIES
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.progress import REFRESH_RATE, TUI_DISABLED
