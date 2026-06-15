@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import reprlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import functools
     import inspect
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     def copy[**P, T, R](target: Callable[P, R], /) -> Callable[[Callable[..., T]], Callable[P, T]]:
         def decorator(func: Callable[..., T]) -> Callable[P, T]:
@@ -27,3 +28,16 @@ else:
             return func
 
         return decorator
+
+
+def simple_repr(*names: str) -> Callable[..., str]:
+
+    @reprlib.recursive_repr()
+    def repr_(self: object) -> str:
+        def fields() -> Generator[str]:
+            for name in names:
+                yield f"{name}={getattr(self, name)!r}"
+
+        return f"<{type(self).__name__}({', '.join(fields())}>"
+
+    return repr_

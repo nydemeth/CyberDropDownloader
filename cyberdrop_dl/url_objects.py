@@ -15,6 +15,7 @@ from typing_extensions import TypeIs
 
 from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.filepath import sanitize_folder
+from cyberdrop_dl.signature import simple_repr
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
@@ -171,6 +172,8 @@ class MediaItem:
 
         self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode().rstrip("=")
 
+    __repr__ = simple_repr("url", "id", "debrid_url", "uploaded_at_date")
+
     def __hash__(self) -> int:
         return hash(self.id)
 
@@ -205,6 +208,8 @@ class ScrapeItem:
     _children_limit: int = 0
     _type: ScrapeItemType | None = None
     _uploaded_at: int | None = None
+
+    __repr__ = simple_repr("url", "folders", "uploaded_at")
 
     @classmethod
     def from_url(cls, url: yarl.URL | str) -> Self:
@@ -244,9 +249,6 @@ class ScrapeItem:
         finally:
             if old_url != self.url:
                 logger.info(f"URL transformation applied: \n  {old_url = !s}\n  new_url = {self.url}")
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, folders={self.folders!r}, uploaded_at={self.uploaded_at!r}"
 
     def append_folders(self, *folders: str) -> None:
         for folder in folders:
