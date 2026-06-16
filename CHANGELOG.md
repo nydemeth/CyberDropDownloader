@@ -127,19 +127,19 @@ The behavior of `--before` and `--after` has been reversed and the `--exclude` p
 
 #### DownloadOptions
 
-`--block-download-sub-folders` -> `--subfolders`, `--no-subfolders`
-`--include-album-id-in-folder-name` -> `--subfolders.include.album-id`
-`--include-thread-id-in-folder-name` -> `--subfolders.include.thread-id`
-`--remove-domains-from-folder-names` -> `--subfolders.include.domain`
-`--separate-posts-format` -> `--subfolders.separate-posts-format`
-`--separate-posts` -> `--subfolders.separate-posts`
-`--skip-download-mark-completed` -> `--skip-and-mark-completed`
-`--max-simultaneous-downloads` -> `--downloads`
-`--max-simultaneous-downloads-per-domain` -> `--downloads.per-domain`
-`--slow-download-speed` -> `--slow-speed`
-`--download-attempts` -> `--attempts`
-`--download-delay` -> `--delay`
-`--download-speed-limit` -> `--speed-limit`
+- `--block-download-sub-folders` -> `--subfolders`, `--no-subfolders`
+- `--include-album-id-in-folder-name` -> `--subfolders.include.album-id`
+- `--include-thread-id-in-folder-name` -> `--subfolders.include.thread-id`
+- `--remove-domains-from-folder-names` -> `--subfolders.include.domain`
+- `--separate-posts-format` -> `--subfolders.separate-posts-format`
+- `--separate-posts` -> `--subfolders.separate-posts`
+- `--skip-download-mark-completed` -> `--skip-and-mark-completed`
+- `--max-simultaneous-downloads` -> `--downloads`
+- `--max-simultaneous-downloads-per-domain` -> `--downloads.per-domain`
+- `--slow-download-speed` -> `--slow-speed`
+- `--download-attempts` -> `--attempts`
+- `--download-delay` -> `--delay`
+- `--download-speed-limit` -> `--speed-limit`
 
 ### Removed
 
