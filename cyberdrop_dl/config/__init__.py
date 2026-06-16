@@ -9,9 +9,9 @@ from cyclopts.bind import normalize_tokens
 from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, PositiveInt, field_validator
 
 from cyberdrop_dl import yaml
-from cyberdrop_dl.config.merge import merge_models
 from cyberdrop_dl.constants import DEFAULT_DOWNLOAD_STORAGE
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
+from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import ByteSizeSerilized, ListNonNegativeInt  # noqa: TC001
 from cyberdrop_dl.models.validators import to_bytesize
 from cyberdrop_dl.utils import cleanup
@@ -90,7 +90,7 @@ class Config(BaseModel):
     def from_file(cls, config_file: Path) -> Config:
         return _load_config_file(config_file)
 
-    def update(self, other: Self) -> Self:
+    def __or__(self, other: Self) -> Self:
         return merge_models(self, other)
 
     @staticmethod
@@ -147,6 +147,19 @@ def _load_config_file(file: Path, *, save_if_not_found: bool = False) -> Config:
         config = Config.model_validate(content, extra="forbid")
         config._source = file
         return config
+
+
+def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
+    match cli_values:
+        case ["+", *_]:
+            new_values = set(config_values + cli_values)
+        case ["-", *_]:
+            new_values = set(config_values) - set(cli_values)
+        case _:
+            return
+
+    cli_values.clear()
+    cli_values.extend(sorted(new_values - {"+", "-"}))
 
 
 def _coerce(*, config: Config | None = None) -> Config:

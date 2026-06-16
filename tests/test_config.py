@@ -9,8 +9,8 @@ from pydantic import BaseModel
 
 import cyberdrop_dl.cli.download
 from cyberdrop_dl.config import Config, _resolve_paths, settings
-from cyberdrop_dl.config.merge import merge_dicts
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
+from cyberdrop_dl.models import merge_dicts
 
 
 def test_config_equality() -> None:
