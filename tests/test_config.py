@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pytest
 from cyclopts.exceptions import UnknownOptionError
+from pydantic import BaseModel
 
 import cyberdrop_dl.cli.download
-from cyberdrop_dl.config import Config, settings
+from cyberdrop_dl.config import Config, _resolve_paths, settings
 from cyberdrop_dl.config.merge import merge_dicts
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 
@@ -162,3 +164,32 @@ def test_media_durations_need_ffmpeg() -> None:
     assert len(exc.value.exceptions) == 1
     assert type(exc.value.exceptions[0]) is RuntimeError
     assert str(exc.value.exceptions[0]) == "Filtering files by duration requires 'ffmpeg' to be installed"
+
+
+def test_resolve_paths(tmp_cwd: Path) -> None:
+
+    class SubConfig(BaseModel):
+        path: Path
+
+    class FakeConfig(BaseModel):
+        name: str
+        child: SubConfig
+
+    config = FakeConfig(
+        name="foo",
+        child=SubConfig(
+            path=Path("/home/user/cdl/{config}/settings.yml"),
+        ),
+    )
+
+    with pytest.raises(CDLConfigRuntimeErrorsGroup, match="Invalid config") as exc_info:
+        _resolve_paths(config)
+
+    assert len(exc_info.value.exceptions) == 1
+    first = exc_info.value.exceptions[0]
+    assert type(first) is ValueError
+    assert "Using '{config}' as reference on a path is no longer supported" in str(first)
+
+    config.child.path = Path("URLs.txt")
+    _resolve_paths(config)
+    assert config.child.path == tmp_cwd / "URLs.txt"
