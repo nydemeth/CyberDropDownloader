@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic.types import ByteSize
 
-from cyberdrop_dl import aio, filepath, storage
+from cyberdrop_dl import aio, env, filepath, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -124,7 +124,7 @@ class ScrapeMapper:
 
     def __post_init__(self) -> None:
         self._direct_http = DirectHttpFileCrawler(self.manager)
-        self._jdownloader = JDownloader.from_manager(self.manager)
+        self._jdownloader = JDownloader.from_config(self.manager.config)
         self._real_debrid = RealDebridCrawler(self.manager)
         self._factory = CrawlerFactory(self.manager)
         self.tui.scrape.get_queue = self._scrape_queue
@@ -148,7 +148,7 @@ class ScrapeMapper:
         for crawler in _create_generic_crawlers(self.manager.config.generic_crawlers):
             register_crawler(self.crawlers, crawler, from_user=True)
 
-        _disable_crawlers_by_config(self.crawlers, *self.manager.config.disable_crawlers)
+        _disable_crawlers_by_config(self.crawlers, *self.manager.config.crawlers.disabled)
 
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
@@ -156,18 +156,20 @@ class ScrapeMapper:
         config = self.manager.config
         _ = filepath.MAX_FILE_LEN.set(config.max_file_name_length)
         _ = filepath.MAX_FOLDER_LEN.set(config.max_folder_name_length)
-        _ = CONCURRENT_SEGMENTS.set(config.rate_limits.concurrent_segments)
-        _ = ALLOW_NO_EXT.set(not config.ignore.exclude_files_with_no_extension)
+        _ = CONCURRENT_SEGMENTS.set(config.downloads.concurrent_segments)
+        _ = ALLOW_NO_EXT.set(config.filters.allow_files_with_no_extension)
+        if config.ui.portrait:
+            env.FORCE_PORTRAIT_MODE = True
 
         config.download_folder.mkdir(parents=True, exist_ok=True)
-        if config.sorting.sort_downloads:
-            config.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
+        if config.sort.enabled:
+            config.sort.output_folder.mkdir(parents=True, exist_ok=True)
 
         logger.debug(
             "Using %s as chunk size", ByteSize(self.manager.download_client.chunk_size).human_readable(decimal=True)
         )
         await self.manager.http_client.load_cookie_files(await self.manager.get_cookie_files())
-        self.tui.mode = self.manager.cli_args.ui
+        self.tui.mode = self.manager.config.ui.mode
         ## IMPORTANT: Order of each context matters!
         with self.tui():
             async with (
@@ -209,7 +211,7 @@ class ScrapeMapper:
 
             self.create_download_task(wait_until_scrape_is_done())
 
-            children_limits = tuple(self.manager.config.downloads.max_number_of_children)
+            children_limits = tuple(self.manager.config.max_children)
             async for item in items:
                 item.children_limits = children_limits
                 item.download_folder = self.manager.config.download_folder
@@ -286,12 +288,12 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
             return False
 
-        skip_hosts = self.manager.config.ignore.skip_hosts
+        skip_hosts = self.manager.config.filters.skip_hosts
         if skip_hosts and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
             return False
 
-        only_hosts = self.manager.config.ignore.only_hosts
+        only_hosts = self.manager.config.filters.only_hosts
         if only_hosts and not _filter_by_domain(scrape_item, only_hosts):
             logger.info(f"Skipping {scrape_item.url} by only_hosts config")
             return False
@@ -330,7 +332,7 @@ def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     if cli_args.links:
         return "--links (CLI args)", _load_cli_links(cli_args.links)
 
-    return str(manager.config.input_file), _load_urls_from_file(manager.config.input_file)
+    return str(manager.input_file), _load_urls_from_file(manager.input_file)
 
 
 async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:

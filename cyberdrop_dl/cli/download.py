@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Annotated
 
+import cyclopts.validators
 from cyclopts import Parameter
+from cyclopts.group import Group
 
 from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
@@ -25,8 +28,8 @@ async def _scrape(manager: Manager) -> None:
     from cyberdrop_dl.utils import apprise
 
     with setup_file_logging(
-        manager.config.logs.main_log,
-        level=manager.config.runtime.effective_log_level,
+        manager.config.logs.files.main,
+        level=manager.config.logs.effective_level,
     ):
         manager.log_config_settings()
         if not ffmpeg.is_installed():
@@ -51,11 +54,11 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            if manager.config.logs.webhook:
-                await webhook.send_notification(manager.config.logs.webhook, stats_summary)
+            if webhook_url := manager.config.notifications.webhook:
+                await webhook.send_notification(webhook_url, stats_summary)
 
-            if manager.config.apprise_urls:
-                await apprise.send_notifications(manager.config.apprise_urls, stats_summary)
+            if urls := manager.config.notifications.apprise:
+                await apprise.send_notifications(urls, stats_summary)
 
 
 async def _post_runtime(manager: Manager) -> None:
@@ -63,14 +66,14 @@ async def _post_runtime(manager: Manager) -> None:
     logger.info("Running Post-Download Processes\n", extra={"color": "green"})
 
     if (
-        manager.config.dupe_cleanup.hashing.enabled
-        and manager.config.dupe_cleanup.auto_dedupe
-        and not manager.config.runtime.ignore_history
+        manager.config.hashing.mode.enabled
+        and manager.config.hashing.dedupe.enabled
+        and not manager.config.ignore_history
     ):
         file_hashes = await manager.hasher.run()
         await manager.deduper.run(file_hashes)
 
-    if manager.config.sorting.sort_downloads:
+    if manager.config.sort.enabled:
         await manager.sorter.run()
 
     _check_partials_and_empty_folders(manager.config)
@@ -79,7 +82,7 @@ async def _post_runtime(manager: Manager) -> None:
 def _main(manager: Manager) -> None:
     from cyberdrop_dl import aio, program_ui
 
-    set_console_level(manager.config.runtime.effective_console_log_level)
+    set_console_level(manager.config.logs.effective_console_level)
     try:
         with manager():
             if not manager.cli_args.download:
@@ -90,37 +93,52 @@ def _main(manager: Manager) -> None:
         logger.info("Exiting (Ctrl + C) ...")
 
 
+inputs_group = Group(sort_key=-1, validator=cyclopts.validators.mutually_exclusive)
+
+
 def download(
-    links: Annotated[
+    urls: Annotated[
         tuple[HttpURL, ...],
         Parameter(
-            help="link(s) to content to download (passing multiple links is supported)",
+            group=inputs_group,
+            help="URL(s) to download",
         ),
     ] = (),
+    /,
     *,
+    input_file: Annotated[
+        Path | None,
+        Parameter(
+            group=inputs_group,
+            alias="-i",
+            help="Text/HTML file with URL(s) to download",
+            validator=cyclopts.validators.Path(exists=True, dir_okay=False),
+        ),
+    ] = None,
     cli: CLIargs | None = None,
     config: Config | None = None,
 ) -> None:
+    if input_file:
+        input_file = input_file.resolve().absolute()
     from cyberdrop_dl.manager import AppData, Manager
 
     cli = cli or CLIargs()
-    cli.links = links
+    cli.links = urls
     config = config or Config()
     appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
 
     config = Config.create(appdata, cli.config_file).update(config)
 
-    if not cli.fullscreen_ui or cli.config_file or config.sorting.sort_downloads:
+    if not config.ui.mode.is_fullscreen or cli.config_file or config.sort.enabled:
         cli.download = True
 
-    manager = Manager(cli, appdata, config)
-
+    manager = Manager(cli, appdata, config, input_file)
     _main(manager)
 
 
 def _check_ffmpeg(config: Config) -> None:
     errors: list[Exception] = []
-    if config.sorting.needs_ffmpeg:
+    if config.sort.needs_ffmpeg:
         exc = RuntimeError("Sorting media files requires 'ffmpeg' to be installed")
         exc.add_note("Disable sorting or install ffmpeg")
         errors.append(exc)
@@ -139,12 +157,11 @@ def _check_partials_and_empty_folders(config: Config) -> None:
     if cleanup.has_partial_files(config.download_folder):
         logger.warning("There are partial downloads in the downloads folder")
 
-    settings = config.runtime
-    if settings.delete_partial_files:
+    if config.delete_partial_files:
         logger.info("Deleting partial downloads...")
         cleanup.rm_partial_files(config.download_folder)
 
-    if settings.skip_check_for_empty_folders:
+    if not config.delete_empty_folders:
         return
 
     _delete_empty_files(config)
@@ -154,6 +171,6 @@ def _delete_empty_files(config: Config) -> None:
     logger.info("Deleting empty files and folders...")
     cleanup.rm_empty_dirs(config.download_folder)
 
-    sorted_folder = config.sorting.sort_folder
-    if sorted_folder and config.sorting.sort_downloads:
+    sorted_folder = config.sort.output_folder
+    if sorted_folder and config.sort.enabled:
         cleanup.rm_empty_dirs(sorted_folder)

@@ -408,7 +408,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @property
     def separate_posts(self) -> bool:
-        return self.config.downloads.separate_posts
+        return self.config.subfolders.separate_posts
 
     @final
     @contextlib.contextmanager
@@ -553,7 +553,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
         return {
-            "User-Agent": self._DEFAULT_UA or self.config.user_agent,
+            "User-Agent": self._DEFAULT_UA or self.config.network.user_agent,
             "Referer": str(scrape_item.url),
         }
 
@@ -707,7 +707,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     ) -> str:
         if not self.separate_posts:
             return ""
-        title_format = self.config.downloads.separate_posts_format
+        title_format = self.config.subfolders.separate_posts_format
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
         if isinstance(date, int):
@@ -1043,18 +1043,22 @@ def auto_task_id[CrawlerT: Crawler, **P, R](
 
 def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
     media_host = media_item.url.host
-    ignore_options = config.ignore
+    filters = config.filters
 
-    if (hosts := ignore_options.skip_hosts) and any(host in media_host for host in hosts):
+    if (hosts := filters.skip_hosts) and any(host in media_host for host in hosts):
         logger.info(f"Download skipped {media_item.url} due to skip_hosts config")
         return True
 
-    if (hosts := ignore_options.only_hosts) and not any(host in media_host for host in hosts):
+    if (hosts := filters.only_hosts) and not any(host in media_host for host in hosts):
         logger.info(f"Download skipped {media_item.url} due to only_hosts config")
         return True
 
-    if (regex := ignore_options.filename_regex_filter) and re.search(regex, media_item.filename):
-        logger.info(f"Download skipped {media_item.url} due to filename regex filter config")
+    if (regex := filters.filename_regex) and not re.search(regex, media_item.filename):
+        logger.info(
+            "Download skipped %s due to filename regex filter. Filename '%s' does not match config regex",
+            media_item.url,
+            media_item.filename,
+        )
         return True
 
     return False
@@ -1076,13 +1080,13 @@ def create_title(
 ) -> str:
     title = (title or "Untitled").strip()
 
-    if album_id and config.downloads.include_album_id_in_folder_name:
+    if album_id and config.subfolders.include.album_id:
         title = f"{title} {album_id}"
 
-    if thread_id and config.downloads.include_thread_id_in_folder_name:
+    if thread_id and config.subfolders.include.thread_id:
         title = f"{title} {thread_id}"
 
-    if not config.downloads.remove_domains_from_folder_names:
+    if config.subfolders.include.domain:
         title = f"{title} ({domain})"
 
     # Remove double spaces

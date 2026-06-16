@@ -36,7 +36,7 @@ class Czkawka:
         return cls(
             base_dir=manager.config.download_folder.expanduser().resolve().absolute(),
             database=manager.database,
-            use_trash_bin=manager.config.dupe_cleanup.send_deleted_to_trash,
+            use_trash_bin=manager.config.hashing.dedupe.use_trash_bin,
         )
 
     def __post_init__(self) -> None:

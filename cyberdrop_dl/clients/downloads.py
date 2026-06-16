@@ -43,14 +43,14 @@ class DownloadClient:
 
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.download_speed_threshold = self.manager.config.runtime.slow_download_speed
+        self.download_speed_threshold = self.manager.config.downloads.slow_speed
         self._supports_ranges: bool = True
-        speed_limit = self.manager.config.rate_limits.download_speed_limit
+        speed_limit = self.manager.config.downloads.speed_limit
 
         self.speed_limiter = aio.RateLimiter(speed_limit, time_period=1)
         self.chunk_size: int = 1024 * 1024 * 10  # 10MB
         if speed_limit:
-            upper_limit = int(speed_limit / 1.5 / self.manager.config.rate_limits.max_simultaneous_downloads)
+            upper_limit = int(speed_limit / 1.5 / self.manager.config.downloads.concurrency)
             self.chunk_size = min(
                 self.chunk_size,
                 upper_limit,
@@ -74,7 +74,7 @@ class DownloadClient:
             resume_point = size
             media_item.headers[hdrs.RANGE] = f"bytes={size}-"
 
-        await asyncio.sleep(self.manager.config.rate_limits.total_delay)
+        await asyncio.sleep(self.manager.config.downloads.total_delay)
 
         async with self.http_client.raw_request(
             media_item.real_url,
@@ -196,7 +196,7 @@ class DownloadClient:
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
-        if self.manager.config.downloads.skip_download_mark_completed and not media_item.is_segment:
+        if self.manager.config.downloads.skip_and_mark_completed and not media_item.is_segment:
             logger.info(f"Download removed {media_item.url} due to mark completed option")
             self.manager.scrape_mapper.tui.files.stats.skipped += 1
             # set completed path
@@ -257,11 +257,12 @@ class DownloadClient:
     def get_download_dir(self, media_item: MediaItem) -> Path:
         """Returns the download directory for the media item."""
         download_folder = media_item.download_folder
+        if self.manager.config.subfolders.create:
+            return download_folder
 
-        if self.manager.config.downloads.block_download_sub_folders:
-            while download_folder.parent != self.manager.config.download_folder:
-                download_folder = download_folder.parent
-            media_item.download_folder = download_folder
+        while download_folder.parent != self.manager.config.download_folder:
+            download_folder = download_folder.parent
+        media_item.download_folder = download_folder
         return download_folder
 
     def get_file_location(self, media_item: MediaItem) -> Path:
@@ -371,7 +372,7 @@ class DownloadClient:
 
     def check_filesize_limits(self, media: MediaItem) -> bool:
         """Checks if the file size is within the limits."""
-        limits = self.manager.config.file_size_limits.ranges
+        limits = self.manager.config.filters.sizes.ranges
 
         assert media.size is not None
         if media.ext in FileExt.IMAGE:
@@ -379,7 +380,7 @@ class DownloadClient:
         if media.ext in FileExt.VIDEO:
             return media.size in limits.video
 
-        return media.size in limits.other
+        return media.size in limits.non_media
 
 
 def _check_content_type(content_type: str, ext: str) -> str | None:
@@ -446,8 +447,8 @@ async def _probe_item(media_item: MediaItem, config: Config) -> ffmpeg.FFprobeRe
     return await ffmpeg.probe_url(
         media_item.url,
         headers=media_item.headers,
-        proxy=config.proxy,
-        verify=bool(config.ssl_context),
+        proxy=config.network.proxy,
+        verify=bool(config.network.ssl_context),
     )
 
 

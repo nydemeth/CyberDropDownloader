@@ -24,13 +24,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## UNRELEASED
 
+⚠️**IMPORTANT**
+
+> This version is incompatible with any previous release. Config file options need to be manually migrated by user.
+>
+> CDL will refuse to start if the current database schema is older than `v9.15.0`. Run `cyberdrop-dl database transfer` to upgrade older databases
+
+### Added
+
+- New `--cookies` option to read cookies from a file/folder
+- New `--hashes` option to control which hashes CDL computes for new downloads
+
 ### Changed
 
+- The config file format has completely changed. All configs (`Auth`, `Global` and `Setttings`) are now a single file. Several options have new names, new defaults and new groups
+- Do not create a config file by default
+- Validate config in strict mode. If a config has an unknown entry, CDL will refuse to run instead of ignoring it
+- Apprise URLs are now part of the main config file instead of a dedicated `apprise.txt` file
+- Refuse to start if the current database schema is older than `v9.15.0`
 - Detect and report BasedFlare anti-bot protection
+- Cookies with not be automatically loaded from `AppData/cookies`. Path to cookies needs to be specified with `--cookies`
+- Always remove generated id from filenames (Cyberdrop)
+- Compute `xxh128`, `md5` and `sha256` hashes by default
+- `--deep-scrape` will no longer reset after a single run
+- `--input-file` is now a CLI only arg
+- If supplied, `--input-file` needs to be a valid file that exists
+- Refuse to run if both URLs and `--input-file` are passed as arguments
+
+The following options, which were CLI only arguments, now have dedicated config entries:
+
+- `--ui` (entry: `ui.mode`)
+- `--portrait` (entry: `ui.portrait`)
+- `--stats`
+
+Several config options have new names:
+
+- `--disable-crawlers`-> `--crawlers.disabled`
+- `--disable-file-timestamps`-> `--mtime`
+- `--maximum-audio-duration` -> `--max-audio-duration`
+- `--maximum-image-size` -> `--max-image-size`
+- `--maximum-number-of-children` -> `--max-children`
+- `--maximum-other-size` -> `--max-non-media-size`
+- `--maximum-thread-depth` -> `--max-thread-depth`
+- `--maximum-thread-folder-depth` -> `--max-thread-folder-depth`
+- `--maximum-video-duration` -> `--max-video-duration`
+- `--maximum-video-size` -> `--max-video-size`
+- `--minimum-audio-duration` -> `--min-audio-duration`
+- `--minimum-image-size` -> `--min-image-size`
+- `--minimum-other-size` -> `--min-non-media-size`
+- `--minimum-video-duration` -> `--min-video-duration`
+- `--minimum-video-size` -> `--min-video-size`
+- `--required-free-space` -> `--min-free-space`
+- `--print-stats` -> `--stats` , `--no-stats`
+- `--send-deleted-to-trash` -> `--hashing.dedupe.use-trash-bin`
+
+#### Jdownloader
+
+- `--jdownloader-autostart` -> `--jdownloader.autostart`
+- `--jdownloader-download-dir` -> `--jdownloader.download-dir`
+- `--jdownloader-whitelist` -> `--jdownloader.whitelist`
+- `--send-unsupported-to-jdownloader`-> `--jdownloader` / `--no-jdownloader`
+
+#### Sorting
+
+- `--sort-downloads` -> `--sort` / `--no-sort`
+- `--scan-folder` -> `--sort.input-folder`
+- `--sort-folder` -> `--sort.output-folder`
+- `--sort-incrementer-format` -> `--sort.formats.incrementer`
+- `--sorted-audio` -> `--sort.formats.audio`
+- `--sorted-image` -> `--sort.formats.image`
+- `--sorted-other` -> `--sort.formats.non-media`
+- `--sorted-video` -> `--sort.formats.video`
+
+#### Ignore options (filters)
+
+The behavior of `--filename-regex` has been reversed (files that DO NOT match the regex will skipped)
+The behavior of `--before` and `--after` has been reversed and the `--exclude` prefix removed (they now **include** instead of excluding files)
+
+- `--exclude-audio` -> `--no-audio`
+- `--exclude-images` -> `--no-images`
+- `--exclude-other` -> `--no-non-media`
+- `--exclude-videos` -> `--no-videos`
+- `--exclude-before` -> `--before`
+- `--exclude-after` -> `--after`
+- `--exclude-files-with-no-extension` -> `--allow-files-with-no-extension`
+- `--filename-regex-filter` -> `--filename-regex`
+- `--ignore-coomer-ads` -> `--crawlers.coomer.ignore-ads`
+- `--ignore-coomer-post-content` -> `--crawlers.coomer.ignore-post-content`
+- `--download-tiktok-src-quality-videos` -> - `--crawlers.tiktok.original`
+
+#### Logs
+
+- `--log-level` -> `--logs.level`
+- `--console-log-level` -> `--logs.console-level`
+- `--log-folder` -> `--logs.folder`
+- `--logs-expire-after` -> `--logs.expire-after`
+- `--main-log` -> `--logs.files.main` with alias `--log-file`
+- `--download-error-urls` -> `--logs.files.download-errors`
+- `--rotate-logs` -> `--logs-rotate`
+- `--scrape-error-urls` -> `--logs.files.scrape-errors`
+- `--unsupported-urls` -> `--logs.files.unsupported`
+
+#### DownloadOptions
+
+`--block-download-sub-folders` -> `--subfolders`, `--no-subfolders`
+`--include-album-id-in-folder-name` -> `--subfolders.include.album-id`
+`--include-thread-id-in-folder-name` -> `--subfolders.include.thread-id`
+`--remove-domains-from-folder-names` -> `--subfolders.include.domain`
+`--separate-posts-format` -> `--subfolders.separate-posts-format`
+`--separate-posts` -> `--subfolders.separate-posts`
+`--skip-download-mark-completed` -> `--skip-and-mark-completed`
+`--max-simultaneous-downloads` -> `--downloads`
+`--max-simultaneous-downloads-per-domain` -> `--downloads.per-domain`
+`--slow-download-speed` -> `--slow-speed`
+`--download-attempts` -> `--attempts`
+`--download-delay` -> `--delay`
+`--download-speed-limit` -> `--speed-limit`
 
 ### Removed
 
+- Support for python 3.11
+- All retry settings + menu option
+- `--log-level` and `--console-log-level` (`--logs.level` and `--logs.console-level`) no longer accept integers. Only log level names as valid, ex: `INFO`, `DEBUG`, `WARNING`
 - Posts filtering by URL params (Wordpress)
+- Auto cookie extraction support
+
+Several config options have been removed:
+
+- `--add-md5-hash`
+- `--add-sha256-hash`
+- `--auto-import`
+- `--browser`
+- `--completed-after`
+- `--completed-before`
+- `--disable-download-attempt-limit`
+- `--download-tiktok-audios`
+- `--last-forum-post`
+- `--max-items-retry`
+- `--remove-generated-id-from-filename`
+- `--retry-all`
+- `--retry-failed`
+- `--retry-maintenance`
+- `--save-pages-html`
+- `--scrape-single-forum-post`
+- `--sites`
+- `--skip-check-for-partial-files`
+- `--update-last-forum-post`
+
+The following authentication entries has been removed:
+
+- `Imgur.client_id`
+- `Kemono.session`
+- `Coomer.session`
 
 ## [9.15.2] - 2026-06-16
 

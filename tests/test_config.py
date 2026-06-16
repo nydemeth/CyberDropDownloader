@@ -29,11 +29,11 @@ def test_parse_config_from_args() -> None:
 
 
 def test_parse_config_from_args2() -> None:
-    config = Config.model_validate({"input_file": "test.txt"})
-    assert config == Config.parse_args(["--input-file", "test.txt"])
-    assert config == Config.parse_args(["-i", "test.txt"])
+    config = Config.model_validate({"download_folder": "downloads"})
+    assert config == Config.parse_args(["--download-folder", "downloads"])
+    assert config == Config.parse_args(["-o", "downloads"])
     with pytest.raises(UnknownOptionError):
-        _ = Config.parse_args(["--i", "test.txt"])
+        _ = Config.parse_args(["-i", "test.txt"])
 
 
 def test_logs_equality() -> None:
@@ -125,25 +125,25 @@ class TestMergeDicts:
 
 class TestRuntimeLogsConfig:
     @staticmethod
-    def parse(level: object, console_level: object) -> settings.RuntimeOptions:
-        return settings.RuntimeOptions.model_validate({"log_level": level, "console_log_level": console_level})
+    def parse(level: object, console_level: object) -> settings.Logs:
+        return settings.Logs.model_validate({"level": level, "console_level": console_level})
 
     def test_default(self) -> None:
-        default = settings.RuntimeOptions()
-        expected = settings.RuntimeOptions(log_level="debug", console_log_level="debug")  # pyright: ignore[reportArgumentType]
+        default = settings.Logs()
+        expected = settings.Logs(level="debug", console_level="debug")  # pyright: ignore[reportArgumentType]
 
-        assert default.effective_log_level == 10
-        assert default.effective_console_log_level == 10
-        assert default.effective_log_level == expected.effective_log_level
-        assert default.effective_console_log_level == expected.effective_console_log_level
+        assert default.effective_level == 10
+        assert default.effective_console_level == 10
+        assert default.effective_level == expected.effective_level
+        assert default.effective_console_level == expected.effective_console_level
 
     def test_falsy_console_log_level(self) -> None:
         for name, level, console_level in [("warning", 30, None), ("error", 40, ""), ("info", 20, "none")]:
-            config = self.parse(name, console_level)
-            assert config.log_level == name.upper()
-            assert config.console_log_level is None
-            assert config.effective_log_level == level
-            assert config.effective_console_log_level == level
+            logs = self.parse(name, console_level)
+            assert logs.level == name.upper()
+            assert logs.console_level is None
+            assert logs.effective_level == level
+            assert logs.effective_console_level == level
 
 
 def test_default_config_does_not_need_ffmpeg() -> None:

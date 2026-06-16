@@ -81,7 +81,7 @@ class Downloader:
 
     def __post_init__(self) -> None:
         self.slots = self._slots
-        self.max_attempts = self.config.rate_limits.download_attempts
+        self.max_attempts = self.config.downloads.attempts
 
     @property
     def waiting_items(self) -> int:
@@ -101,7 +101,7 @@ class Downloader:
             if not (sem._waiters is None and sem._value == self._slots):
                 raise RuntimeError("Can't change download limits. Downloader is already in use")
 
-        upper_limit = self.config.rate_limits.max_simultaneous_downloads_per_domain
+        upper_limit = self.config.downloads.concurrency_per_domain
         self._slots = min(new_limit or upper_limit, upper_limit)
         self._semaphore = asyncio.Semaphore(self._slots)
 
@@ -115,7 +115,7 @@ class Downloader:
 
     @property
     def _ignore_history(self) -> bool:
-        return self.manager.config.runtime.ignore_history
+        return self.manager.config.ignore_history
 
     @error_handling_wrapper
     async def __download_w_retries(self, media_item: MediaItem) -> bool:
@@ -274,15 +274,18 @@ class Downloader:
 
 
 def _is_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
-    ignore_options = config.ignore
+    filters = config.filters.files
     ext = media_item.ext.lower()
 
-    return not (
-        (ignore_options.exclude_images and ext in constants.FileExt.IMAGE)
-        or (ignore_options.exclude_videos and ext in constants.FileExt.VIDEO)
-        or (ignore_options.exclude_audio and ext in constants.FileExt.AUDIO)
-        or (ignore_options.exclude_other and ext not in constants.FileExt.MEDIA)
-    )
+    for is_allowed, valid_exts in [
+        (filters.images, constants.FileExt.IMAGE),
+        (filters.videos, constants.FileExt.VIDEO),
+        (filters.audio, constants.FileExt.AUDIO),
+    ]:
+        if ext in valid_exts:
+            return is_allowed
+
+    return filters.non_media
 
 
 def _is_allowed_date_range(media_item: MediaItem, config: Config) -> bool:
@@ -294,18 +297,18 @@ def _is_allowed_date_range(media_item: MediaItem, config: Config) -> bool:
 
 def _filter_by_date(item_datetime: datetime.datetime, config: Config) -> bool:
     item_date = item_datetime.date()
-    ignore_options = config.ignore
+    filters = config.filters
 
-    if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
+    if filters.before and item_date > filters.before:
         return False
-    return not (ignore_options.exclude_after and item_date > ignore_options.exclude_after)
+    return not (filters.after and item_date < filters.after)
 
 
 async def _set_mtime(media_item: MediaItem, config: Config) -> None:
     if media_item.is_segment:
         return
 
-    if not config.downloads.mtime:
+    if not config.mtime:
         return
 
     if not media_item.uploaded_at:

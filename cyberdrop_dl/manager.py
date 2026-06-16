@@ -44,6 +44,7 @@ class Manager:
         cli_args: CLIargs | None = None,
         appdata: AppData | None = None,
         config: Config | None = None,
+        input_file: Path | None = None,
     ) -> None:
         from cyberdrop_dl.cli import CLIargs
 
@@ -51,10 +52,11 @@ class Manager:
         self._appdata: AppData | None = appdata
         self.cli_args: CLIargs = cli_args or CLIargs()
         self._config: Config | None = config
+        self.input_file: Path = input_file or Path("URLs.txt")
 
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
-        self.logs: CSVLogsManager = CSVLogsManager.from_manager(self)
+        self.logs: CSVLogsManager = CSVLogsManager.from_config(self.config)
         self.http_client: HTTPClient = HTTPClient.from_manager(self)
         self.download_client: DownloadClient = DownloadClient(self)
 
@@ -78,22 +80,19 @@ class Manager:
     def __resolve_paths(self) -> None:
         self.appdata.mkdirs()
         self.config.resolve_paths()
-        self.logs = CSVLogsManager.from_manager(self)
+        self.logs = CSVLogsManager.from_config(self.config)
         self.logs.delete_old_logs()
 
     @contextlib.contextmanager
     def __call__(self) -> Generator[Self]:
         self.__resolve_paths()
-        self.database = Database(
-            self.appdata.db_file,
-            self.config.runtime.ignore_history,
-        )
+        self.database = Database(self.appdata.db_file, self.config.ignore_history)
         self.deduper = Czkawka.from_manager(self)
         self.sorter = Sorter.from_manager(self)
         with (
             _cache_context(self.appdata.cache_file, self.cache),
-            enter_context(REFRESH_RATE, self.config.ui_options.refresh_rate),
-            enter_context(TUI_DISABLED, self.cli_args.ui.is_disabled),
+            enter_context(REFRESH_RATE, self.config.ui.refresh_rate),
+            enter_context(TUI_DISABLED, self.config.ui.mode.is_disabled),
         ):
             try:
                 yield self
@@ -120,7 +119,7 @@ class Manager:
         _log_dependencies()
 
     def print_stats(self, stats: ScrapeStats) -> str:
-        if not self.cli_args.print_stats:
+        if not self.config.show_stats:
             return ""
 
         log_spacer()
@@ -140,7 +139,7 @@ class Manager:
         logger.info(f"  URLs source: {scrape_stats.source}")
         logger.info(f"  URLs: {scrape_stats.count:,}")
         logger.info(f"  URL groups: {len(scrape_stats.unique_groups):,}")
-        logger.info(f"  Logs folder: {self.config.logs.log_folder}")
+        logger.info(f"  Logs folder: {self.config.logs.folder}")
         logger.info(f"  Total runtime: {elapsed}")
         logger.info(f"  Total downloaded data: {total_data_written}")
 
@@ -165,7 +164,7 @@ class Manager:
         )
 
     async def get_cookie_files(self) -> list[Path]:
-        path = self.config.cookies.cookies
+        path = self.config.cookies
         if not path:
             return []
 
