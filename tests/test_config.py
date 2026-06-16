@@ -8,7 +8,7 @@ from cyclopts.exceptions import UnknownOptionError
 from pydantic import BaseModel
 
 import cyberdrop_dl.cli.download
-from cyberdrop_dl.config import Config, _resolve_paths, settings
+from cyberdrop_dl.config import Config, _resolve_paths, merge_additive_args, settings
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.models import merge_dicts
 
@@ -193,3 +193,64 @@ def test_resolve_paths(tmp_cwd: Path) -> None:
     config.child.path = Path("URLs.txt")
     _resolve_paths(config)
     assert config.child.path == tmp_cwd / "URLs.txt"
+
+
+@pytest.mark.parametrize(
+    ("config_args", "cli_args", "expected"),
+    [
+        (
+            [],
+            ["a", "b", "c"],
+            ["a", "b", "c"],
+        ),
+        (
+            ("e"),
+            ("a", "b", "c"),
+            ("a", "b", "c"),
+        ),
+        (
+            ("b", "d", "e"),
+            ("+", "a", "b", "c"),
+            ("a", "b", "c", "d", "e"),
+        ),
+        (
+            ("a", "d", "e"),
+            ("-", "a", "b", "c"),
+            ("d", "e"),
+        ),
+        (
+            ("drive.google.com", "facebook.com", "youtube.com"),
+            ("instagram.com",),
+            ("instagram.com",),
+        ),
+        (
+            ("drive.google.com", "facebook.com", "youtube.com"),
+            ("+", "instagram.com"),
+            ("drive.google.com", "facebook.com", "instagram.com", "youtube.com"),
+        ),
+        (
+            ("drive.google.com", "facebook.com", "youtube.com"),
+            ("-", "youtube.com"),
+            ("drive.google.com", "facebook.com"),
+        ),
+    ],
+)
+def test_additive_args(
+    config_args: list[str] | tuple[str, ...],
+    cli_args: list[str] | tuple[str, ...],
+    expected: list[str] | tuple[str, ...],
+) -> None:
+    result = merge_additive_args(cli_args, config_args)
+    assert type(result) is type(expected)
+    assert result == expected
+
+
+def test_config_from_file(tmp_cwd: Path) -> None:
+    config_file = tmp_cwd / "cdl_config.txt"
+    config_1 = Config.from_file(config_file)
+    assert config_1.source is None
+    config_file.touch()
+    config_2 = Config.from_file(config_file)
+    assert config_2.source == config_file
+    config_2._source = None
+    assert config_1 == config_2

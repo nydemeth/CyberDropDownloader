@@ -86,9 +86,19 @@ class Config(BaseModel):
     def source(self) -> Path | None:
         return self._source
 
-    @classmethod
-    def from_file(cls, config_file: Path) -> Config:
-        return _load_config_file(config_file)
+    @staticmethod
+    def from_file(file: Path, *, _save_if_not_found: bool = False) -> Config:
+        try:
+            content = yaml.load(file)
+        except FileNotFoundError:
+            default = Config()
+            if _save_if_not_found:
+                yaml.save(file, default.model_dump())
+            return default
+
+        config = Config.model_validate(content, extra="forbid")
+        config._source = file
+        return config
 
     def __or__(self, other: Self) -> Self:
         return merge_models(self, other)
@@ -135,31 +145,16 @@ def _resolve_paths(model: BaseModel) -> None:
             _resolve_paths(value)
 
 
-def _load_config_file(file: Path, *, save_if_not_found: bool = False) -> Config:
-    try:
-        content = yaml.load(file)
-    except FileNotFoundError:
-        default = Config()
-        if save_if_not_found:
-            yaml.save(file, default.model_dump())
-        return default
-    else:
-        config = Config.model_validate(content, extra="forbid")
-        config._source = file
-        return config
-
-
-def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
+def merge_additive_args[T: list[str] | tuple[str, ...]](cli_values: T, config_values: Iterable[str]) -> T:
     match cli_values:
         case ["+", *_]:
-            new_values = set(config_values + cli_values)
+            new_values = set(config_values).union(cli_values)
         case ["-", *_]:
             new_values = set(config_values) - set(cli_values)
         case _:
-            return
+            return cli_values
 
-    cli_values.clear()
-    cli_values.extend(sorted(new_values - {"+", "-"}))
+    return type(cli_values)(sorted(new_values - {"+", "-"}))
 
 
 def _coerce(*, config: Config | None = None) -> Config:
