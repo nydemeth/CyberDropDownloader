@@ -187,6 +187,11 @@ The following authentication entries has been removed:
 - `Kemono.session`
 - `Coomer.session`
 
+### Fixed
+
+- Do not skip initialization segments (HLS) (#1977)
+- 403 errors on embeded videos (twing)
+
 ## [9.15.2] - 2026-06-16
 
 ### Fixed
