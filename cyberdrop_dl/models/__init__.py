@@ -13,7 +13,6 @@ class DeferedModel(
     populate_by_name=True,
     defer_build=True,
     allow_inf_nan=False,
-    extra="forbid",
     url_preserve_empty_path=True,
     val_temporal_unit="milliseconds",
     validate_default=env.DEBUG_MODE,
@@ -21,7 +20,10 @@ class DeferedModel(
 ): ...
 
 
-class ConfigGroup(DeferedModel):
+class ConfigModel(DeferedModel, extra="forbid"): ...
+
+
+class ConfigGroup(ConfigModel):
     def __init_subclass__(cls, *, group: str | None = None, name: str | None = "*") -> None:
         _ = Parameter(group=group or cls.__name__, name=name)(cls)
         return super().__init_subclass__()
@@ -33,7 +35,7 @@ class _AppriseURLDict(TypedDict):
 
 
 @Parameter(name="*")
-class AppriseURL(DeferedModel):
+class AppriseURL(ConfigModel):
     url: Secret[AnyUrl]
     tags: set[str] = set()
 

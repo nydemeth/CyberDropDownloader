@@ -1,19 +1,22 @@
 from pydantic import Field
 
-from cyberdrop_dl.models import ConfigGroup, DeferedModel
+from cyberdrop_dl.models import ConfigGroup, ConfigModel
 from cyberdrop_dl.models.types import FalsyAsTuple, HttpURL, NonEmptyStr, RemoveDuplicates
 
 
-class KemonoConfig(DeferedModel):
+class KemonoConfig(ConfigModel):
     ignore_ads: bool = False
+    "Ignore advertisement posts"
     ignore_post_content: bool = True
+    "Ignore URL in inside the content (text) of posts"
 
 
-class TikTokConfig(DeferedModel):
+class TikTokConfig(ConfigModel):
     original: bool = False
+    "Download videos in original quality (slower)"
 
 
-class GenericCrawlers(DeferedModel):
+class GenericCrawlers(ConfigModel):
     wordpress_media: FalsyAsTuple[HttpURL] = ()
     wordpress_html: FalsyAsTuple[HttpURL] = ()
     discourse: FalsyAsTuple[HttpURL] = ()
@@ -22,6 +25,8 @@ class GenericCrawlers(DeferedModel):
 
 class Crawlers(ConfigGroup, name=None):
     disabled: RemoveDuplicates[FalsyAsTuple[NonEmptyStr]] = ()
+    "Name of crawlers to disable for the current run"
+
     generic: GenericCrawlers = Field(default_factory=GenericCrawlers)
     kemono: KemonoConfig = Field(default_factory=KemonoConfig)
     coomer: KemonoConfig = Field(default_factory=KemonoConfig)

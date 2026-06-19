@@ -16,7 +16,7 @@ from cyberdrop_dl.constants import (
     CIStrEnum,
     HashMode,
 )
-from cyberdrop_dl.models import ConfigGroup, DeferedModel
+from cyberdrop_dl.models import ConfigGroup, ConfigModel
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     CSVPath,
@@ -33,7 +33,7 @@ from cyberdrop_dl.models.types import (
 from cyberdrop_dl.models.validators import strings
 
 
-class _SubFoldersInclude(DeferedModel):
+class _SubFoldersInclude(ConfigModel):
     album_id: bool = False
     thread_id: bool = False
     domain: bool = True
@@ -41,18 +41,29 @@ class _SubFoldersInclude(DeferedModel):
 
 class SubFolders(ConfigGroup, name=None):
     create: Annotated[bool, Parameter(name="--subfolders")] = True
+    "Enable/disable the createtion of nested sub-folders"
+
     include: _SubFoldersInclude = Field(default_factory=_SubFoldersInclude)
     separate_posts_format: Annotated[
         FormatStr, strings.format_validator({"default", "title", "id", "number", "date"})
     ] = "{default}"
+
     separate_posts: bool = False
+    "Create new subfolders for every post on a site"
 
 
-class LogFiles(DeferedModel):
+class LogFiles(ConfigModel):
     main: Annotated[LogPath, Parameter(alias="--log-file")] = Path("downloader.log")
+    "Path of main log file"
+
     download_errors: CSVPath = Path("Download_Error_URLs.csv")
+    "Save download errors to this file (MUST BE .csv)"
+
     scrape_errors: CSVPath = Path("Scrape_Error_URLs.csv")
+    "Save scrape errors to this file (MUST BE .csv)"
+
     unsupported: CSVPath = Path("Unsupported_URLs.csv")
+    "Save unsupported URLs to this file (MUST BE .csv)"
 
     @property
     def jsonl_file(self) -> Path:
@@ -62,13 +73,20 @@ class LogFiles(DeferedModel):
 class Logs(ConfigGroup, name=None):  # noqa: PLW1641
     level: LogLevel = "DEBUG"
     "Only log messages of this level or higher to the main log file"
+
     console_level: FalsyAsNone[LogLevel] = None
     "Only log messages of this level or higher to the console. An empty or `None` value will use the same level as `log_level`"
 
     files: LogFiles = Field(default_factory=LogFiles)
     folder: FalsyAsNone[Path] = None
+    "Base folder to prepend to log files paths (if they are not absolute)"
+
     expire_after: FalsyAsNone[Timedelta] = None
+    "Delete all log files inside `--logs.folder` if they are older that this"
+
     rotate: bool = False
+    "Append current datetimme to every log file on each run"
+
     _created_at: datetime.datetime = PrivateAttr(default_factory=datetime.datetime.now)
 
     @property
@@ -130,12 +148,19 @@ class Logs(ConfigGroup, name=None):  # noqa: PLW1641
 
 class Jdownloader(ConfigGroup, name=None):
     enabled: Annotated[bool, Parameter(name="--jdownloader")] = False
+    "Send unsupported URLs to Jdownloader"
+
     autostart: bool = False
+    "Immediately start downloads as soon as they are sent"
+
     download_dir: FalsyAsNone[Path] = None
+    "Output path for Jdownloader. Defaults to `--download-folder`"
+
     whitelist: RemoveDuplicates[FalsyAsTuple[NonEmptyStr]] = ()
+    "Only send unsupported URLs from these domains to Jdownloader. An empty list means 'send all URLs'"
 
 
-class SortFormats(DeferedModel):
+class SortFormats(ConfigModel):
     _COMMON_FIELDS: ClassVar[set[str]] = {
         "base_dir",
         "ext",
@@ -186,8 +211,14 @@ class SortFormats(DeferedModel):
 
 class Sort(ConfigGroup, name=None):
     enabled: Annotated[bool, Parameter(name="--sort")] = False
+    "Enable/Disable file sorting at the end of a run"
+
     input_folder: FalsyAsNone[Path] = None
+    "Base folder to scan for files. Default to the same value as `--download-folder`"
+
     output_folder: Path = DEFAULT_DOWNLOAD_PATH / "Cyberdrop-DL Sorted Downloads"
+    "Output path to place sorted files in"
+
     formats: SortFormats = Field(default_factory=SortFormats)
 
     @property
@@ -195,9 +226,12 @@ class Sort(ConfigGroup, name=None):
         return bool(self.enabled and (self.formats.audio or self.formats.video))
 
 
-class Dedupe(DeferedModel):
+class Dedupe(ConfigModel):
     enabled: Annotated[bool, Parameter(name="--hashing.dedupe", alias="--auto-dedupe")] = True
+    "Auto delete duplicate downloads by hash"
+
     use_trash_bin: bool = True
+    "Send deleted files to the trash bin"
 
 
 class Hashing(ConfigGroup, name=None):
@@ -216,6 +250,8 @@ class Hashing(ConfigGroup, name=None):
         "md5",
         "sha256",
     )
+    "List of hashes to compute for each download"
+
     dedupe: Dedupe = Field(default_factory=Dedupe)
     _extra_hashes: tuple[Literal["md5", "sha256"], ...] = ()
 
@@ -237,13 +273,28 @@ class Hashing(ConfigGroup, name=None):
 
 class Downloads(ConfigGroup):
     concurrency: Annotated[PositiveInt, Parameter(name="--downloads")] = 15
+    "Max number of files to download simultaneously"
+
     concurrency_per_domain: Annotated[PositiveInt, Parameter(name="--downloads.per-domain")] = 5
+    "Max number of files to download simultaneously per domain"
+
     attempts: PositiveInt = 2
+
     delay: NonNegativeFloat = 0.0
+    "Number of seconds to wait before starting downloads"
+
     slow_speed: ByteSizeSerilized = ByteSize(0)
+    "Skip downloads if their speed is bellow this value for more than 10 seconds. Set to 0 to disable"
+
     speed_limit: ByteSizeSerilized = ByteSize(0)
+    "Max speed rate (in bytes per second) to limit downloads (combined)"
+
     jitter: NonNegativeFloat = 0
+    "Wait a random additional number of seconds in between 0 and <jitter> before downloads"
+
     skip_and_mark_completed: bool = False
+    "Skip all downloads and mark them as downloaded on the database"
+
     concurrent_segments: PositiveInt = 10
     """Allow up to `<N>` HLS segments to be downloaded concurrently"""
 
@@ -254,10 +305,17 @@ class Downloads(ConfigGroup):
 
 class Network(ConfigGroup):
     dump_responses: bool = False
-    """Save text/HTML/JSON responses to disk (flaresolverr responses are excluded)"""
+    "Save text/HTML/JSON responses to disk (flaresolverr responses are excluded)"
+
     flaresolverr: FalsyAsNone[HttpURL] = None
+    "HTTP URL of an existing flaresolverr instance"
+
     proxy: FalsyAsNone[HttpURL] = None
+    "HTTP/HTTPS proxy"
+
     rate_limit: PositiveFloat = 25
+    "Max number of requests per second (only used while scraping)"
+
     connection_timeout: PositiveFloat = 15
     read_timeout: FalsyAsNone[PositiveFloat] = 300
     ssl_context: FalsyAsNone[
@@ -267,6 +325,8 @@ class Network(ConfigGroup):
         ]
     ] = "truststore+certifi"
     user_agent: NonEmptyStr = "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0"
+    impersonate: FalsyAsNone[Literal["chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"]] = None
+    "Use this target as impersonation for all scrape requests"
 
     @property
     def curl_timeout(self) -> float | tuple[float, float]:

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Self
 from cyclopts import Parameter
 from pydantic import ByteSize, Field
 
-from cyberdrop_dl.models import ConfigGroup, DeferedModel
+from cyberdrop_dl.models import ConfigGroup, ConfigModel
 from cyberdrop_dl.models.types import (  # noqa: TC001
     ByteSizeSerilized,
     FalsyAsNone,
@@ -56,13 +56,13 @@ class _FileSizeRanges:
     non_media: _FloatRange
 
 
-class _SizeLimit(DeferedModel):
+class _SizeLimit(ConfigModel):
     min: ByteSizeSerilized = ByteSize(0)
     max: ByteSizeSerilized = ByteSize(0)
 
 
 @Parameter(name="*", name_transform=_limit_suffix("size"))
-class _FileSizes(DeferedModel):
+class _FileSizes(ConfigModel):
     image: _SizeLimit = Field(default_factory=_SizeLimit)
     video: _SizeLimit = Field(default_factory=_SizeLimit)
     audio: _SizeLimit = Field(default_factory=_SizeLimit)
@@ -99,13 +99,13 @@ class _DurationRanges:
     audio: _FloatRange | None
 
 
-class _DurationLimit(DeferedModel):
+class _DurationLimit(ConfigModel):
     min: Timedelta = datetime.timedelta(seconds=0)
     max: Timedelta = datetime.timedelta(seconds=0)
 
 
 @Parameter(name="*", name_transform=_limit_suffix("duration"))
-class _DurationLimits(DeferedModel):
+class _DurationLimits(ConfigModel):
     video: _DurationLimit = Field(default_factory=_DurationLimit)
     audio: _DurationLimit = Field(default_factory=_DurationLimit)
     _ranges: _DurationRanges | None = None
@@ -131,11 +131,18 @@ class _DurationLimits(DeferedModel):
 
 
 @Parameter(name="*")
-class _FileFilter(DeferedModel):
+class _FileFilter(ConfigModel):
     audio: bool = True
+    "Download/skip audio files"
+
     images: bool = True
+    "Download/skip image files"
+
     videos: bool = True
+    "Download/skip videos"
+
     non_media: bool = True
+    "Download/skip non media files (.txt, zip, .rar, etc...)"
 
 
 class Filters(ConfigGroup):
@@ -143,8 +150,19 @@ class Filters(ConfigGroup):
     sizes: _FileSizes = Field(default_factory=_FileSizes)
     duration: _DurationLimits = Field(default_factory=_DurationLimits)
     before: FalsyAsNone[datetime.date] = None
+    "Only download files uploaded before this date"
+
     after: FalsyAsNone[datetime.date] = None
+    "Only download files uploaded after this date"
+
     filename_regex: FalsyAsNone[re.Pattern[str]] = None
+    "Only download files that match this regex"
+
     only_hosts: RemoveDuplicates[FalsyAsTuple[NonEmptyStr]] = ()
+    "Only scrape/download from these domains"
+
     skip_hosts: RemoveDuplicates[FalsyAsTuple[NonEmptyStr]] = ()
+    "Skip scrape/download from these domains"
+
     allow_files_with_no_extension: bool = False
+    "Download potentially dangerous files that have no extension"
