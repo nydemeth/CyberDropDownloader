@@ -169,7 +169,8 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
 
         soup = await self.request_soup(scrape_item.url)
         video = extract_kvs_video(self, soup)
-        filename, ext = self.get_filename_and_ext(video.url.name)
+        name = video.url.name or video.url.parent.name
+        filename, ext = self.get_filename_and_ext(name)
         scrape_item.uploaded_at = self._extract_upload_date(soup)
 
         await self.handle_file(
@@ -307,7 +308,7 @@ def _get_license_token(license_code: str) -> tuple[int, ...]:
 
 def _deobfuscate_url(video_url_str: str, license_token: Sequence[int]) -> AbsoluteHttpURL:
     raw_url_str = video_url_str.removeprefix("function/0/")
-    url = parse_url(raw_url_str)
+    url = parse_url(raw_url_str, trim=False)
     is_obfuscated = raw_url_str != video_url_str
     if not is_obfuscated:
         return url
