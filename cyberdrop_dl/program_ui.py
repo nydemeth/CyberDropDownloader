@@ -4,7 +4,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import inquirer
@@ -47,6 +47,7 @@ def run(manager: Manager) -> None:
         "Create file hashes": _scan_and_create_hashes,
         "Sort files in download folder": _sort_files,
         "Edit URLs.txt": _edit_urls,
+        "Edit config": _edit_config,
         "View changelog": lambda _: _view_changelog(),
         "Exit": lambda _: sys.exit(0),
     }
@@ -74,9 +75,31 @@ def _sort_files(manager: Manager) -> None:
         _WARNING,
         f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
     )
-    answer = _ask_text("Type 'YES' to proceed")
-    if answer.strip().casefold() == "yes":
+    if _ask_confirmation(explicit=True):
         asyncio.run(sorter.run())
+        _enter_to_continue()
+
+
+def _should_create_config(file: Path) -> bool:
+    _CONSOLE.print(_WARNING, "A default config file does not exists")
+    return _ask_confirmation(f"Do you want to create it at '{file}'?")
+
+
+def _edit_config(manager: Manager) -> None:
+    file = manager.config.source
+    if file is None:
+        file = manager.appdata.config_file
+        if not _should_create_config(file):
+            return
+        type(manager.config)().save_to(file)
+
+    try:
+        text_editor.open(file)
+    except ValueError as e:
+        _CONSOLE.print(_ERROR, str(e))
+    else:
+        _CONSOLE.print(_WARNING, "You must restart cyberdrop-dl for changes to the config to take effect")
+    finally:
         _enter_to_continue()
 
 
@@ -129,8 +152,8 @@ def _app_header(manager: Manager) -> None:
     _CONSOLE.line()
 
 
-def _ask_choices(choices: Iterable[str]) -> str:
-    return _ask(
+def _ask_choices[T](choices: Iterable[T]) -> T:
+    return _ask(  # pyright: ignore[reportAny]
         inquirer.List(
             "main",
             message="What would you like to do",
@@ -139,7 +162,7 @@ def _ask_choices(choices: Iterable[str]) -> str:
     )
 
 
-def _ask(question: inquirer.questions.Question) -> str:
+def _ask(question: inquirer.questions.Question) -> Any:
     answers = inquirer.prompt(
         [question],
         raise_keyboard_interrupt=True,
@@ -151,6 +174,14 @@ def _ask(question: inquirer.questions.Question) -> str:
 
 def _ask_text(text: str) -> str:
     return _ask(inquirer.Text("text", message=text))
+
+
+def _ask_confirmation(text: str = "", *, explicit: bool = False) -> bool:
+    if explicit:
+        msg = "Type 'YES' to proceed"
+        answer = _ask_text(f"{text}. {msg}" if text else msg)
+        return answer.strip().casefold() == "yes"
+    return _ask(inquirer.Confirm("text", message=text))
 
 
 def _ask_dir(message: str = "Select dir path", default: Path | None = None) -> Path:

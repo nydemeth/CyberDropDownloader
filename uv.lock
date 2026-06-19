@@ -669,7 +669,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "apprise", marker = "extra == 'apprise'", specifier = ">=1.11.0" },
     { name = "async-mega-py", specifier = ">=2.4.1" },
-    { name = "backports-zstd", marker = "python_full_version < '3.14' and implementation_name == 'cpython'", specifier = ">=1.5.0" },
+    { name = "backports-zstd", marker = "python_full_version < '3.14' and implementation_name == 'cpython'", specifier = ">=1.6.0" },
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "brotli", marker = "implementation_name == 'cpython' and sys_platform != 'ios'", specifier = ">=1.2.0" },
     { name = "certifi", specifier = ">=2026.6.17" },

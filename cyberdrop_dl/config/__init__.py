@@ -93,6 +93,9 @@ class Config(DeferedModel, title="cyberdrop-dl config"):
     def source(self) -> Path | None:
         return self._source
 
+    def save_to(self, file: Path) -> None:
+        yaml.save(file, self.model_dump(mode="json"))
+
     @staticmethod
     def from_file(file: Path, *, _save_if_not_found: bool = False) -> Config:
         try:
@@ -100,7 +103,7 @@ class Config(DeferedModel, title="cyberdrop-dl config"):
         except FileNotFoundError:
             default = Config()
             if _save_if_not_found:
-                yaml.save(file, default.model_dump(mode="json"))
+                default.save_to(file)
             return default
 
         config = Config.model_validate(content)

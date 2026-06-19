@@ -40,11 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The config file format has completely changed. All configs (`Auth`, `Global` and `Setttings`) are now a single file. Several options have new names, new defaults and new groups
-- Do not create a config file by default
+- A default config file will not be created by default. You can manually create a default one from the `Edit config` option on the main menu
 - Validate config in strict mode. If a config has an unknown entry, CDL will refuse to run instead of ignoring it
 - Apprise URLs are now part of the main config file instead of a dedicated `apprise.txt` file
 - Refuse to start if the current database schema is older than `v9.15.0`
-- Detect and report BasedFlare anti-bot protection
 - Cookies with not be automatically loaded from `AppData/cookies`. Path to cookies needs to be specified with `--cookies`
 - Always remove generated id from filenames (Cyberdrop)
 - Compute `xxh128`, `md5` and `sha256` hashes by default
@@ -52,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--input-file` is now a CLI only arg
 - If supplied, `--input-file` needs to be a valid file that exists
 - Refuse to run if both URLs and `--input-file` are passed as arguments
+- Detect and report BasedFlare anti-bot protection
 
 The following options, which were CLI only arguments, now have dedicated config entries:
 
