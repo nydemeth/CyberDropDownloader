@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 from pathlib import Path
@@ -14,7 +13,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.text import Text
 
-from cyberdrop_dl import __version__, stats
+from cyberdrop_dl import __version__, aio, stats
 from cyberdrop_dl.hasher import Hasher, hash_directory
 from cyberdrop_dl.progress import hyperlink
 from cyberdrop_dl.sorter import Sorter
@@ -64,7 +63,7 @@ _console = _ConsoleWrapper()
 def _changelog() -> str:
     global _changelog_content  # noqa: PLW0603
     if not _changelog_content:
-        _changelog_content = asyncio.run(_fetch_changelog())
+        _changelog_content = aio.run(_fetch_changelog())
 
     return _changelog_content
 
@@ -94,7 +93,7 @@ def _scan_and_create_hashes(manager: Manager) -> None:
         default=manager.config.download_folder,
     )
     hasher = Hasher.create(manager.config, manager.database, path)
-    hash_stats = asyncio.run(hash_directory(hasher))
+    hash_stats = aio.run(hash_directory(hasher))
     stats.print(hash_stats)
     _enter_to_continue()
 
@@ -105,7 +104,7 @@ def _sort_files(manager: Manager) -> None:
         f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
     )
     if _ask_confirmation(explicit=True):
-        asyncio.run(sorter.run())
+        aio.run(sorter.run())
         _enter_to_continue()
 
 

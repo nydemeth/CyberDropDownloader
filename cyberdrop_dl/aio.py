@@ -8,11 +8,10 @@ import contextlib
 import dataclasses
 import functools
 import shutil
-import tempfile
 import time
 from pathlib import Path
 from stat import S_ISREG
-from typing import IO, TYPE_CHECKING, Any, AnyStr, Self, cast, overload
+from typing import IO, TYPE_CHECKING, Any, Self, cast, overload
 from weakref import WeakValueDictionary
 
 from aiolimiter.leakybucket import AsyncLimiter
@@ -422,6 +421,8 @@ async def get_size(path: Path) -> int | None:
 
 @contextlib.asynccontextmanager
 async def temp_dir() -> AsyncGenerator[Path]:
+    import tempfile
+
     temp_dir = await asyncio.to_thread(tempfile.TemporaryDirectory, prefix="cdl_", ignore_cleanup_errors=True)
     try:
         yield Path(temp_dir.name)
