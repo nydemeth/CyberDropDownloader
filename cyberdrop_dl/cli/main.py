@@ -17,22 +17,20 @@ from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
 from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
-from cyberdrop_dl.utils import cleanup
 
-logger = logging.getLogger(__name__)
 _INTERACTIVE: ContextVar[bool] = ContextVar("_INTERACTIVE", default=False)
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.utils import cleanup  # noqa: TC004
 
 
 async def _scrape(manager: Manager) -> None:
-    from cyberdrop_dl import ffmpeg, webhook
+    from cyberdrop_dl import ffmpeg
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
-    from cyberdrop_dl.updates import check_latest_pypi
-    from cyberdrop_dl.utils import apprise
 
     manager.log_config_settings()
     if not ffmpeg.is_installed():
@@ -45,27 +43,14 @@ async def _scrape(manager: Manager) -> None:
         async with ScrapeMapper(manager)() as scrape_mapper:
             stats = await scrape_mapper.run()
 
-        log_spacer()
         await _post_runtime(manager)
-
         stats_summary = manager.print_stats(stats)
-
-        log_spacer()
-        async with manager.http_client.create_aiohttp_session() as session:
-            await check_latest_pypi(session)
-        log_spacer()
-        logger.info("Closing program...")
-        logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
-
-        if webhook_url := manager.config.notifications.webhook:
-            await webhook.send_notification(webhook_url, stats_summary)
-
-        if urls := manager.config.notifications.apprise:
-            await apprise.send_notifications(urls, stats_summary)
+        await _check_for_updates(manager)
+        await _notify(manager.config, stats_summary)
 
 
 async def _post_runtime(manager: Manager) -> None:
-    """Actions to complete after main runtime, and before UI shutdown."""
+    log_spacer()
     logger.info("Running Post-Download Processes\n", extra={"color": "green"})
 
     if (
@@ -79,7 +64,31 @@ async def _post_runtime(manager: Manager) -> None:
     if manager.config.sort.enabled:
         await manager.sorter.run()
 
-    _check_partials_and_empty_folders(manager.config)
+    _perform_cleanup(manager.config)
+
+
+async def _check_for_updates(manager: Manager) -> None:
+    from cyberdrop_dl.updates import check_latest_pypi
+
+    log_spacer()
+    async with manager.http_client.create_aiohttp_session() as session:
+        await check_latest_pypi(session)
+
+
+async def _notify(config: Config, stats_summary: str) -> None:
+    log_spacer()
+    logger.info("Closing program...")
+    logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
+
+    if webhook_url := config.notifications.webhook:
+        from cyberdrop_dl import webhook
+
+        await webhook.notify(webhook_url, stats_summary)
+
+    if urls := config.notifications.apprise:
+        from cyberdrop_dl.utils import apprise
+
+        await apprise.notify(urls, stats_summary)
 
 
 def _show_interactive_ui(manager: Manager) -> None:
@@ -119,7 +128,7 @@ def _validate_inputs(args: ArgumentCollection) -> None:
         raise
 
 
-inputs_group = Group(sort_key=-1, validator=_validate_inputs)
+_inputs_group = Group(sort_key=-1, validator=_validate_inputs)
 
 
 def interactive(
@@ -143,7 +152,7 @@ def download(
     urls: Annotated[
         tuple[HttpURL, ...],
         Parameter(
-            group=inputs_group,
+            group=_inputs_group,
             help="URL(s) to download",
         ),
     ] = (),
@@ -152,7 +161,7 @@ def download(
     input_file: Annotated[
         Path | None,
         Parameter(
-            group=inputs_group,
+            group=_inputs_group,
             alias="-i",
             help="Text/HTML file with URL(s) to download",
             validator=cyclopts.validators.Path(exists=True, dir_okay=False),
@@ -207,7 +216,9 @@ def _check_ffmpeg(config: Config) -> None:
         raise CDLConfigRuntimeErrorsGroup("Some config options are impossible to fulfill", errors)
 
 
-def _check_partials_and_empty_folders(config: Config) -> None:
+def _perform_cleanup(config: Config) -> None:
+    from cyberdrop_dl.utils import cleanup
+
     logger.info("Checking for partial downloads...")
     if cleanup.has_partial_files(config.download_folder):
         logger.warning("There are partial downloads in the downloads folder")

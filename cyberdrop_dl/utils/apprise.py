@@ -41,7 +41,7 @@ def read_apprise_urls(file: Path) -> tuple[str, ...]:
         return ()
 
 
-async def send_notifications(urls: Sequence[AppriseURL], body: str) -> None:
+async def notify(urls: Sequence[AppriseURL], body: str) -> None:
     if not urls:
         return
 
