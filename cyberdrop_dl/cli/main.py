@@ -129,7 +129,7 @@ def interactive(
         Parameter(
             alias="-i",
             help="Text/HTML file with URL(s) to download",
-            validator=cyclopts.validators.Path(exists=True, dir_okay=False),
+            validator=cyclopts.validators.Path(dir_okay=False),
         ),
     ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
     cli: CLIargs | None = None,
