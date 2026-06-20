@@ -7,7 +7,6 @@ import logging
 import os
 import sys
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, final
 
 from pydantic.types import ByteSize
@@ -28,6 +27,7 @@ from cyberdrop_dl.utils import enter_context, get_system_information
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from pathlib import Path
 
     from cyberdrop_dl.cli.main import CLIargs
     from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
@@ -52,7 +52,7 @@ class Manager:
         self._appdata: AppData | None = appdata
         self.cli_args: CLIargs = cli_args or CLIargs()
         self._config: Config | None = config
-        self._input_file: Path | None = input_file
+        self.input_file: Path | None = input_file
 
         self._completed_downloads: list[MediaItem] = []
         self._hasher: Hasher | None = None
@@ -70,12 +70,6 @@ class Manager:
         if self._hasher is None:
             self._hasher = Hasher.create(self.config, self.database)
         return self._hasher
-
-    @property
-    def input_file(self) -> Path:
-        if self._input_file is None:
-            self._input_file = Path("URLs.txt").absolute()
-        return self._input_file
 
     @property
     def appdata(self) -> AppData:

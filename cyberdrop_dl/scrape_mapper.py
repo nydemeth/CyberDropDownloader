@@ -342,6 +342,7 @@ def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     if cli_args.links:
         return "--links (CLI args)", _load_cli_links(cli_args.links)
 
+    assert manager.input_file
     return str(manager.input_file), _load_urls_from_file(manager.input_file)
 
 

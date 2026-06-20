@@ -93,6 +93,7 @@ def _edit_config(manager: Manager) -> None:
 
 
 def _edit_urls(manager: Manager) -> None:
+    assert manager.input_file
     try:
         text_editor.open(manager.input_file)
     except ValueError as e:
