@@ -26,19 +26,47 @@ if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
 
 
-_CONSOLE = Console()
 _ERROR = Text("ERROR:  ", style="bold red")
 _WARNING = Text("WARNING:", style="bold yellow")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/Cyberdrop-DL/cyberdrop-dl/refs/heads/main/CHANGELOG.md"
-_changelog: str = ""
+_changelog_content: str = ""
 
 
-def changelog() -> str:
-    global _changelog  # noqa: PLW0603
-    if not _changelog:
-        _changelog = asyncio.run(_fetch_changelog())
+class _ConsoleWrapper:
+    def __init__(self, console: Console | None = None) -> None:
+        self.console: Console = console or Console()
 
-    return _changelog
+    def info(self, *objects: object) -> None:
+        self.console.print(*objects)
+
+    def warning(self, *objects: object) -> None:
+        self.console.print(_WARNING, *objects)
+
+    def error(self, *objects: object) -> None:
+        self.console.print(_ERROR, *objects)
+
+    def rule(self, color: str = "blue") -> None:
+        self.console.rule(style=color)
+
+    def line(self, count: int = 1) -> None:
+        self.console.line(count)
+
+    def input(self, msg: str = "") -> None:
+        self.console.input(msg)
+
+    def clear(self) -> None:
+        _ = os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
+
+
+_console = _ConsoleWrapper()
+
+
+def _changelog() -> str:
+    global _changelog_content  # noqa: PLW0603
+    if not _changelog_content:
+        _changelog_content = asyncio.run(_fetch_changelog())
+
+    return _changelog_content
 
 
 def run(manager: Manager) -> None:
@@ -73,8 +101,7 @@ def _scan_and_create_hashes(manager: Manager) -> None:
 
 def _sort_files(manager: Manager) -> None:
     sorter = Sorter.from_manager(manager)
-    _CONSOLE.print(
-        _WARNING,
+    _console.warning(
         f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
     )
     if _ask_confirmation(explicit=True):
@@ -83,7 +110,7 @@ def _sort_files(manager: Manager) -> None:
 
 
 def _should_create_config(file: Path) -> bool:
-    _CONSOLE.print(_WARNING, "A default config file does not exists")
+    _console.warning("A default config file does not exists")
     return _ask_confirmation(f"Do you want to create it at '{file}'?")
 
 
@@ -98,9 +125,9 @@ def _edit_config(manager: Manager) -> None:
     try:
         text_editor.open(file)
     except ValueError as e:
-        _CONSOLE.print(_ERROR, str(e))
+        _console.error(str(e))
     else:
-        _CONSOLE.print(_WARNING, "You must restart cyberdrop-dl for config changes to take effect")
+        _console.warning("You must restart cyberdrop-dl for config changes to take effect")
     finally:
         _enter_to_continue()
 
@@ -109,7 +136,7 @@ def _edit_urls(manager: Manager) -> None:
     try:
         text_editor.open(manager.input_file)
     except ValueError as e:
-        _CONSOLE.print(_ERROR, str(e))
+        _console.error(str(e))
 
     _enter_to_continue()
 
@@ -124,22 +151,22 @@ async def _fetch_changelog() -> str:
 
 
 def _view_changelog() -> None:
-    _clear_term()
+    _console.clear()
     try:
-        content = changelog()
+        content = _changelog()
     except Exception as e:  # noqa: BLE001
-        _CONSOLE.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION", repr(e))
+        _console.error("UNABLE TO GET CHANGELOG INFORMATION", repr(e))
         _enter_to_continue()
         return
 
-    with _CONSOLE.pager(links=True):
-        _CONSOLE.print(Markdown(content, justify="left"))
+    with _console.console.pager(links=True):
+        _console.info(Markdown(content, justify="left"))
 
 
 def _app_header(manager: Manager) -> None:
-    _clear_term()
-    _CONSOLE.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
-    _CONSOLE.rule(style="blue")
+    _console.clear()
+    _console.info(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
+    _console.rule()
     paths = {
         "Config file": manager.config.source,
         "Database file": manager.appdata.db_file,
@@ -150,9 +177,9 @@ def _app_header(manager: Manager) -> None:
     }
     padding = max(map(len, paths))
     for name, file in paths.items():
-        _CONSOLE.print(f"{name:<{padding}} :", hyperlink(file) if file else None)
+        _console.info(f"{name:<{padding}} :", hyperlink(file) if file else None)
 
-    _CONSOLE.line()
+    _console.line()
 
 
 def _ask_choices[T](choices: Iterable[T]) -> T:
@@ -229,7 +256,7 @@ def _ask_path(
                 validate(path)
 
         except OSError as e:
-            _CONSOLE.print(_ERROR, repr(e))
+            _console.error(repr(e))
         else:
             return path.resolve()
 
@@ -237,9 +264,5 @@ def _ask_path(
 def _enter_to_continue() -> None:
     if "pytest" in sys.modules:
         return
-    _CONSOLE.rule(style="blue")
-    _CONSOLE.input("Press <ENTER> to continue")
-
-
-def _clear_term() -> None:
-    _ = os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
+    _console.rule()
+    _console.input("Press <ENTER> to continue")
