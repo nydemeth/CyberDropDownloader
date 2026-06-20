@@ -11,16 +11,8 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 from pydantic.types import ByteSize
 
 from cyberdrop_dl import aio, env, filepath, storage
-from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
-from cyberdrop_dl.crawlers import create_crawlers
-from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
-from cyberdrop_dl.crawlers.crawler import ALLOW_NO_EXT
-from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
-from cyberdrop_dl.crawlers.http_direct import DirectHttpFileCrawler
-from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
-from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
-from cyberdrop_dl.downloader.hls import CONCURRENT_SEGMENTS
+from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.progress.scraping import ScrapingUI
@@ -31,8 +23,11 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence
     from pathlib import Path
 
+    from cyberdrop_dl.clients.jdownloader import JDownloader
     from cyberdrop_dl.config.crawlers import GenericCrawlers
     from cyberdrop_dl.crawlers.crawler import Crawler
+    from cyberdrop_dl.crawlers.http_direct import DirectHttpFileCrawler
+    from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
     from cyberdrop_dl.manager import Manager
 
 
@@ -48,8 +43,8 @@ def _filter_by_domain(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bo
 
 @dataclasses.dataclass(slots=True, eq=False)
 class CrawlerFactory:
-    manager: Manager
-    _instances: dict[type[Crawler], Crawler] = dataclasses.field(default_factory=dict)
+    manager: Manager = dataclasses.field(repr=False)
+    _instances: dict[type[Crawler], Crawler] = dataclasses.field(repr=False, default_factory=dict)
 
     def __getitem__[CrawlerT: Crawler](self, obj: type[CrawlerT]) -> CrawlerT:
         instance = self.get(obj)
@@ -90,9 +85,9 @@ class ScrapeStats:
 
 
 @dataclasses.dataclass(slots=True)
-class TaskGroups:
-    scrape: asyncio.TaskGroup
-    downloads: asyncio.TaskGroup
+class TaskGroups[T: asyncio.TaskGroup]:
+    scrape: T
+    downloads: T
 
 
 @dataclasses.dataclass(slots=True)
@@ -105,14 +100,18 @@ class ScrapeMapper:
     _direct_http: DirectHttpFileCrawler = dataclasses.field(init=False)
     _jdownloader: JDownloader = dataclasses.field(init=False)
     _real_debrid: RealDebridCrawler = dataclasses.field(init=False)
-    _task_groups: TaskGroups = dataclasses.field(
-        init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
+    _task_groups: TaskGroups[asyncio.TaskGroup] = dataclasses.field(
+        init=False,
+        default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup()),
     )
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
     _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
     _factory: CrawlerFactory = dataclasses.field(init=False)
     tui: ScrapingUI = dataclasses.field(init=False, default_factory=ScrapingUI)
     _done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}(seen_url={len(self._seen_urls):,}, done={self._done!r})>"
 
     def _scrape_queue(self) -> int:
         return sum(crawler.waiting_items for crawler in self._factory)
@@ -123,6 +122,10 @@ class ScrapeMapper:
         return total
 
     def __post_init__(self) -> None:
+        from cyberdrop_dl.clients.jdownloader import JDownloader
+        from cyberdrop_dl.crawlers.http_direct import DirectHttpFileCrawler
+        from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
+
         self._direct_http = DirectHttpFileCrawler(self.manager)
         self._jdownloader = JDownloader.from_config(self.manager.config)
         self._real_debrid = RealDebridCrawler(self.manager)
@@ -142,16 +145,23 @@ class ScrapeMapper:
         _ = self._task_groups.downloads.create_task(coro)
 
     def _init_crawlers(self) -> None:
+        crawlers = get_crawlers_mapping()
+        self.crawlers.update(crawlers)
 
-        self.crawlers.update(get_crawlers_mapping())
-
+        n_generics = 0
         for crawler in _create_generic_crawlers(self.manager.config.crawlers.generic):
+            n_generics += 1
             register_crawler(self.crawlers, crawler, from_user=True)
+
+        msg = f"Loaded {len(crawlers) + n_generics:,} crawlers ({len(crawlers):,} concrete, {n_generics:,} generic)"
+        logger.debug(msg)
 
         _disable_crawlers_by_config(self.crawlers, *self.manager.config.crawlers.disabled)
 
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
+        from cyberdrop_dl.downloader.hls import CONCURRENT_SEGMENTS
+
         assert not self._done.is_set()
         config = self.manager.config
         _ = filepath.MAX_FILE_LEN.set(config.max_file_name_length)
@@ -390,16 +400,12 @@ def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:
             logger.error(f"Unable to parse URL from input file: {link} {e:!r}")
 
 
-def get_crawlers_mapping(*, include_generics: bool = False) -> dict[str, type[Crawler]]:
-    from cyberdrop_dl.crawlers.crawler import Registry
-
-    Registry.import_all()
+def get_crawlers_mapping() -> dict[str, type[Crawler]]:
+    from cyberdrop_dl.crawlers import Registry
 
     crawlers_map: dict[str, type[Crawler]] = {}
 
-    crawlers = Registry.concrete | Registry.generic if include_generics else Registry.concrete
-
-    for crawler in sorted(crawlers, key=lambda c: c.NAME):
+    for crawler in sorted(Registry.get_crawlers(), key=lambda c: c.NAME):
         register_crawler(crawlers_map, crawler)
 
     copy = crawlers_map.copy()
@@ -440,15 +446,25 @@ def register_crawler(
 
 
 def _create_generic_crawlers(generics_config: GenericCrawlers) -> Generator[type[Crawler]]:
+    from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 
-    for domains, cls in (
-        (generics_config.wordpress_html, WordPressHTMLCrawler),
-        (generics_config.wordpress_media, WordPressMediaCrawler),
-        (generics_config.discourse, DiscourseCrawler),
-        (generics_config.chevereto, CheveretoCrawler),
-    ):
-        if domains:
-            yield from create_crawlers(domains, cls)
+    if generics_config.chevereto:
+        yield from create_crawlers(generics_config.chevereto, CheveretoCrawler)
+
+    if generics_config.wordpress_html:
+        from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler
+
+        yield from create_crawlers(generics_config.wordpress_html, WordPressHTMLCrawler)
+
+    if generics_config.wordpress_media:
+        from cyberdrop_dl.crawlers.wordpress import WordPressMediaCrawler
+
+        yield from create_crawlers(generics_config.wordpress_media, WordPressMediaCrawler)
+
+    if generics_config.discourse:
+        from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
+
+        yield from create_crawlers(generics_config.discourse, DiscourseCrawler)
 
 
 def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], *crawlers_to_disable: str) -> None:

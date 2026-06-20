@@ -7,7 +7,7 @@
     "justMyCode": false,
     "purpose": ["debug-test"],
     "args": [
-      "--download",
+      "download",
       "--ignore-history",
       "--dump-json",
       "--min-free-space",

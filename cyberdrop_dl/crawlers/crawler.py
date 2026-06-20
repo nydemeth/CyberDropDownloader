@@ -4,11 +4,8 @@ import asyncio
 import contextlib
 import dataclasses
 import functools
-import importlib
 import logging
-import pkgutil
 import re
-import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
 from contextvars import ContextVar
@@ -19,6 +16,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Se
 from cyberdrop_dl import aio, env, signature
 from cyberdrop_dl.clients.http import JSON_CHECK, HTTPClient, HTTPMixin, RequestContext
 from cyberdrop_dl.constants import CDL_USER_AGENT
+from cyberdrop_dl.crawlers import ALLOW_NO_EXT, SKIP_DOWNLOAD, Registry
 from cyberdrop_dl.crawlers._hls import HLSMixin
 from cyberdrop_dl.downloader.http import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
@@ -41,7 +39,6 @@ if TYPE_CHECKING:
     import datetime
     import http.cookies
     from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator, Iterable, Mapping
-    from types import ModuleType
 
     import yarl
     from bs4 import BeautifulSoup, Tag
@@ -61,11 +58,8 @@ type SupportedPaths = dict[str, OneOrTuple[str]]
 type SupportedDomains = OneOrTuple[str]
 type RateLimit = tuple[float, float]
 
-SKIP_DOWNLOAD: ContextVar[bool] = ContextVar("SKIP_DOWNLOAD", default=False)
-ALLOW_NO_EXT: ContextVar[bool] = ContextVar("ALLOW_NO_EXT", default=False)
-ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
 
-
+_ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
@@ -123,52 +117,6 @@ class SiteCookies:
     def keys(self) -> tuple[str, ...]:
         # dict protocol
         return tuple(self.raw.keys())
-
-
-class Registry:
-    abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    concrete: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    generic: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    names: ClassVar[set[str]] = set()
-    # generics are concrete crawlers that are not bound to any specific site
-    # They can be mapped to a site by just subclassing and setting a PRIMARY URL. ex: Chevereto
-
-    _loaded: bool = False
-
-    @classmethod
-    def import_all(cls) -> None:
-        if cls._loaded:
-            return
-
-        assert __package__
-        module = importlib.import_module(__package__)
-        errors = tuple(cls._import_from(module))
-        if errors:
-            error = RuntimeError("cyberdrop-dl installation is corrupted")
-            error.add_note("A complete uninstall and reinstall should fix crawler import errors")
-            raise BaseExceptionGroup("", (*errors, error))
-
-        cls._loaded = True
-
-    @classmethod
-    def _import_from(cls, module: ModuleType) -> Generator[ImportError]:
-        """Import every module (and sub-package) inside *pkg_name*."""
-        for sub_module_info in pkgutil.iter_modules(module.__path__, module.__name__ + "."):
-            try:
-                sub_module = cls._import_module(sub_module_info.name)
-            except ImportError as e:
-                yield e
-            else:
-                if sub_module_info.ispkg:
-                    yield from cls._import_from(sub_module)
-
-    @classmethod
-    def _import_module(cls, name: str, /) -> ModuleType:
-        try:
-            return importlib.import_module(name)
-        except ImportError as e:
-            msg = f"Could not import crawlers from module '{name}' [{e.msg}]"
-            raise ImportError(msg).with_traceback(e.__traceback__) from None
 
 
 class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
@@ -404,7 +352,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @final
     @property
     def origin(self) -> AbsoluteHttpURL:
-        return ORIGIN.get()
+        return _ORIGIN.get()
 
     @property
     def separate_posts(self) -> bool:
@@ -469,7 +417,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     def new_task_id(self, url: AbsoluteHttpURL):
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.log.info(f"Scraping {url}")
-        _ = ORIGIN.set(url.origin())
+        _ = _ORIGIN.set(url.origin())
         return self.scrape_mapper.tui.scrape.new(url)
 
     @final
@@ -961,7 +909,7 @@ class API(HTTPMixin, ABC):
     @final
     @property
     def origin(self) -> AbsoluteHttpURL:
-        return ORIGIN.get()
+        return _ORIGIN.get()
 
 
 def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:

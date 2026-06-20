@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl.__main__ import run_cdl
-from cyberdrop_dl.crawlers.crawler import SKIP_DOWNLOAD
+from cyberdrop_dl.crawlers import SKIP_DOWNLOAD
 
 if TYPE_CHECKING:
     from collections.abc import Generator

@@ -222,7 +222,7 @@ async def test_direct_http_crawler(running_manager: Manager, url: str, filename:
 
 
 def test_invalid_crawler_modules_should_raise_import_error() -> None:
-    from cyberdrop_dl.crawlers.crawler import Registry
+    from cyberdrop_dl.crawlers import Registry
 
     with pytest.raises(ImportError, match="Could not import crawlers from module"):
         Registry._import_module("cyberdrop_dl.crawler.fake_crawler_12345")
@@ -231,7 +231,8 @@ def test_invalid_crawler_modules_should_raise_import_error() -> None:
 def test_public_methods_have_error_handling_wrapper() -> None:
     import inspect
 
-    from cyberdrop_dl.crawlers.crawler import Crawler, Registry
+    from cyberdrop_dl.crawlers import Registry
+    from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.utils._errors import is_error_wrapped
 
     def returns_none(func: Callable[..., Any]) -> bool:
@@ -254,10 +255,8 @@ def test_public_methods_have_error_handling_wrapper() -> None:
             if name not in base_methods and not is_error_wrapped(method) and returns_none(method)
         )
 
-    Registry.import_all()
-
     errors: list[Exception] = []
-    for crawler in sorted(Registry.concrete | Registry.generic, key=lambda x: x.__name__):
+    for crawler in sorted(Registry.get_crawlers(generic=True), key=lambda x: x.__name__):
         unwrapped_methods = sorted(unsafe_public_methods(crawler))
         if unwrapped_methods:
             errors.append(ValueError(crawler.__name__, unwrapped_methods))

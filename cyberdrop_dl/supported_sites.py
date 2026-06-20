@@ -12,14 +12,11 @@ if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import CrawlerInfo
 
 
-def _gen_crawlers_info() -> Generator[CrawlerInfo]:
-    from cyberdrop_dl.crawlers.crawler import Registry
+def _gen_crawlers_info() -> list[CrawlerInfo]:
+    from cyberdrop_dl.crawlers import Registry
 
-    Registry.import_all()
-
-    crawlers = Registry.generic | Registry.concrete
-    infos = (crawler.INFO for crawler in crawlers)
-    yield from sorted(infos, key=lambda x: x.site.casefold())
+    infos = (crawler.INFO for crawler in Registry.get_crawlers(generic=True))
+    return sorted(infos, key=lambda x: x.site.casefold())
 
 
 def as_rich_table() -> Table:
