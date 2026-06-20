@@ -29,8 +29,7 @@ if TYPE_CHECKING:
 
 @Parameter(name="*")
 class CLIargs(ConfigModel):
-    links: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
-    "Link(s) to content to download (passing multiple links is supported"
+    urls: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
 
     config_file: Path | None = None
     "YAML file to use as config"
@@ -191,18 +190,13 @@ def download(
 
     from cyberdrop_dl.manager import Manager
 
-    appdata, config = _prepare_appdata_and_config(urls, cli, cli_overrides)
+    cli = cli or CLIargs()
+    cli.urls = urls
+    appdata, config = _prepare_appdata_and_config(cli, cli_overrides)
     _main(Manager(cli, appdata, config, input_file))
 
 
-def _prepare_appdata_and_config(
-    urls: tuple[HttpURL, ...] = (),
-    cli: CLIargs | None = None,
-    cli_overrides: Config | None = None,
-) -> tuple[AppData, Config]:
-
-    cli = cli or CLIargs()
-    cli.links = urls
+def _prepare_appdata_and_config(cli: CLIargs, cli_overrides: Config | None = None) -> tuple[AppData, Config]:
     appdata = AppData.create(
         config_file=cli.config_file,
         cache_file=cli.cache_file,

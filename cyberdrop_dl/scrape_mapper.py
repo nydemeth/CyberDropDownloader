@@ -339,8 +339,8 @@ class ScrapeMapper:
 
 def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     cli_args = manager.cli_args
-    if cli_args.links:
-        return "--links (CLI args)", _load_cli_links(cli_args.links)
+    if cli_args.urls:
+        return "--links (CLI args)", _load_cli_links(cli_args.urls)
 
     assert manager.input_file
     return str(manager.input_file), _load_urls_from_file(manager.input_file)
