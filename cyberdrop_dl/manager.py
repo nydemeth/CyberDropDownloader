@@ -29,7 +29,7 @@ from cyberdrop_dl.utils import enter_context, get_system_information
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from cyberdrop_dl.cli import CLIargs
+    from cyberdrop_dl.cli.main import CLIargs
     from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
     from cyberdrop_dl.url_objects import MediaItem
 
@@ -46,7 +46,7 @@ class Manager:
         config: Config | None = None,
         input_file: Path | None = None,
     ) -> None:
-        from cyberdrop_dl.cli import CLIargs
+        from cyberdrop_dl.cli.main import CLIargs
 
         self.cache: dict[str, Any] = {}
         self._appdata: AppData | None = appdata

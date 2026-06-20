@@ -1,28 +1,12 @@
-from pathlib import Path
-from typing import Annotated
-
 from cyclopts import Parameter
 from cyclopts.core import App
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.models import ConfigModel
-from cyberdrop_dl.models.types import HttpURL
-
-
-@Parameter(name="*")
-class CLIargs(ConfigModel):
-    links: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
-    "Link(s) to content to download (passing multiple links is supported"
-
-    config_file: Path | None = None
-    "YAML file to use as config"
-
-    cache_file: Path | None = None
-    "JSON file to use as cache"
-
-    database_file: Path | None = None
-    "SQLite file to use as database"
-
+from cyberdrop_dl.cli.clean_up import app as cleanup
+from cyberdrop_dl.cli.database import app as database
+from cyberdrop_dl.cli.hash import compute_hashes
+from cyberdrop_dl.cli.main import download, interactive
+from cyberdrop_dl.cli.report import report
 
 app = App(
     name="cyberdrop-dl",
@@ -33,6 +17,7 @@ app = App(
 )
 
 
+@app.command
 def show() -> None:
     """Show a list of all supported sites"""
     from cyberdrop_dl import supported_sites
@@ -41,17 +26,8 @@ def show() -> None:
     app.console.print(table)
 
 
-def register_commands() -> None:
-    from cyberdrop_dl.cli.clean_up import app as cleanup
-    from cyberdrop_dl.cli.database import app as database
-    from cyberdrop_dl.cli.hash import compute_hashes
-    from cyberdrop_dl.cli.main import download, interactive
-    from cyberdrop_dl.cli.report import report
-
-    for cmd in download, database, interactive, show, cleanup, report:
-        app.command(cmd)
-
-    app.command(compute_hashes, name="hash")
+for cmd in download, database, interactive, cleanup, report:
+    app.command(cmd)
 
 
-register_commands()
+app.command(compute_hashes, name="hash")

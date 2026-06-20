@@ -9,13 +9,12 @@ import cyclopts.validators
 from cyclopts import Parameter
 from cyclopts.group import Group
 
-from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.cli.compat import check_for_v9_files
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
-from cyberdrop_dl.models import merge_models
+from cyberdrop_dl.models import ConfigModel, merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
 from cyberdrop_dl.utils import cleanup
 
@@ -26,6 +25,21 @@ if TYPE_CHECKING:
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
+
+
+@Parameter(name="*")
+class CLIargs(ConfigModel):
+    links: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
+    "Link(s) to content to download (passing multiple links is supported"
+
+    config_file: Path | None = None
+    "YAML file to use as config"
+
+    cache_file: Path | None = None
+    "JSON file to use as cache"
+
+    database_file: Path | None = None
+    "SQLite file to use as database"
 
 
 async def _scrape(manager: Manager) -> None:
