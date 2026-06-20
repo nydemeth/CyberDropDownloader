@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 
 
 _CONSOLE = Console()
-_ERROR = Text("ERROR: ", style="bold red")
-_WARNING = Text("WARNING: ", style="bold yellow")
+_ERROR = Text("ERROR:  ", style="bold red")
+_WARNING = Text("WARNING:", style="bold yellow")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/Cyberdrop-DL/cyberdrop-dl/refs/heads/main/CHANGELOG.md"
 _changelog: str = ""
 
@@ -100,7 +100,7 @@ def _edit_config(manager: Manager) -> None:
     except ValueError as e:
         _CONSOLE.print(_ERROR, str(e))
     else:
-        _CONSOLE.print(_WARNING, "You must restart cyberdrop-dl for changes to the config to take effect")
+        _CONSOLE.print(_WARNING, "You must restart cyberdrop-dl for config changes to take effect")
     finally:
         _enter_to_continue()
 
@@ -110,7 +110,8 @@ def _edit_urls(manager: Manager) -> None:
         text_editor.open(manager.input_file)
     except ValueError as e:
         _CONSOLE.print(_ERROR, str(e))
-        _enter_to_continue()
+
+    _enter_to_continue()
 
 
 async def _fetch_changelog() -> str:
@@ -236,7 +237,8 @@ def _ask_path(
 def _enter_to_continue() -> None:
     if "pytest" in sys.modules:
         return
-    _ = input("Press <ENTER> to continue")
+    _CONSOLE.rule(style="blue")
+    _CONSOLE.input("Press <ENTER> to continue")
 
 
 def _clear_term() -> None:
