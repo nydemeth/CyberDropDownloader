@@ -1,4 +1,4 @@
 @echo off
 echo Starting cyberdrop-dl...
-cyberdrop-dl-patched
+cyberdrop-dl-patched interactive
 pause
