@@ -209,8 +209,11 @@ class ScrapeMapper:
         await self._direct_http.__async_post_init__()
 
         source_name, source = _source(self.manager)
+        stats = ScrapeStats(source_name)
+        if source is None:
+            return stats
+
         async with contextlib.aclosing(source) as items:
-            stats = ScrapeStats(source_name)
 
             async def wait_until_scrape_is_done() -> None:
                 _ = await self._done.wait()
@@ -337,13 +340,15 @@ class ScrapeMapper:
         return crawler
 
 
-def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
+def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem] | None]:
     cli_args = manager.cli_args
     if cli_args.urls:
         return "--links (CLI args)", _load_cli_links(cli_args.urls)
 
-    assert manager.input_file
-    return str(manager.input_file), _load_urls_from_file(manager.input_file)
+    if manager.input_file:
+        return str(manager.input_file), _load_urls_from_file(manager.input_file)
+
+    return "", None
 
 
 async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
