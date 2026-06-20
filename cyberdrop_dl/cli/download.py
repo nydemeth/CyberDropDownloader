@@ -21,6 +21,8 @@ from cyberdrop_dl.utils import cleanup
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from cyclopts.argument import ArgumentCollection
+
     from cyberdrop_dl.manager import Manager
 
 
@@ -103,7 +105,16 @@ def _main(manager: Manager) -> None:
         logger.info("Exiting (Ctrl + C) ...")
 
 
-inputs_group = Group(sort_key=-1, validator=cyclopts.validators.mutually_exclusive)
+def _validate_inputs(args: ArgumentCollection) -> None:
+    try:
+        cyclopts.validators.LimitedChoice(min=1, max=1)(args)
+    except ValueError as e:
+        if "choices may be specified." in str(e):
+            raise ValueError("You must provide either URLs or a file with `--input-file`") from None
+        raise
+
+
+inputs_group = Group(sort_key=-1, validator=_validate_inputs)
 
 
 def download(
@@ -128,6 +139,7 @@ def download(
     cli: CLIargs | None = None,
     cli_overrides: Config | None = None,
 ) -> None:
+    "Download URLs"
     check_for_v9_files()
     if input_file:
         input_file = input_file.resolve().absolute()

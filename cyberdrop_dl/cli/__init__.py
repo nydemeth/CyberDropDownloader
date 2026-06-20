@@ -51,7 +51,7 @@ def register_commands() -> None:
     from cyberdrop_dl.cli.hash import compute_hashes
     from cyberdrop_dl.cli.report import report
 
-    app.default(download)
+    app.command(download)
     app.command(database)
     app.command(show)
     app.command(cleanup)
