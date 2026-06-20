@@ -17,6 +17,7 @@ from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
 from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
+from cyberdrop_dl.utils import cleanup
 
 _INTERACTIVE: ContextVar[bool] = ContextVar("_INTERACTIVE", default=False)
 logger = logging.getLogger(__name__)
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.utils import cleanup  # noqa: TC004
 
 
 async def _scrape(manager: Manager) -> None:
@@ -217,7 +217,6 @@ def _check_ffmpeg(config: Config) -> None:
 
 
 def _perform_cleanup(config: Config) -> None:
-    from cyberdrop_dl.utils import cleanup
 
     logger.info("Checking for partial downloads...")
     if cleanup.has_partial_files(config.download_folder):
