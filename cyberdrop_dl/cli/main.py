@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path  # noqa: TC003
+from contextvars import ContextVar
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import cyclopts.validators
@@ -19,6 +20,7 @@ from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
 from cyberdrop_dl.utils import cleanup
 
 logger = logging.getLogger(__name__)
+_INTERACTIVE: ContextVar[bool] = ContextVar("_INTERACTIVE", default=False)
 
 if TYPE_CHECKING:
     from cyclopts.argument import ArgumentCollection
@@ -80,20 +82,23 @@ async def _post_runtime(manager: Manager) -> None:
     _check_partials_and_empty_folders(manager.config)
 
 
+def _show_interactive_ui(manager: Manager) -> None:
+    if not _INTERACTIVE.get():
+        return
+
+    from cyberdrop_dl import program_ui
+
+    program_ui.run(manager)
+
+
 def _main(manager: Manager) -> None:
-    from cyberdrop_dl import aio, program_ui
+    from cyberdrop_dl import aio
 
     set_console_level(manager.config.logs.effective_console_level)
     manager.appdata.mkdirs()
     try:
         with manager():
-            if (
-                not manager.cli_args.download
-                or not manager.config.ui.mode.is_fullscreen
-                or manager.cli_args.config_file
-                or manager.config.sort.enabled
-            ):
-                program_ui.run(manager)
+            _show_interactive_ui(manager)
 
             with setup_file_logging(
                 manager.config.logs.files.main,
@@ -115,6 +120,23 @@ def _validate_inputs(args: ArgumentCollection) -> None:
 
 
 inputs_group = Group(sort_key=-1, validator=_validate_inputs)
+
+
+def interactive(
+    *,
+    input_file: Annotated[
+        Path,
+        Parameter(
+            alias="-i",
+            help="Text/HTML file with URL(s) to download",
+            validator=cyclopts.validators.Path(exists=True, dir_okay=False),
+        ),
+    ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
+    cli: CLIargs | None = None,
+) -> None:
+    "Show a TUI menu equivalent to the CLI commands"
+    _INTERACTIVE.set(True)
+    download(input_file=input_file, cli=cli or CLIargs())
 
 
 def download(

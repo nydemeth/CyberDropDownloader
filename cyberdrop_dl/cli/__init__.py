@@ -23,9 +23,6 @@ class CLIargs(ConfigModel):
     database_file: Path | None = None
     "SQLite file to use as database"
 
-    download: bool = False
-    "Skips UI, start download immediately"
-
 
 app = App(
     name="cyberdrop-dl",
@@ -47,15 +44,13 @@ def show() -> None:
 def register_commands() -> None:
     from cyberdrop_dl.cli.clean_up import app as cleanup
     from cyberdrop_dl.cli.database import app as database
-    from cyberdrop_dl.cli.download import download
     from cyberdrop_dl.cli.hash import compute_hashes
+    from cyberdrop_dl.cli.main import download, interactive
     from cyberdrop_dl.cli.report import report
 
-    app.command(download)
-    app.command(database)
-    app.command(show)
-    app.command(cleanup)
-    app.command(report)
+    for cmd in download, database, interactive, show, cleanup, report:
+        app.command(cmd)
+
     app.command(compute_hashes, name="hash")
 
 

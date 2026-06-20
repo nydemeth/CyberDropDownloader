@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `--hashes` option to control which hashes CDL computes for new downloads
 - New `--database-file` option
 - New `--cache-file` option
+- New `download` subcommand (replaces the `--download` argument)
+- New `interactive` subcommand
 - New `hash` subcommand
 - New `report` subcommand
 
