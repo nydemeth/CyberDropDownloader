@@ -260,7 +260,7 @@ class InvalidYamlError(CDLBaseError):
         """This error will be thrown when a yaml config file has invalid values."""
         file = file.resolve()
         ui_failure = "Invalid YAML"
-        msg = f"File '{file}' is not a valid YAML file"
+        msg = f"'{file}' is not a valid YAML file"
 
         if mark := getattr(e, "problem_mark", None):
             msg += f"\n\nThe error was found in this line: \n {mark}"

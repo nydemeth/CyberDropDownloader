@@ -137,7 +137,7 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
         try:
             data = yaml.safe_load(content) or {}
         except yaml.YAMLError as e:
-            raise InvalidYamlError(file, e) from e
+            raise CDLConfigRuntimeErrorsGroup("Invalid YAML file", (InvalidYamlError(file, e),)) from None
 
         config = Config.model_validate(data)
         config._source = file
