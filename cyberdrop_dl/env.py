@@ -33,7 +33,7 @@ ENABLE_DEBUG_CRAWLERS = (
     _env("ENABLE_DEBUG_CRAWLERS", censor=True) == "d396ab8c85fcb1fecd22c8d9b58acf944a44e6d35014e9dd39e42c9a64091eda"
 )
 
-NO_PLUGINS = bool(_env("NO_PLUGINS"))
+APPDATA_FOLDER = _env("APPDATA_FOLDER")
 WRITE_JSON_UI = int(_env("WRITE_JSON_UI") or 0) or None
 EDITOR = os.getenv("EDITOR")
 

@@ -8,6 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, final
 
+from cyberdrop_dl import env
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -99,6 +101,9 @@ def _default_app_dir() -> AppDirs:
     if "pytest" in sys.modules:
         temp_dir = Path(tempfile.TemporaryDirectory(prefix="cdl_", delete=False).name)
         return AppDirs.from_path(temp_dir)
+
+    if env.APPDATA_FOLDER:
+        return AppDirs.from_path(_resolve(Path(env.APPDATA_FOLDER)))
 
     if os.name == "nt":
         return AppDirs.from_path(_windows_appdata())
