@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-PRIMARY_URL = AbsoluteHttpURL("https://motherless.com")
+PRIMARY_URL = AbsoluteHttpURL("https://motherless.xxx")
 MEDIA_INFO_JS_SELECTOR = "script:-soup-contains('__fileurl')"
 ITEM_SELECTOR = "div.thumb-container a.img-container"
 ITEM_TITLE_SELECTOR = "div.media-meta-title"
@@ -40,6 +40,7 @@ class MotherlessCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
     NEXT_PAGE_SELECTOR: ClassVar[str] = "div.pagination_link > a[rel=next]"
     DOMAIN: ClassVar[str] = "motherless"
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("motherless.com",)
     _RATE_LIMIT: ClassVar[RateLimit] = 2, 1
 
     async def fetch(self, scrape_item: ScrapeItem, collection_id: str = "") -> None:
