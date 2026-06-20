@@ -26,9 +26,9 @@ def _check_for_v9_database() -> None:
     )
     logger.warning(msg, db, default.db_file)
 
-    from cyberdrop_dl.program_ui import _ask_confirmation
+    from cyberdrop_dl.prompts import ask_confirmation
 
-    if _ask_confirmation("Do you want to move the database to the new default location?"):
+    if ask_confirmation("Do you want to move the database to the new default location?"):
         _move_database(db, default.db_file)
         return
 
