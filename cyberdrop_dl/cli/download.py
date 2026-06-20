@@ -9,14 +9,16 @@ from cyclopts import Parameter
 from cyclopts.group import Group
 
 from cyberdrop_dl.cli import CLIargs
+from cyberdrop_dl.cli.compat import check_for_v9_files
 from cyberdrop_dl.config import Config
+from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
 from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
 from cyberdrop_dl.utils import cleanup
 
-logger = logging.getLogger("cyberdrop_dl")
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
@@ -126,6 +128,7 @@ def download(
     cli: CLIargs | None = None,
     cli_overrides: Config | None = None,
 ) -> None:
+    check_for_v9_files()
     if input_file:
         input_file = input_file.resolve().absolute()
 
@@ -139,8 +142,7 @@ def _prepare_appdata_and_config(
     urls: tuple[HttpURL, ...] = (),
     cli: CLIargs | None = None,
     cli_overrides: Config | None = None,
-):
-    from cyberdrop_dl.config.appdata import AppData
+) -> tuple[AppData, Config]:
 
     cli = cli or CLIargs()
     cli.links = urls

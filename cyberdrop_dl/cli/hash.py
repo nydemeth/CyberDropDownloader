@@ -2,6 +2,8 @@ from typing import Literal
 
 from cyclopts.types import ExistingDirectory, ExistingFile
 
+from cyberdrop_dl.cli.compat import check_for_v9_files
+
 
 async def compute_hashes(
     folder: ExistingDirectory,
@@ -11,7 +13,7 @@ async def compute_hashes(
     hashes: tuple[Literal["xxh128", "md5", "sha256"], ...] = ("xxh128", "md5", "sha256"),
 ) -> None:
     """Compute and save hashes of every file inside `folder` (recursively)"""
-
+    check_for_v9_files()
     from cyberdrop_dl import stats
     from cyberdrop_dl.config.appdata import AppData
     from cyberdrop_dl.database import Database

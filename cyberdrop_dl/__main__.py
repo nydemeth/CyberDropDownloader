@@ -44,7 +44,7 @@ def run_cdl(args: Sequence[str] | None = None) -> int:
             app.console.print(_error_panel(tb))
         except CDLConfigRuntimeErrorsGroup as exc_group:
             tb = tracebacks.from_exception(exc_group, chain_traceback=False)
-            app.console.print(_error_panel(tb, title="Invalid Config"))
+            app.console.print(_error_panel(tb, title=exc_group.message or "Invalid Config"))
         else:
             return 0
 

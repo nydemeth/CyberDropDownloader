@@ -59,8 +59,8 @@ class Database:
         try:
             await self._create_tables()
         except Exception:
+            await self.conn.close()
             if self.is_new:
-                await self.conn.close()
                 try:
                     await aio.unlink(self.path, missing_ok=True)
                 except OSError:

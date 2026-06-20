@@ -59,14 +59,19 @@ class SchemaTable(Table, name="schema_version"):
         await self.db_conn.commit()
 
     def check_version(self) -> None:
+        error = None
         if self.version is None:
-            raise DatabaseError(f"Database has no schema information. Minimum required version: {REQUIRED_VERSION}")
-        if self.version < REQUIRED_VERSION:
-            raise DatabaseError(
-                f"Incompatible database version detected. Current: {self.version!s} , Minimum required: {REQUIRED_VERSION!s}"
+            error = DatabaseError(f"Database has no schema information. Minimum required version: {REQUIRED_VERSION}")
+        elif self.version < REQUIRED_VERSION:
+            error = DatabaseError(
+                f"Incompatible database version detected. Current: {self.version!s} - Required: {REQUIRED_VERSION!s}"
             )
-        if self.version >= CURRENT_VERSION:
+        elif self.version >= CURRENT_VERSION:
             self.up_to_date = True
+
+        if error:
+            error.add_note("Run 'cyberdrop-dl database transfer' to upgrade the database to a new version")
+            raise error
 
     async def update(self, version: Version = CURRENT_VERSION) -> None:
         query = "INSERT INTO schema_version (version) VALUES (?)"

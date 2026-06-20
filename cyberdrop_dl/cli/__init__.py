@@ -36,13 +36,20 @@ app = App(
 )
 
 
+def show() -> None:
+    """Show a list of all supported sites"""
+    from cyberdrop_dl import supported_sites
+
+    table = supported_sites.as_rich_table()
+    app.console.print(table)
+
+
 def register_commands() -> None:
     from cyberdrop_dl.cli.clean_up import app as cleanup
     from cyberdrop_dl.cli.database import app as database
     from cyberdrop_dl.cli.download import download
     from cyberdrop_dl.cli.hash import compute_hashes
     from cyberdrop_dl.cli.report import report
-    from cyberdrop_dl.cli.show import show
 
     app.default(download)
     app.command(database)
