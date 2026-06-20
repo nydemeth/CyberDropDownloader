@@ -34,7 +34,7 @@ crawlers:
 deep_scrape: false
 delete_empty_folders: true
 delete_partial_files: false
-download_folder: Downloads
+download_folder: downloads/cyberdrop-dl
 downloads:
   attempts: 2
   concurrency: 15
@@ -97,10 +97,10 @@ logs:
   console_level: null
   expire_after: null
   files:
-    download_errors: Download_Error_URLs.csv
+    download_errors: download_errors.csv
     main: downloader.log
-    scrape_errors: Scrape_Error_URLs.csv
-    unsupported: Unsupported_URLs.csv
+    scrape_errors: scrape_errors.csv
+    unsupported: unsupported.csv
   folder: null
   level: DEBUG
   rotate: false
@@ -134,7 +134,7 @@ sort:
     non_media: '{sort_dir}/{base_dir}/Other/{filename}{ext}'
     video: '{sort_dir}/{base_dir}/Videos/{filename}{ext}'
   input_folder: null
-  output_folder: Downloads/Cyberdrop-DL Sorted Downloads
+  output_folder: downloads/cyberdrop-dl sorted
 subfolders:
   create: true
   include:

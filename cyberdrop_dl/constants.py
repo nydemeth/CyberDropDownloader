@@ -3,12 +3,14 @@ from __future__ import annotations
 import datetime
 from contextvars import ContextVar
 from enum import Enum, StrEnum, auto
-from pathlib import Path
-from typing import final
+from typing import TYPE_CHECKING, final
 
 from rich.text import Text
 
 from cyberdrop_dl import __version__, env
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 STARTUP_TIME_UTC = datetime.datetime.now(datetime.UTC)
 LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
@@ -57,9 +59,6 @@ class BlockedDomains:
     if not env.ENABLE_TWITTER:
         partial_match = *partial_match, "twitter.com", ".x.com"
         exact_match = *exact_match, "x.com"
-
-
-DEFAULT_DOWNLOAD_PATH = Path("./Downloads")
 
 
 class HashType(StrEnum):

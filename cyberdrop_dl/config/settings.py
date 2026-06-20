@@ -9,13 +9,7 @@ from cyclopts import Parameter
 from pydantic import BaseModel, Field, PrivateAttr
 from pydantic.types import ByteSize, NonNegativeFloat, PositiveFloat, PositiveInt
 
-from cyberdrop_dl.constants import (
-    DEFAULT_DOWNLOAD_PATH,
-    LOGS_DATE_FORMAT,
-    LOGS_DATETIME_FORMAT,
-    CIStrEnum,
-    HashMode,
-)
+from cyberdrop_dl.constants import LOGS_DATE_FORMAT, LOGS_DATETIME_FORMAT, CIStrEnum, HashMode
 from cyberdrop_dl.models import ConfigGroup, ConfigModel
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
@@ -56,13 +50,13 @@ class LogFiles(ConfigModel):
     main: Annotated[LogPath, Parameter(alias="--log-file")] = Path("downloader.log")
     "Path of main log file"
 
-    download_errors: CSVPath = Path("Download_Error_URLs.csv")
+    download_errors: CSVPath = Path("download_errors.csv")
     "Save download errors to this file (MUST BE .csv)"
 
-    scrape_errors: CSVPath = Path("Scrape_Error_URLs.csv")
+    scrape_errors: CSVPath = Path("scrape_errors.csv")
     "Save scrape errors to this file (MUST BE .csv)"
 
-    unsupported: CSVPath = Path("Unsupported_URLs.csv")
+    unsupported: CSVPath = Path("unsupported.csv")
     "Save unsupported URLs to this file (MUST BE .csv)"
 
     @property
@@ -216,7 +210,7 @@ class Sort(ConfigGroup, name=None):
     input_folder: FalsyAsNone[Path] = None
     "Base folder to scan for files. Default to the same value as `--download-folder`"
 
-    output_folder: Path = DEFAULT_DOWNLOAD_PATH / "Cyberdrop-DL Sorted Downloads"
+    output_folder: Path = Path("downloads/cyberdrop-dl sorted")
     "Output path to place sorted files in"
 
     formats: SortFormats = Field(default_factory=SortFormats)

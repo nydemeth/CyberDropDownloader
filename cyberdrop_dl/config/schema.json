@@ -564,15 +564,15 @@
         },
         "download_errors": {
           "$ref": "#/$defs/CSVPath",
-          "default": "Download_Error_URLs.csv"
+          "default": "download_errors.csv"
         },
         "scrape_errors": {
           "$ref": "#/$defs/CSVPath",
-          "default": "Scrape_Error_URLs.csv"
+          "default": "scrape_errors.csv"
         },
         "unsupported": {
           "$ref": "#/$defs/CSVPath",
-          "default": "Unsupported_URLs.csv"
+          "default": "unsupported.csv"
         }
       },
       "title": "LogFiles",
@@ -710,7 +710,7 @@
           "default": null
         },
         "output_folder": {
-          "default": "Downloads/Cyberdrop-DL Sorted Downloads",
+          "default": "downloads/cyberdrop-dl sorted",
           "format": "path",
           "title": "Output Folder",
           "type": "string"
@@ -971,7 +971,7 @@
       "type": "boolean"
     },
     "download_folder": {
-      "default": "Downloads",
+      "default": "downloads/cyberdrop-dl",
       "format": "path",
       "title": "Download Folder",
       "type": "string"

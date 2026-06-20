@@ -10,7 +10,6 @@ from cyclopts.bind import normalize_tokens
 from pydantic import AfterValidator, BaseModel, Field, NonNegativeInt, PositiveInt
 
 from cyberdrop_dl.config.appdata import AppData
-from cyberdrop_dl.constants import DEFAULT_DOWNLOAD_PATH
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup, InvalidYamlError
 from cyberdrop_dl.models import ConfigModel
 from cyberdrop_dl.models.types import ByteSizeSerilized, FalsyAsTuple  # noqa: TC001
@@ -63,7 +62,7 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
     delete_partial_files: bool = False
     "Delete partial files after a run"
 
-    download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = DEFAULT_DOWNLOAD_PATH
+    download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = Path("downloads/cyberdrop-dl")
     "Base output path for all downloads"
 
     downloads: Downloads = Field(default_factory=Downloads)
