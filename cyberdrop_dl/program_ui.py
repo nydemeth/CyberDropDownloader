@@ -9,13 +9,19 @@ from rich.markdown import Markdown
 from cyberdrop_dl import __version__, aio, stats
 from cyberdrop_dl.hasher import Hasher, hash_directory
 from cyberdrop_dl.progress import hyperlink
-from cyberdrop_dl.prompts import ask_choices, ask_confirmation, ask_dir, console, enter_to_continue
+from cyberdrop_dl.prompts import (
+    ask_choices,
+    ask_confirmation,
+    ask_dir,
+    ask_should_create_config,
+    console,
+    enter_to_continue,
+)
 from cyberdrop_dl.sorter import Sorter
 from cyberdrop_dl.utils import text_editor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from cyberdrop_dl.manager import Manager
 
@@ -69,16 +75,11 @@ def _sort_files(manager: Manager) -> None:
         enter_to_continue()
 
 
-def _should_create_config(file: Path) -> bool:
-    console.warning("A default config file does not exists")
-    return ask_confirmation(f"Do you want to create it at '{file}'?")
-
-
 def _edit_config(manager: Manager) -> None:
     file = manager.config.source
     if file is None:
         file = manager.appdata.config_file
-        if not _should_create_config(file):
+        if not ask_should_create_config(file):
             return
         type(manager.config)().save_to(file)
 

@@ -118,10 +118,12 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
     def source(self) -> Path | None:
         return self._source
 
+    def dump_yaml(self) -> str:
+        return yaml.safe_dump(self.model_dump(mode="json"), default_flow_style=False)
+
     def save_to(self, file: Path) -> None:
         file.parent.mkdir(parents=True, exist_ok=True)
-        with file.open("w", encoding="utf8") as file_io:
-            yaml.safe_dump(self.model_dump(mode="json"), file_io, default_flow_style=False)
+        file.write_text(self.dump_yaml(), encoding="utf8")
 
     @staticmethod
     def from_file(file: Path, *, _save_if_not_found: bool = False) -> Config:

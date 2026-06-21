@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `--database-file` option
 - New `--cache-file` option
 - New `download` subcommand (replaces the `--download` argument)
+- New `config` subcommand
 - New `interactive` subcommand
 - New `hash` subcommand
 - New `report` subcommand

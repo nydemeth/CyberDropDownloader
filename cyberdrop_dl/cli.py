@@ -4,6 +4,7 @@ from cyclopts.help import DefaultFormatter
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.commands.clean_up import app as cleanup
+from cyberdrop_dl.commands.config import app as config
 from cyberdrop_dl.commands.database import app as database
 from cyberdrop_dl.commands.hash import compute_hashes
 from cyberdrop_dl.commands.report import report
@@ -28,7 +29,7 @@ def show() -> None:
     app.console.print(table)
 
 
-for cmd in download, database, interactive, cleanup, report:
+for cmd in download, database, interactive, cleanup, report, config:
     app.command(cmd)
 
 
