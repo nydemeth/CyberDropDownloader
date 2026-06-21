@@ -53,7 +53,7 @@ license-files = ["LICENSE"]
 maintainers = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
 readme = "README.md"
 requires-python = ">=3.12"
-version = "10.0.0rc3"
+version = "10.0.0rc4"
 
 [project.optional-dependencies]
 apprise = [
