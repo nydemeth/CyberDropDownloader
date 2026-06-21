@@ -10,7 +10,7 @@ import yaml
 from cyclopts.exceptions import UnknownOptionError
 from pydantic import BaseModel
 
-import cyberdrop_dl.cli.main
+import cyberdrop_dl.commands.scrape
 from cyberdrop_dl.config import Config, Files, _resolve_paths, merge_additive_args, settings
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.config.auth import Authentication, Notifications
@@ -154,7 +154,7 @@ class TestRuntimeLogsConfig:
 
 
 def test_default_config_does_not_need_ffmpeg() -> None:
-    cyberdrop_dl.cli.main._check_ffmpeg(Config())
+    cyberdrop_dl.commands.scrape._check_ffmpeg(Config())
 
 
 def test_media_durations_need_ffmpeg() -> None:
@@ -164,7 +164,7 @@ def test_media_durations_need_ffmpeg() -> None:
     assert duration.total_seconds() == 20
     assert config.filters.duration.needs_ffmpeg
     with pytest.raises(CDLConfigRuntimeErrorsGroup) as exc:
-        cyberdrop_dl.cli.main._check_ffmpeg(config)
+        cyberdrop_dl.commands.scrape._check_ffmpeg(config)
 
     assert len(exc.value.exceptions) == 1
     assert type(exc.value.exceptions[0]) is RuntimeError

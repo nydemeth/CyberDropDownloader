@@ -9,36 +9,23 @@ import cyclopts.validators
 from cyclopts import Parameter
 from cyclopts.group import Group
 
-from cyberdrop_dl.cli.compat import check_for_v9_files
+from cyberdrop_dl.commands import CLIarguments
+from cyberdrop_dl.commands.compat import check_for_v9_files
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
-from cyberdrop_dl.models import ConfigModel, merge_models
+from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
 from cyberdrop_dl.utils import cleanup
 
-_INTERACTIVE: ContextVar[bool] = ContextVar("_INTERACTIVE", default=False)
+INTERACTIVE: ContextVar[bool] = ContextVar("_INTERACTIVE", default=False)
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
-
-
-@Parameter(name="*")
-class CLIargs(ConfigModel):
-    urls: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
-
-    config_file: Path | None = None
-    "YAML file to use as config"
-
-    cache_file: Path | None = None
-    "JSON file to use as cache"
-
-    database_file: Path | None = None
-    "SQLite file to use as database"
 
 
 async def _scrape(manager: Manager) -> None:
@@ -105,7 +92,7 @@ async def _notify(config: Config, stats_summary: str) -> None:
 
 
 def _show_interactive_ui(manager: Manager) -> None:
-    if not _INTERACTIVE.get():
+    if not INTERACTIVE.get():
         return
 
     from cyberdrop_dl import program_ui
@@ -150,11 +137,11 @@ def interactive(
             validator=cyclopts.validators.Path(dir_okay=False),
         ),
     ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
-    cli: CLIargs | None = None,
+    cli: CLIarguments | None = None,
 ) -> None:
     "Show a TUI menu equivalent to the CLI commands"
-    _INTERACTIVE.set(True)
-    download(input_file=input_file, cli=cli or CLIargs())
+    INTERACTIVE.set(True)
+    download(input_file=input_file, cli=cli or CLIarguments())
 
 
 def download(
@@ -177,7 +164,7 @@ def download(
             validator=cyclopts.validators.Path(exists=True, dir_okay=False),
         ),
     ] = None,
-    cli: CLIargs | None = None,
+    cli: CLIarguments | None = None,
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
@@ -187,13 +174,13 @@ def download(
 
     from cyberdrop_dl.manager import Manager
 
-    cli = cli or CLIargs()
+    cli = cli or CLIarguments()
     cli.urls = urls
     appdata, config = _prepare_appdata_and_config(cli, cli_overrides)
     _main(Manager(cli, appdata, config, input_file))
 
 
-def _prepare_appdata_and_config(cli: CLIargs, cli_overrides: Config | None = None) -> tuple[AppData, Config]:
+def _prepare_appdata_and_config(cli: CLIarguments, cli_overrides: Config | None = None) -> tuple[AppData, Config]:
     appdata = AppData.create(
         config_file=cli.config_file,
         cache_file=cli.cache_file,

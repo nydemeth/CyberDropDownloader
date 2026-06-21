@@ -1,8 +1,8 @@
 import logging
-from pathlib import Path
 from typing import Annotated
 
-from cyclopts import App, Parameter, validators
+from cyclopts import App, Parameter
+from cyclopts.types import ResolvedExistingDirectory
 
 from cyberdrop_dl.utils import cleanup
 
@@ -13,17 +13,13 @@ logger = logging.getLogger(__name__)
 @app.command()
 def files(
     path: Annotated[
-        Path,
-        Parameter(
-            help="Path of the folder to clean up",
-            validator=validators.Path(exists=True, file_okay=False, dir_okay=True),
-        ),
+        ResolvedExistingDirectory,
+        Parameter(help="Path of the folder to clean up"),
     ],
     /,
 ) -> None:
-    """Delete partial (`.cdl_hls` and `.part`) files, empty folders and empty files inside `dir` (recursive)"""
+    """Delete partial (`.cdl_hls` and `.part`) files, empty folders and empty files inside `path` (recursive)"""
 
-    path = path.expanduser().resolve().absolute()
     logger.info("Deleting partial downloads...")
     cleanup.rm_partial_files(path)
     logger.info("Deleting empty files and folders...")

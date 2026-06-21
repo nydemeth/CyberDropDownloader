@@ -3,11 +3,11 @@ from cyclopts.core import App
 from cyclopts.help import DefaultFormatter
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.cli.clean_up import app as cleanup
-from cyberdrop_dl.cli.database import app as database
-from cyberdrop_dl.cli.hash import compute_hashes
-from cyberdrop_dl.cli.main import download, interactive
-from cyberdrop_dl.cli.report import report
+from cyberdrop_dl.commands.clean_up import app as cleanup
+from cyberdrop_dl.commands.database import app as database
+from cyberdrop_dl.commands.hash import compute_hashes
+from cyberdrop_dl.commands.report import report
+from cyberdrop_dl.commands.scrape import download, interactive
 
 app = App(
     name="cyberdrop-dl",

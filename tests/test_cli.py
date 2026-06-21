@@ -2,7 +2,7 @@ import pytest
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.__main__ import run_cdl
-from cyberdrop_dl.cli.report import generate_report
+from cyberdrop_dl.commands.report import generate_report
 
 
 @pytest.mark.parametrize(

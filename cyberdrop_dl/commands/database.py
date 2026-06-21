@@ -1,7 +1,9 @@
-from pathlib import Path
 from typing import Annotated
 
-from cyclopts import App, Parameter, validators
+from cyclopts import App, Parameter
+from cyclopts.types import ResolvedExistingFile
+
+from cyberdrop_dl.config.appdata import AppData
 
 app = App(name="database", help="Commands for managing the database")
 
@@ -9,11 +11,8 @@ app = App(name="database", help="Commands for managing the database")
 @app.command()
 def transfer(
     db_path: Annotated[
-        Path,
-        Parameter(
-            help="Path to the SQLite database file to migrate",
-            validator=validators.Path(exists=True, file_okay=True, dir_okay=False, ext=".db"),
-        ),
+        ResolvedExistingFile,
+        Parameter(help="Path to the SQLite database file to migrate"),
     ],
     *,
     force: Annotated[
@@ -27,3 +26,9 @@ def transfer(
     from cyberdrop_dl.database.transfer import run as transfer_db
 
     transfer_db(db_path, force=force)
+
+
+@app.command()
+def file() -> None:
+    "Show path of default database"
+    app.console.print(AppData.default().db_file)

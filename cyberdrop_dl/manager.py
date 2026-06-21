@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
-    from cyberdrop_dl.cli.main import CLIargs
+    from cyberdrop_dl.commands import CLIarguments
     from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
     from cyberdrop_dl.url_objects import MediaItem
 
@@ -41,16 +41,16 @@ logger = logging.getLogger(__name__)
 class Manager:
     def __init__(
         self,
-        cli_args: CLIargs | None = None,
+        cli_args: CLIarguments | None = None,
         appdata: AppData | None = None,
         config: Config | None = None,
         input_file: Path | None = None,
     ) -> None:
-        from cyberdrop_dl.cli.main import CLIargs
+        from cyberdrop_dl.commands import CLIarguments
 
         self.cache: dict[str, Any] = {}
         self._appdata: AppData | None = appdata
-        self.cli_args: CLIargs = cli_args or CLIargs()
+        self.cli_args: CLIarguments = cli_args or CLIarguments()
         self._config: Config | None = config
         self.input_file: Path | None = input_file
 
@@ -228,7 +228,7 @@ def _log_enviroment() -> None:
     )
 
 
-def _log_cli_args(cli_args: CLIargs) -> None:
+def _log_cli_args(cli_args: CLIarguments) -> None:
     logger.debug({"CLI options": cli_args.model_dump(mode="json")})
 
 
