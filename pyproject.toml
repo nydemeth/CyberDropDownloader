@@ -171,6 +171,7 @@ banned-from = [
     "base64",
     "cyberdrop_dl.aio",
     "cyberdrop_dl.stats",
+    "dataclasses",
     "datetime",
     "functools",
     "hashlib",

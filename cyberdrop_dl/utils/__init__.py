@@ -9,7 +9,6 @@ import sys
 from typing import TYPE_CHECKING, Any, cast
 
 from cyberdrop_dl.constants import MISSING
-from cyberdrop_dl.utils._dataclasses import DictDataclass, deserialize, filter_data  # noqa: F401
 from cyberdrop_dl.utils._errors import error_handling_context, error_handling_wrapper  # noqa: F401
 from cyberdrop_dl.utils._url import parse_http_url as parse_url  # noqa: F401
 from cyberdrop_dl.utils._url import remove_trailing_slash  # noqa: F401

@@ -17,7 +17,8 @@ from pydantic import Field
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.models import DeferedModel
-from cyberdrop_dl.utils import DictDataclass, error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
+from cyberdrop_dl.utils.dataclass import DictDataclass
 from cyberdrop_dl.utils.dates import to_timestamp
 
 if TYPE_CHECKING:

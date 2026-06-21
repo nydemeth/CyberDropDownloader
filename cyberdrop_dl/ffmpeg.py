@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypedDict
 from multidict import CIMultiDict, CIMultiDictProxy
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.utils import DictDataclass
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
