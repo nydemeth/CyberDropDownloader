@@ -227,19 +227,6 @@ class ScrapeError(CDLBaseError):
         return ScrapeError("Unknown yarl.URL path")
 
 
-class InvalidURLError(ScrapeError):
-    def __init__(
-        self,
-        message: str | None = None,
-        origin: HasParents | yarl.URL | None = None,
-        url: yarl.URL | str = "",
-    ) -> None:
-        """This error will be thrown when parsed yarl.URL is not valid."""
-        ui_failure = "Invalid yarl.URL"
-        self.url: yarl.URL | str = url
-        super().__init__(ui_failure, message=message, origin=origin)
-
-
 class LoginError(CDLBaseError):
     def __init__(self, message: str | None = None, *, origin: HasParents | yarl.URL | None = None) -> None:
         """This error will be thrown when the login fails for a site."""

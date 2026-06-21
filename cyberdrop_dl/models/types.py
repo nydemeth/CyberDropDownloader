@@ -1,17 +1,15 @@
 import datetime
 from pathlib import Path
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, Literal
 
 from pydantic import (
     AfterValidator,
-    AnyUrl,
     BeforeValidator,
     ByteSize,
     Field,
     PlainSerializer,
     PlainValidator,
     StringConstraints,
-    UrlConstraints,
     WithJsonSchema,
 )
 
@@ -49,20 +47,9 @@ type Timedelta = Annotated[
 type RemoveDuplicates[T: tuple[str, ...]] = Annotated[T, AfterValidator(remove_duplicates)]
 
 
-class _HttpURL(AnyUrl):
-    _constraints: ClassVar[UrlConstraints] = UrlConstraints(
-        max_length=2083,
-        allowed_schemes=["http", "https"],
-        host_required=True,
-    )
-
-
 # Only use this for config validation. To parse URLs internally while scraping, call `parse_url` directly
 type HttpURL = Annotated[
     AbsoluteHttpURL,
-    PlainValidator(
-        lambda x: to_yarl_url(_HttpURL(str(x))),
-        json_schema_input_type=str,
-    ),
+    PlainValidator(to_yarl_url, json_schema_input_type=str),
     WithJsonSchema({"type": "string", "format": "uri"}),
 ]

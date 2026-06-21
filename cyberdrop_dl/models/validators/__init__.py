@@ -27,10 +27,7 @@ def bytesize_to_str(value: _ConvertibleToInt) -> str:
 def to_yarl_url(value: object) -> yarl.URL:
     from cyberdrop_dl.utils import parse_url
 
-    try:
-        return parse_url(str(value))
-    except Exception as e:
-        raise ValueError(str(e)) from e
+    return parse_url(str(value))
 
 
 def to_bytesize(value: ByteSize | str | int) -> ByteSize:
