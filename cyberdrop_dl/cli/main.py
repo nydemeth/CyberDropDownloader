@@ -118,18 +118,14 @@ def _main(manager: Manager) -> None:
 
     set_console_level(manager.config.logs.effective_console_level)
     manager.appdata.mkdirs()
-    try:
-        with manager():
-            _show_interactive_ui(manager)
+    with manager():
+        _show_interactive_ui(manager)
 
-            with setup_file_logging(
-                manager.config.logs.files.main,
-                level=manager.config.logs.effective_level,
-            ):
-                aio.run(_scrape(manager))
-
-    except KeyboardInterrupt:
-        logger.info("Exiting (Ctrl + C) ...")
+        with setup_file_logging(
+            manager.config.logs.files.main,
+            level=manager.config.logs.effective_level,
+        ):
+            aio.run(_scrape(manager))
 
 
 def _validate_inputs(args: ArgumentCollection) -> None:

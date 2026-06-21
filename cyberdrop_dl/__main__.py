@@ -54,9 +54,7 @@ def main(args: Sequence[str] | None = None) -> None:
     try:
         raise SystemExit(run_cdl(args))
     except KeyboardInterrupt:
-        import logging
-
-        logging.getLogger("cyberdrop_dl").info("Exiting (Ctrl + C) ...")
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":
