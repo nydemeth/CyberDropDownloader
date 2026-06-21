@@ -1,5 +1,6 @@
 from cyclopts import Parameter
 from cyclopts.core import App
+from cyclopts.help import DefaultFormatter
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.cli.clean_up import app as cleanup
@@ -14,6 +15,7 @@ app = App(
     version=__version__,
     default_parameter=Parameter(negative_iterable=[], json_dict=False, json_list=False),
     result_action="return_value",
+    help_formatter=DefaultFormatter().with_newline_metadata(),
 )
 
 

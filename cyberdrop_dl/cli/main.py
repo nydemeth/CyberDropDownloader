@@ -167,6 +167,7 @@ def download(
         Parameter(
             group=_inputs_group,
             help="URL(s) to download",
+            show_default=False,
         ),
     ] = (),
     /,
