@@ -10,7 +10,8 @@ from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDoma
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.models import type_adapter
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import basic_auth, error_handling_wrapper
+from cyberdrop_dl.utils import basic_auth
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.clients.response import AbstractResponse

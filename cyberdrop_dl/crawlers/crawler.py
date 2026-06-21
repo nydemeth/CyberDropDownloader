@@ -24,16 +24,8 @@ from cyberdrop_dl.filepath import check_dangerous_filename, check_path_traversal
 from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
-from cyberdrop_dl.utils import (
-    css,
-    dates,
-    enter_context,
-    error_handling_context,
-    is_blob_or_svg,
-    m3u8,
-    parse_url,
-    unique,
-)
+from cyberdrop_dl.utils import css, dates, enter_context, is_blob_or_svg, m3u8, parse_url, unique
+from cyberdrop_dl.utils.errors import error_handling_context
 
 if TYPE_CHECKING:
     import datetime

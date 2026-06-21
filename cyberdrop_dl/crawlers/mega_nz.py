@@ -18,12 +18,13 @@ from cyberdrop_dl.downloader.mega_nz import MegaDownloader
 from cyberdrop_dl.exceptions import LoginError, PasswordProtectedError, ScrapeError
 from cyberdrop_dl.progress.scraping import show_msg
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
-from cyberdrop_dl.utils import error_handling_wrapper, m3u8
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from mega.filesystem import FileSystem
 
     from cyberdrop_dl.url_objects import ScrapeItem
+    from cyberdrop_dl.utils import m3u8
 
 
 class MegaNzCrawler(Crawler, db_path="path_qs_frag"):

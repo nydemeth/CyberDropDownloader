@@ -233,7 +233,7 @@ def test_public_methods_have_error_handling_wrapper() -> None:
 
     from cyberdrop_dl.crawlers import Registry
     from cyberdrop_dl.crawlers.crawler import Crawler
-    from cyberdrop_dl.utils._errors import is_error_wrapped
+    from cyberdrop_dl.utils.errors import is_error_wrapped
 
     def returns_none(func: Callable[..., Any]) -> bool:
         return_ = inspect.signature(func).return_annotation

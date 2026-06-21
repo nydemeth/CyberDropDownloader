@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_wrapper, extr_text, parse_url
+from cyberdrop_dl.utils import extr_text, parse_url
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

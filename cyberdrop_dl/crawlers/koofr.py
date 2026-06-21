@@ -8,7 +8,7 @@ from pydantic import dataclasses
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DownloadError, PasswordProtectedError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import error_handling_wrapper
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 _APP_URL = AbsoluteHttpURL("https://app.koofr.net")
 _PRIMARY_URL = AbsoluteHttpURL("https://koofr.eu")

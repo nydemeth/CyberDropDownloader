@@ -15,8 +15,9 @@ from bs4 import BeautifulSoup
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
+from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.dates import to_timestamp
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 from .models import HTML, Category, CategorySequence, ColletionType, Post, PostSequence, Tag, TagSequence
 

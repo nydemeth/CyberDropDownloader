@@ -13,8 +13,9 @@ from pydantic import BaseModel
 
 from cyberdrop_dl.crawlers._forum import MessageBoardCrawler
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.dates import to_timestamp
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 from .models import AvailablePost, PostStream, Topic
 

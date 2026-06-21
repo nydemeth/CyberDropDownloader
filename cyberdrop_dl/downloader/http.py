@@ -21,7 +21,8 @@ from cyberdrop_dl.exceptions import (
     RestrictedFiletypeError,
     SkipDownloadError,
 )
-from cyberdrop_dl.utils import dates, error_handling_wrapper
+from cyberdrop_dl.utils import dates
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     import datetime

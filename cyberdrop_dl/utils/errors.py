@@ -142,7 +142,7 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
             yield
         return
 
-    url: yarl.URL = item if type(item) is yarl.URL else item.url
+    url: yarl.URL = item if type(item) is yarl.URL else item.url  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
     app_error = origin = exc = None
     real_url: yarl.URL | str = ""
     try:
