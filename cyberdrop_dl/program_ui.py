@@ -88,8 +88,8 @@ def _edit_config(manager: Manager) -> None:
         console.error(str(e))
     else:
         console.warning("You must restart cyberdrop-dl for config changes to take effect")
-    finally:
-        enter_to_continue()
+
+    enter_to_continue()
 
 
 def _edit_urls(manager: Manager) -> None:

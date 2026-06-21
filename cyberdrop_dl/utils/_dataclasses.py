@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self
 
-from pydantic import TypeAdapter
 from typing_extensions import Sentinel
 
 if TYPE_CHECKING:
@@ -15,7 +14,6 @@ class _DataClass(Protocol):
 
 
 _FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
-_TYPE_ADAPTER_CACHE: dict[type[_DataClass], TypeAdapter[_DataClass]] = {}
 _MISSING = Sentinel("_MISSING")
 
 
@@ -38,16 +36,6 @@ def deserialize[DataClassT: _DataClass](
     if overrides:
         data.update(overrides)
     return cls(**data)
-
-
-def type_adapter[DataClassT: _DataClass](cls: type[DataClassT]) -> TypeAdapter[DataClassT]:
-    """Get a type adapter for this class.
-
-    Type adapters are cached. Multiple calls return the same adapter"""
-    if adapter := _TYPE_ADAPTER_CACHE.get(cls):
-        return adapter  # pyright: ignore[reportReturnType]
-    adapter = _TYPE_ADAPTER_CACHE[cls] = TypeAdapter(cls)
-    return adapter  # pyright: ignore[reportReturnType]
 
 
 class DictDataclass(_DataClass, Protocol):

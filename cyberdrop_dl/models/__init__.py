@@ -1,9 +1,10 @@
 """Pydantic models"""
 
+import functools
 from typing import Any, ClassVar, TypedDict
 
 from cyclopts import Parameter
-from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, model_serializer, model_validator
+from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, TypeAdapter, model_serializer, model_validator
 
 from cyberdrop_dl import env
 
@@ -125,3 +126,11 @@ def merge_models[M: BaseModel](default: M, new: M) -> M:
     new_dict = new.model_dump(exclude_unset=True)
     updated_dict = merge_dicts(default_dict, new_dict)
     return default.model_validate(updated_dict)
+
+
+@functools.cache
+def type_adapter[T](cls: type[T]) -> TypeAdapter[T]:
+    """Get a type adapter for this class.
+
+    Type adapters are cached. Multiple calls return the same adapter"""
+    return TypeAdapter(cls)
