@@ -34,6 +34,9 @@ logger = logging.getLogger("cyberdrop_dl")
 for noisy_package in ("aiosqlite", "markdown_it"):
     logging.getLogger(noisy_package).setLevel(logging.ERROR)
 
+if not env.DEBUG_MODE:
+    logging.getLogger("asyncio").setLevel(logging.ERROR)
+
 
 _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
