@@ -406,7 +406,7 @@ def _get_content_type(headers: Mapping[str, str]) -> str | None:
 
 def _get_last_modified(headers: Mapping[str, str]) -> int | None:
     if date_str := headers.get(hdrs.LAST_MODIFIED):
-        return dates.parse_http(date_str)
+        return int(dates.parse_http(date_str).timestamp())
 
 
 def _is_html_or_text(content_type: str) -> bool:

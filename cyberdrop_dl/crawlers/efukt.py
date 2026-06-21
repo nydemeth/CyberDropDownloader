@@ -9,6 +9,8 @@ from cyberdrop_dl.utils import css, dates, parse_url
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
+    import datetime
+
     from bs4 import BeautifulSoup
 
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -82,7 +84,7 @@ class EfuktCrawler(Crawler):
             return
 
         media = await self._request_media(scrape_item.url)
-        scrape_item.uploaded_at = dates.to_timestamp(media.date)
+        scrape_item.upload_date = media.date
         _, ext = self.get_filename_and_ext(media.src.name)
         title = f"{media.date.date().isoformat()} {media.title}"
         filename = self.create_custom_filename(title, ext, file_id=media.id)
@@ -98,7 +100,7 @@ class EfuktCrawler(Crawler):
 
 @dataclasses.dataclass(slots=True)
 class Media:
-    date: dates.UTCAwareDatetime
+    date: datetime.datetime
     title: str
     src: AbsoluteHttpURL
     id: str = ""

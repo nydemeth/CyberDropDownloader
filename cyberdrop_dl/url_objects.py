@@ -224,6 +224,16 @@ class ScrapeItem:
         self._uploaded_at = None if value is None else int(value)
 
     @property
+    def upload_date(self) -> datetime.datetime | None:
+        if self._uploaded_at:
+            return datetime.datetime.fromtimestamp(self._uploaded_at, tz=datetime.UTC)
+
+    @upload_date.setter
+    def upload_date(self, date: datetime.datetime | None) -> None:
+        if date:
+            self.uploaded_at = date.timestamp()
+
+    @property
     def type(self) -> ScrapeItemType | None:
         return self._type
 

@@ -16,7 +16,6 @@ from bs4 import BeautifulSoup
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.dates import to_timestamp
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 from .models import HTML, Category, CategorySequence, ColletionType, Post, PostSequence, Tag, TagSequence
@@ -131,7 +130,7 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
         if is_single_post:
             title = self.create_title(title)
         scrape_item.setup_as_album(title, album_id=post_id)
-        scrape_item.uploaded_at = to_timestamp(post.date_gmt)
+        scrape_item.upload_date = post.date_gmt
         if post.thumbnail:
             await self.direct_file(scrape_item, self.parse_url(post.thumbnail))
         return await self._post_content(scrape_item, post)

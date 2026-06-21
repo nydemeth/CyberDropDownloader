@@ -771,13 +771,13 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     @classmethod
-    def parse_date(cls, date_or_datetime: str, /, format: str) -> dates.TimeStamp:  # noqa: A002
-        return dates.to_timestamp(dates.parse_format(date_or_datetime, format))
+    def parse_date(cls, date_or_datetime: str, /, format: str) -> float:  # noqa: A002
+        return dates.parse_format(date_or_datetime, format).timestamp()
 
     @final
     @classmethod
-    def parse_iso_date(cls, date_or_datetime: str, /) -> dates.TimeStamp:
-        return dates.to_timestamp(dates.parse_iso(date_or_datetime))
+    def parse_iso_date(cls, date_or_datetime: str, /) -> float:
+        return dates.parse_iso(date_or_datetime).timestamp()
 
     async def _get_redirect_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         async with self.request(url) as resp:

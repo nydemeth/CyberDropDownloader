@@ -10,7 +10,6 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, dates
-from cyberdrop_dl.utils.dates import TimeStamp
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -69,7 +68,7 @@ class CardSet:
     name: str
     abbr: str
     set_series_code: str | None
-    release_date: TimeStamp
+    release_date: int
 
     @property
     def full_code(self) -> str:
@@ -208,7 +207,7 @@ def create_set(soup: Tag) -> CardSet:
     release_date: int | None = None
     for item in set_info["@graph"]:
         if iso_date := item.get("datePublished"):
-            release_date = dates.to_timestamp(dates.parse_iso(iso_date))
+            release_date = int(dates.parse_iso(iso_date).timestamp())
             break
 
     set_abbr = css.select_text(soup, Selector.SET_ABBR)
@@ -217,4 +216,4 @@ def create_set(soup: Tag) -> CardSet:
     if not release_date:
         raise ScrapeError(422)
 
-    return CardSet(set_name, set_abbr, set_series_code, TimeStamp(release_date))
+    return CardSet(set_name, set_abbr, set_series_code, release_date)

@@ -233,7 +233,7 @@ def parse_api_response(json_resp: dict[str, Any], access_details: AccessDetails)
         "url": create_api_url(new_access_details),
         "web_url": AbsoluteHttpURL(web_url_str, encoded="%" in web_url_str),
         "name": json_resp["name"],
-        "date": dates.to_timestamp(dates.parse_iso(date_str)),
+        "date": dates.parse_iso(date_str).timestamp(),
         "access_details": new_access_details,
     }
 

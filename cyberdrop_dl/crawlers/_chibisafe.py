@@ -18,7 +18,6 @@ from pydantic import Field
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.models import DeferedModel
 from cyberdrop_dl.utils.dataclass import DictDataclass
-from cyberdrop_dl.utils.dates import to_timestamp
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -84,7 +83,7 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
     @error_handling_wrapper
     def _handle_file(self, scrape_item: ScrapeItem, file: File) -> None:
         if scrape_item.uploaded_at is None and file.createdAt:
-            scrape_item.uploaded_at = to_timestamp(file.createdAt)
+            scrape_item.upload_date = file.createdAt
         name = file.original or file.name
         filename, ext = self.get_filename_and_ext(name)
         self.create_task(

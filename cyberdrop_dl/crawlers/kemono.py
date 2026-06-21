@@ -18,7 +18,6 @@ from cyberdrop_dl.models import DeferedModel
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.dates import to_timestamp
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -101,7 +100,7 @@ class Post(DeferedModel):
 
     def model_post_init(self, *_: object) -> None:
         if date := self.published or self.added:
-            self.timestamp = to_timestamp(date)
+            self.timestamp = int(date.timestamp())
 
     @property
     def all_files(self) -> Generator[File]:
