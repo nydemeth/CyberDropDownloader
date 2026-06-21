@@ -17,6 +17,8 @@ from weakref import WeakValueDictionary
 from aiolimiter.leakybucket import AsyncLimiter
 from typing_extensions import Sentinel
 
+from cyberdrop_dl.constants import MISSING
+
 if TYPE_CHECKING:
     from collections.abc import (
         AsyncGenerator,
@@ -32,9 +34,6 @@ if TYPE_CHECKING:
     from types import CoroutineType
 
     from _typeshed import OpenBinaryMode, OpenTextMode
-
-
-_MISSING = Sentinel("_MISSING")
 
 
 class _AsyncChain:
@@ -151,16 +150,16 @@ def cached[T](fn: Callable[[], Awaitable[T]], *, ttl: float | None = None) -> Ca
 
 def _perpetual_cache[T](fn: Callable[[], Awaitable[T]]) -> Callable[[], CoroutineType[Any, Any, T]]:
     lock = asyncio.Lock()
-    cached_value: T | Sentinel = _MISSING
+    cached_value: T | Sentinel = MISSING
 
     @functools.wraps(fn)
     async def wrapper() -> T:
         nonlocal cached_value
-        if cached_value is not _MISSING:
+        if cached_value is not MISSING:
             return cast("T", cached_value)
 
         async with lock:
-            if cached_value is not _MISSING:
+            if cached_value is not MISSING:
                 return cast("T", cached_value)
 
             cached_value = await fn()
@@ -219,8 +218,8 @@ class AsyncIteratorWrapper[T]:
     async def __anext__(self) -> T:
         if self._iterator is None:
             self._iterator = iter(await self._coro)
-        value = await asyncio.to_thread(next, self._iterator, _MISSING)
-        if value is _MISSING:
+        value = await asyncio.to_thread(next, self._iterator, MISSING)
+        if value is MISSING:
             raise StopAsyncIteration from None
 
         return cast("T", value)

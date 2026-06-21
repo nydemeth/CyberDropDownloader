@@ -1,12 +1,12 @@
 """Pydantic models"""
 
-import functools
 from typing import Any, ClassVar, TypedDict
 
 from cyclopts import Parameter
 from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, TypeAdapter, model_serializer, model_validator
 
 from cyberdrop_dl import env
+from cyberdrop_dl.utils import fast_cache
 
 
 class DeferedModel(
@@ -128,7 +128,7 @@ def merge_models[M: BaseModel](default: M, new: M) -> M:
     return default.model_validate(updated_dict)
 
 
-@functools.cache
+@fast_cache
 def type_adapter[T](cls: type[T]) -> TypeAdapter[T]:
     """Get a type adapter for this class.
 

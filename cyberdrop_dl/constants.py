@@ -6,6 +6,7 @@ from enum import Enum, StrEnum, auto
 from typing import TYPE_CHECKING, final
 
 from rich.text import Text
+from typing_extensions import Sentinel
 
 from cyberdrop_dl import __version__, env
 
@@ -17,6 +18,7 @@ LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = datetime.datetime.now().strftime(LOGS_DATETIME_FORMAT)  # noqa: DTZ005
 CDL_USER_AGENT = f"cyberdrop-dl/{__version__}"
+MISSING = Sentinel("MISSING")
 
 MAIN_LOG_FILE: ContextVar[Path] = ContextVar("MAIN_LOG_FILE")
 

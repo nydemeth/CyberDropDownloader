@@ -3,7 +3,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self
 
-from typing_extensions import Sentinel
+from cyberdrop_dl.constants import MISSING
+from cyberdrop_dl.utils import fast_cache
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -14,18 +15,15 @@ class _DataClass(Protocol):
 
 
 _FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
-_MISSING = Sentinel("_MISSING")
 
 
+@fast_cache
 def _fields(cls: type[_DataClass]) -> tuple[str, ...]:
-    if fields := _FIELDS_CACHE.get(cls):
-        return fields
-    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls) if f.init)
-    return fields
+    return tuple(f.name for f in dataclasses.fields(cls) if f.init)
 
 
 def filter_data[DataClassT: _DataClass](cls: type[DataClassT], data: Mapping[str, Any], /) -> dict[str, Any]:
-    return {name: value for name in _fields(cls) if (value := data.get(name, _MISSING)) is not _MISSING}
+    return {name: value for name in _fields(cls) if (value := data.get(name, MISSING)) is not MISSING}
 
 
 def deserialize[DataClassT: _DataClass](

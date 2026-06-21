@@ -6,15 +6,16 @@ import itertools
 import logging
 import platform
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from cyberdrop_dl.constants import MISSING
 from cyberdrop_dl.utils._dataclasses import DictDataclass, deserialize, filter_data  # noqa: F401
 from cyberdrop_dl.utils._errors import error_handling_context, error_handling_wrapper  # noqa: F401
 from cyberdrop_dl.utils._url import parse_http_url as parse_url  # noqa: F401
 from cyberdrop_dl.utils._url import remove_trailing_slash  # noqa: F401
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Callable, Generator, Iterable
     from contextvars import ContextVar
 
 
@@ -104,3 +105,18 @@ def unique[T](itr: Iterable[T], /) -> Generator[T]:
         if ele not in seen:
             seen.add(ele)
             yield ele
+
+
+def fast_cache[T, R](fn: Callable[[T], R]) -> Callable[[T], R]:
+    "Like functools.cache but for single argument funciton and without all the stats logic"
+    cache: dict[T, R] = {}
+
+    def compute(obj: T) -> R:
+        val = cache.get(obj, MISSING)
+        if val is not MISSING:
+            return cast("R", val)
+
+        cache[obj] = val = fn(obj)
+        return val
+
+    return compute
