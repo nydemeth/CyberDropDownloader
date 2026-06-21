@@ -16,7 +16,7 @@ from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.progress.scraping import ScrapingUI
-from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import remove_trailing_slash
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.clients.jdownloader import JDownloader
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.config.crawlers import GenericCrawlers
     from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.crawlers.http_direct import DirectHttpFileCrawler
@@ -224,9 +225,9 @@ class ScrapeMapper:
 
             self.create_download_task(wait_until_scrape_is_done())
 
-            children_limits = tuple(self.manager.config.max_children)
+            max_children = _build_max_children_map(self.manager.config)
             async for item in items:
-                item.children_limits = children_limits
+                item.max_children = max_children
                 item.download_folder = self.manager.config.download_folder
                 if self._should_scrape(item):
                     stats.update(item)
@@ -516,3 +517,13 @@ def _best_match[T](current_map: dict[str, T], domain: str) -> T | None:
     else:
         current_map[domain] = found = current_map[best_match]
         return found
+
+
+def _build_max_children_map(config: Config) -> dict[ScrapeItemType, int]:
+    max_children = config.max_children
+    return {
+        ScrapeItemType.FORUM: max_children.forum,
+        ScrapeItemType.FORUM_POST: max_children.forum_post,
+        ScrapeItemType.PROFILE: max_children.profile,
+        ScrapeItemType.ALBUM: max_children.album,
+    }

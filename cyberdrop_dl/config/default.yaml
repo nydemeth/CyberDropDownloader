@@ -104,7 +104,11 @@ logs:
   folder: null
   level: DEBUG
   rotate: false
-max_children: []
+max_children:
+  album: 0
+  forum: 0
+  forum_post: 0
+  profile: 0
 max_file_name_length: 95
 max_folder_name_length: 60
 max_thread_depth: 0

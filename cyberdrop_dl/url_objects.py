@@ -18,7 +18,7 @@ from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.filepath import sanitize_folder
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Sequence
+    from collections.abc import Generator, Iterable, Mapping, Sequence
 
     @final
     class AbsoluteHttpURL(yarl.URL):
@@ -113,8 +113,8 @@ def is_absolute_http_url(url: yarl.URL) -> TypeIs[AbsoluteHttpURL]:
 class ScrapeItemType(IntEnum):
     FORUM = 0
     FORUM_POST = 1
-    FILE_HOST_PROFILE = 2
-    FILE_HOST_ALBUM = 3
+    PROFILE = 2
+    ALBUM = 3
 
 
 logger = logging.getLogger(__name__)
@@ -199,7 +199,7 @@ class ScrapeItem:
     folders: list[str] = dataclasses.field(default_factory=list)
     parents: list[AbsoluteHttpURL] = dataclasses.field(default_factory=list)
     parent_threads: set[AbsoluteHttpURL] = dataclasses.field(default_factory=set)
-    children_limits: tuple[int, ...] = dataclasses.field(default_factory=tuple)
+    max_children: Mapping[ScrapeItemType, int] | None = None
     password: str | None = None
 
     _children_count: int = 0
@@ -241,11 +241,12 @@ class ScrapeItem:
     def type(self, item_type: ScrapeItemType | None) -> None:
         self._type = item_type
         self._children_count = self._children_limit = 0
-        if item_type is None:
+        if item_type is None or not self.max_children:
             return
+
         try:
-            self._children_limit = self.children_limits[item_type]
-        except (IndexError, TypeError):
+            self._children_limit = self.max_children[item_type]
+        except LookupError:
             pass
 
     @property
@@ -326,10 +327,10 @@ class ScrapeItem:
         return self.create_new(url, part_of_album=True, add_parent=True)
 
     def setup_as_album(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, ScrapeItemType.FILE_HOST_ALBUM, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.ALBUM, album_id=album_id)
 
     def setup_as_profile(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, ScrapeItemType.FILE_HOST_PROFILE, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.PROFILE, album_id=album_id)
 
     def setup_as_forum(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
         return self.setup_as(title, ScrapeItemType.FORUM, album_id=album_id)

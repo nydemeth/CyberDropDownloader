@@ -50,7 +50,7 @@ class ToonilyCrawler(Crawler):
 
         *_, series_name, chapter_title = (css.text(bc) for bc in soup.select(Selector.NAV_BREADCUMBS))
 
-        if scrape_item.type != ScrapeItemType.FILE_HOST_PROFILE:
+        if scrape_item.type != ScrapeItemType.PROFILE:
             series_title = self.create_title(series_name)
             scrape_item.append_folders(series_title)
 

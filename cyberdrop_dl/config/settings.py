@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated, ClassVar, Literal, override
 
 from cyclopts import Parameter
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, NonNegativeInt, PrivateAttr
 from pydantic.types import ByteSize, NonNegativeFloat, PositiveFloat, PositiveInt
 
 from cyberdrop_dl.constants import LOGS_DATE_FORMAT, LOGS_DATETIME_FORMAT, CIStrEnum, HashMode
@@ -349,3 +349,14 @@ class UIOptions(ConfigGroup):
     portrait: bool = False
     "force CDL to run with a vertical layout"
     refresh_rate: PositiveFloat = 10.0
+
+
+class MaxChildren(ConfigGroup, name=None):
+    forum: NonNegativeInt = 0
+    "Do not scrape more that this number of URLs inside a forum thread"
+    forum_post: NonNegativeInt = 0
+    "Do not scrape more that this number of URLs inside an individual a forum post"
+    profile: NonNegativeInt = 0
+    "Do not scrape more that this number of URLs in a profile"
+    album: NonNegativeInt = 0
+    "Do not scrape more that this number of URLs in a album"

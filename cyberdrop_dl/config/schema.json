@@ -339,13 +339,6 @@
         }
       ]
     },
-    "FalsyAsTuple_Annotated_int__Ge__": {
-      "items": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "type": "array"
-    },
     "FalsyAsTuple_HttpURL_": {
       "items": {
         "$ref": "#/$defs/HttpURL"
@@ -621,6 +614,37 @@
         }
       },
       "title": "Logs",
+      "type": "object"
+    },
+    "MaxChildren": {
+      "additionalProperties": false,
+      "properties": {
+        "forum": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Forum",
+          "type": "integer"
+        },
+        "forum_post": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Forum Post",
+          "type": "integer"
+        },
+        "profile": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Profile",
+          "type": "integer"
+        },
+        "album": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Album",
+          "type": "integer"
+        }
+      },
+      "title": "MaxChildren",
       "type": "object"
     },
     "Network": {
@@ -1002,8 +1026,7 @@
       "$ref": "#/$defs/Logs"
     },
     "max_children": {
-      "$ref": "#/$defs/FalsyAsTuple_Annotated_int__Ge__",
-      "default": []
+      "$ref": "#/$defs/MaxChildren"
     },
     "max_file_name_length": {
       "default": 95,

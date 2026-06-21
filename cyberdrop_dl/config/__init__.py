@@ -12,14 +12,14 @@ from pydantic import AfterValidator, BaseModel, Field, NonNegativeInt, PositiveI
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup, InvalidYamlError
 from cyberdrop_dl.models import ConfigModel
-from cyberdrop_dl.models.types import ByteSizeSerilized, FalsyAsTuple  # noqa: TC001
+from cyberdrop_dl.models.types import ByteSizeSerilized  # noqa: TC001
 from cyberdrop_dl.models.validators import to_bytesize
 from cyberdrop_dl.utils import cleanup
 
 from .auth import Authentication, Notifications
 from .crawlers import Crawlers
 from .filters import Filters
-from .settings import Downloads, Hashing, Jdownloader, Logs, Network, Sort, SubFolders, UIOptions
+from .settings import Downloads, Hashing, Jdownloader, Logs, MaxChildren, Network, Sort, SubFolders, UIOptions
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -76,7 +76,7 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
 
     jdownloader: Jdownloader = Field(default_factory=Jdownloader)
     logs: Logs = Field(default_factory=Logs)
-    max_children: FalsyAsTuple[NonNegativeInt] = ()
+    max_children: MaxChildren = Field(default_factory=MaxChildren)
     "Limit the number of items to scrape per category"
 
     max_file_name_length: PositiveInt = 95

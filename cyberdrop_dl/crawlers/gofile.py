@@ -260,9 +260,7 @@ def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:
 
 def _has_single_not_nested_file(scrape_item: ScrapeItem, folder: Folder) -> bool:
     return (
-        folder["childrenCount"] == 1
-        and folder["name"] == folder["code"]
-        and scrape_item.type != ScrapeItemType.FILE_HOST_ALBUM
+        folder["childrenCount"] == 1 and folder["name"] == folder["code"] and scrape_item.type != ScrapeItemType.ALBUM
     )
 
 
