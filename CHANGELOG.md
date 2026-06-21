@@ -22,7 +22,7 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## UNRELEASED
+## [10.0.0] - UNRELEASED
 
 ⚠️**IMPORTANT**
 
@@ -65,8 +65,8 @@ The following options, which were CLI only arguments, now have dedicated config 
 
 Several config options have new names:
 
-- `--disable-crawlers`-> `--crawlers.disabled`
-- `--disable-file-timestamps`-> `--mtime`
+- `--disable-crawlers` -> `--crawlers.disabled`
+- `--disable-file-timestamps` -> `--mtime`
 - `--maximum-audio-duration` -> `--audio.duration.max`
 - `--maximum-image-size` -> `--image.size.max`
 - `--maximum-number-of-children` -> `--max-children`
@@ -89,7 +89,7 @@ Several config options have new names:
 - `--jdownloader-autostart` -> `--jdownloader.autostart`
 - `--jdownloader-download-dir` -> `--jdownloader.download-dir`
 - `--jdownloader-whitelist` -> `--jdownloader.whitelist`
-- `--send-unsupported-to-jdownloader`-> `--jdownloader` / `--no-jdownloader`
+- `--send-unsupported-to-jdownloader` -> `--jdownloader` / `--no-jdownloader`
 
 #### Sorting
 
