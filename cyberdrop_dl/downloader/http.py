@@ -63,6 +63,42 @@ async def _exclusive_lock(media_item: MediaItem) -> AsyncGenerator[None]:
 
 
 @dataclasses.dataclass(slots=True)
+class Capacity:
+    limit: int | None = None
+    waiting: int = 0
+    condition: asyncio.Condition = dataclasses.field(default_factory=asyncio.Condition)
+    _should_warn: bool = True
+
+    @property
+    def overloaded(self) -> bool:
+        if self.limit is None:
+            return False
+        return self.waiting > max((self.limit * 1.2), self.limit + 10)
+
+    async def _wait(self) -> None:
+        if self.limit is None or self.waiting <= self.limit:
+            return
+
+        async with self.condition:
+            await self.condition.wait()
+
+    async def wait(self, domain: str) -> None:
+        overloaded = self.overloaded
+        if overloaded and self._should_warn:
+            logger.warning(
+                "[%s] Too many downloads queued (%s+). All scraping has been temporarily paused",
+                domain,
+                self.limit,
+            )
+            self._should_warn = False
+
+        await self._wait()
+        if overloaded and not self.overloaded:
+            logger.debug("[%s] Resuming scraping", domain)
+            self._should_warn = True
+
+
+@dataclasses.dataclass(slots=True)
 class Downloader:
     """Hight level class that handles limiters, database checks, skip by config checks and retries"""
 
@@ -72,13 +108,13 @@ class Downloader:
     max_attempts: int = dataclasses.field(init=False)
 
     _slots: int | None = None
-    _waiting_items: int = dataclasses.field(init=False, default=0)
     _processed_items: set[str] = dataclasses.field(init=False, default_factory=set)
     _current_attempt_filesize: dict[str, int] = dataclasses.field(init=False, default_factory=dict)
     _semaphore: asyncio.Semaphore = dataclasses.field(init=False)
     _server_locks: aio.WeakAsyncLocks[str] = dataclasses.field(
         init=False, default_factory=aio.WeakAsyncLocks, repr=False
     )
+    capacity: Capacity = dataclasses.field(default_factory=Capacity)
 
     def __post_init__(self) -> None:
         self.slots = self._slots
@@ -86,7 +122,7 @@ class Downloader:
 
     @property
     def waiting_items(self) -> int:
-        return self._waiting_items
+        return self.capacity.waiting
 
     @property
     def slots(self) -> int | None:
@@ -105,6 +141,7 @@ class Downloader:
         upper_limit = self.config.downloads.concurrency_per_domain
         self._slots = min(new_limit or upper_limit, upper_limit)
         self._semaphore = asyncio.Semaphore(self._slots)
+        self.capacity.limit = min(self._slots * 10, 50)
 
     @property
     def client(self) -> DownloadClient:
@@ -169,10 +206,11 @@ class Downloader:
             yield
             return
 
-        self._waiting_items += 1
-        async with self.lock(media_item.real_url):
+        self.capacity.waiting += 1
+        async with self.lock(media_item.real_url), self.capacity.condition:
             self._processed_items.add(media_item.db_path)
-            self._waiting_items -= 1
+            self.capacity.condition.notify()
+            self.capacity.waiting -= 1
             yield
 
     async def __download_file(self, media_item: MediaItem) -> bool | None:

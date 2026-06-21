@@ -265,6 +265,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if impersonate is None:
             impersonate = self._IMPERSONATE
 
+        await self.downloader.capacity.wait(self.FOLDER_DOMAIN)
+
         with enter_context(JSON_CHECK, self.__json_resp_check__):
             async with (
                 self.client.rate_limits[self.DOMAIN],
