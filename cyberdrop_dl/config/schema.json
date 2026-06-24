@@ -66,6 +66,26 @@
       "title": "Authentication",
       "type": "object"
     },
+    "BandcampConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "formats": {
+          "$ref": "#/$defs/RemoveDuplicates_tuple_Literal__mp3-320____mp3____aac-hi____wav____flac____vorbis____aiff____alas____________",
+          "default": [
+            "mp3-320",
+            "mp3",
+            "aac-hi",
+            "wav",
+            "flac",
+            "vorbis",
+            "aiff",
+            "alas"
+          ]
+        }
+      },
+      "title": "BandcampConfig",
+      "type": "object"
+    },
     "ByteSizeSerilized": {
       "anyOf": [
         {
@@ -82,12 +102,30 @@
       "format": "path",
       "type": "string"
     },
+    "ClypitConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "prefer_mp3": {
+          "default": false,
+          "title": "Prefer Mp3",
+          "type": "boolean"
+        }
+      },
+      "title": "ClypitConfig",
+      "type": "object"
+    },
     "Crawlers": {
       "additionalProperties": false,
       "properties": {
         "disabled": {
           "$ref": "#/$defs/RemoveDuplicates_FalsyAsTuple_NonEmptyStr__",
           "default": []
+        },
+        "bandcamp": {
+          "$ref": "#/$defs/BandcampConfig"
+        },
+        "clypit": {
+          "$ref": "#/$defs/ClypitConfig"
         },
         "generic": {
           "$ref": "#/$defs/GenericCrawlers"
@@ -98,8 +136,8 @@
         "coomer": {
           "$ref": "#/$defs/KemonoConfig"
         },
-        "nekohouse": {
-          "$ref": "#/$defs/KemonoConfig"
+        "one_pace": {
+          "$ref": "#/$defs/OnePaceConfig"
         },
         "tiktok": {
           "$ref": "#/$defs/TikTokConfig"
@@ -718,8 +756,36 @@
       "title": "Notifications",
       "type": "object"
     },
+    "OnePaceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "prefer_dub": {
+          "default": false,
+          "title": "Prefer Dub",
+          "type": "boolean"
+        }
+      },
+      "title": "OnePaceConfig",
+      "type": "object"
+    },
     "RemoveDuplicates_FalsyAsTuple_NonEmptyStr__": {
       "$ref": "#/$defs/FalsyAsTuple_NonEmptyStr_"
+    },
+    "RemoveDuplicates_tuple_Literal__mp3-320____mp3____aac-hi____wav____flac____vorbis____aiff____alas____________": {
+      "items": {
+        "enum": [
+          "mp3-320",
+          "mp3",
+          "aac-hi",
+          "wav",
+          "flac",
+          "vorbis",
+          "aiff",
+          "alas"
+        ],
+        "type": "string"
+      },
+      "type": "array"
     },
     "Sort": {
       "additionalProperties": false,

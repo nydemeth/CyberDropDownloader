@@ -14,6 +14,18 @@ auth:
     api_key: null
 cookies: null
 crawlers:
+  bandcamp:
+    formats:
+    - mp3-320
+    - mp3
+    - aac-hi
+    - wav
+    - flac
+    - vorbis
+    - aiff
+    - alas
+  clypit:
+    prefer_mp3: false
   coomer:
     ignore_ads: false
     ignore_post_content: true
@@ -26,9 +38,8 @@ crawlers:
   kemono:
     ignore_ads: false
     ignore_post_content: true
-  nekohouse:
-    ignore_ads: false
-    ignore_post_content: true
+  one_pace:
+    prefer_dub: false
   tiktok:
     original: false
 deep_scrape: false

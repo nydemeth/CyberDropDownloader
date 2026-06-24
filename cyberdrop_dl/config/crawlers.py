@@ -34,6 +34,16 @@ class BandcampConfig(ConfigModel):
     "Format to choose for downloads (if available), ordered by preference"
 
 
+class ClypitConfig(ConfigModel):
+    prefer_mp3: bool = False
+    """Download audios as .mp3 files even if WAV (high quality) versions are available"""
+
+
+class OnePaceConfig(ConfigModel):
+    prefer_dub: bool = False
+    """Download episodes with english audio tracks instead of japanase (if available)"""
+
+
 class GenericCrawlers(ConfigModel):
     wordpress_media: FalsyAsTuple[HttpURL] = ()
     wordpress_html: FalsyAsTuple[HttpURL] = ()
@@ -46,8 +56,9 @@ class Crawlers(ConfigGroup, name=None):
     "Name of crawlers to disable for the current run"
 
     bandcamp: BandcampConfig = Field(default_factory=BandcampConfig)
+    clypit: ClypitConfig = Field(default_factory=ClypitConfig)
     generic: GenericCrawlers = Field(default_factory=GenericCrawlers)
     kemono: KemonoConfig = Field(default_factory=KemonoConfig)
     coomer: KemonoConfig = Field(default_factory=KemonoConfig)
-    nekohouse: KemonoConfig = Field(default_factory=KemonoConfig)
+    one_pace: OnePaceConfig = Field(default_factory=OnePaceConfig)
     tiktok: TikTokConfig = Field(default_factory=TikTokConfig)
