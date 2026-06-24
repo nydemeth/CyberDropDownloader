@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt
+from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt, overload
 
 from pydantic import ByteSize, TypeAdapter
 
@@ -110,5 +110,13 @@ def falsy_as_none[T](value: T | Literal[""] | None) -> T | None:
     return falsy_as(value, None)
 
 
-def remove_duplicates[T: str](value: tuple[T, ...]) -> tuple[T, ...]:
-    return tuple(sorted(set(value)))
+@overload
+def remove_duplicates[T](values: list[T]) -> list[T]: ...
+
+
+@overload
+def remove_duplicates[T](values: tuple[T, ...]) -> tuple[T, ...]: ...
+
+
+def remove_duplicates[T](values: list[T] | tuple[T, ...]) -> list[T] | tuple[T, ...]:
+    return type(values)(dict.fromkeys(values))

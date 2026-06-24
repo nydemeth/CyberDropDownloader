@@ -44,7 +44,7 @@ type Timedelta = Annotated[
         str, return_type=str, when_used="json"
     ),  # Serialize as str to save it as sexageximal (hh:mm:ss) instead of pydantic's ISO duration (PT1H5M26S)
 ]
-type RemoveDuplicates[T: tuple[str, ...]] = Annotated[T, AfterValidator(remove_duplicates)]
+type RemoveDuplicates[T] = Annotated[T, AfterValidator(remove_duplicates)]
 
 
 # Only use this for config validation. To parse URLs internally while scraping, call `parse_url` directly
