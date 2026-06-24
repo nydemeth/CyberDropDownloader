@@ -21,7 +21,7 @@ This is a bulk downloader for the supported sites. It supports resumable downloa
 ## How do I update?
 
 If you are using one of the provided start files, it should do so automatically. Keep in mind that they will only update to the newest release of the same major version. ex: if you are using v9 start scripts, they will update to the latest v9 release.
-This is beacuse every new major relase has breaking changes and is not safe to automatically update to them.
+This is because every new major release has breaking changes and is not safe to automatically update to them.
 Each time there is a new major release, you will need to download new start scripts. Be sure to read the changelog to know about the breaking changes. You may need to perform some manual action to update successfully
 
 ## Why do i get `DDoS-Guard` error downloading from `x` site?

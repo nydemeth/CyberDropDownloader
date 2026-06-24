@@ -278,7 +278,7 @@ class Downloads(ConfigGroup):
     "Number of seconds to wait before starting downloads"
 
     slow_speed: ByteSizeSerilized = ByteSize(0)
-    "Skip downloads if their speed is bellow this value for more than 10 seconds. Set to 0 to disable"
+    "Skip downloads if their speed is below this value for more than 10 seconds. Set to 0 to disable"
 
     speed_limit: ByteSizeSerilized = ByteSize(0)
     "Max speed rate (in bytes per second) to limit downloads (combined)"

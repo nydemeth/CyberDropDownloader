@@ -106,7 +106,7 @@ def unique[T](itr: Iterable[T], /) -> Generator[T]:
 
 
 def fast_cache[T, R](fn: Callable[[T], R]) -> Callable[[T], R]:
-    "Like functools.cache but for single argument funciton and without all the stats logic"
+    "Like functools.cache but for single argument function and without all the stats logic"
     cache: dict[T, R] = {}
 
     def compute(obj: T) -> R:

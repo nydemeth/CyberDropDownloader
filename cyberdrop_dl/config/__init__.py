@@ -72,7 +72,7 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
     filters: Filters = Field(default_factory=Filters)
     hashing: Hashing = Field(default_factory=Hashing)
     ignore_history: bool = False
-    "Download files even if the alrady are maked as downloaded on the database"
+    "Download files even if the already are marked as downloaded on the database"
 
     jdownloader: Jdownloader = Field(default_factory=Jdownloader)
     logs: Logs = Field(default_factory=Logs)
@@ -94,10 +94,10 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
     min_free_space: Annotated[ByteSizeSerilized, AfterValidator(lambda x: max(x, MIN_REQUIRED_FREE_SPACE))] = (
         to_bytesize("5GB")
     )
-    "Mininum free space require to start new downloads"
+    "Minimum free space require to start new downloads"
 
     mtime: bool = True
-    "Use original upload date as modification date for downloded file"
+    "Use original upload date as modification date for downloaded file"
 
     network: Network = Field(default_factory=Network)
     notifications: Notifications = Field(default_factory=Notifications)

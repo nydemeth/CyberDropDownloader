@@ -128,8 +128,8 @@ def _parse_raw_chunks(flight_data: FlightData) -> Generator[_FlightChunk]:
         marker = marker or None
         data = line[m.end() :].strip()
         if marker and marker.startswith("T"):
-            lenght = int(marker[1:-1], 16)
-            data, rest = data[:lenght], FlightData(data[lenght:])
+            length = int(marker[1:-1], 16)
+            data, rest = data[:length], FlightData(data[length:])
             yield _FlightChunk(chunk_id, "T", data)
             if rest:
                 yield from _parse_raw_chunks(rest)
