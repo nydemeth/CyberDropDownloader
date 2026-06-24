@@ -47,12 +47,12 @@ async def has_sufficient_space(folder: Path, /, required_free_space: int | None 
     return free_space == -1 or free_space > (required_free_space or _REQUIRED_FREE_SPACE.get())
 
 
-def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
+def create_free_space_checker(media_item: MediaItem, *, frequency: int = 5) -> Callable[[], Awaitable[None]]:
     current_chunk = 0
 
     async def checker() -> None:
         nonlocal current_chunk
-        if current_chunk % frecuency == 0 and not await has_sufficient_space(media_item.download_folder):
+        if current_chunk % frequency == 0 and not await has_sufficient_space(media_item.download_folder):
             raise InsufficientFreeSpaceError(media_item)
 
         current_chunk += 1

@@ -62,7 +62,7 @@ class VidaraCrawler(Crawler, db_path="path_qs_frag"):
             self.PRIMARY_URL / "api/stream",
             method="POST",
             json={
-                "devide": "web",
+                "device": "web",
                 "filecode": video_id,
             },
         )

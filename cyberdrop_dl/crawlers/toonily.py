@@ -18,7 +18,7 @@ class Selector:
 class ToonilyCrawler(Crawler):
     # TODO: Make this a general crawler for any site that uses wordpress madara
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Serie": "/serie/<name>",
+        "Series": "/serie/<name>",
         "Chapter": "/serie/<name>/chapter-<chapter-id>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://toonily.com")

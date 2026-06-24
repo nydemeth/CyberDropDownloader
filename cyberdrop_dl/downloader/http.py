@@ -100,7 +100,7 @@ class Capacity:
 
 @dataclasses.dataclass(slots=True)
 class Downloader:
-    """Hight level class that handles limiters, database checks, skip by config checks and retries"""
+    """High level class that handles limiters, database checks, skip by config checks and retries"""
 
     manager: Manager
     log_prefix: str = "Download"

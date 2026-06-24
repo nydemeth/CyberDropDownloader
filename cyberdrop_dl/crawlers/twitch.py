@@ -78,7 +78,7 @@ class TwitchCrawler(Crawler):
         m3u8_obj = await super()._request_m3u8(url, headers=headers, media_type=media_type)
 
         # Some formats are "hidden" unless the user is logged in (1080p+ resolutions)
-        # We can extract and parse them manually, bypasing the logging requirement
+        # We can extract and parse them manually, bypassing the logging requirement
         for data in m3u8_obj.session_data:
             if data.data_id == "com.amazon.ivs.unavailable-media" and data.value:
                 unavailable_media = json.loads(base64.b64decode(data.value))
