@@ -12,7 +12,7 @@ from pydantic import BeforeValidator, Field
 from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
-from cyberdrop_dl.models import DeferedModel
+from cyberdrop_dl.models import DeferredModel
 from cyberdrop_dl.models.validators import falsy_as_none, falsy_as_tuple
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import unique
@@ -59,7 +59,7 @@ class Embed(NamedTuple):
     description: str
 
 
-class Post(DeferedModel):
+class Post(DeferredModel):
     id: str
     content: str = ""
     file: Annotated[File | None, BeforeValidator(falsy_as_none)] = None

@@ -9,10 +9,10 @@ from cyberdrop_dl import env
 from cyberdrop_dl.utils import fast_cache
 
 
-class DeferedModel(
+class DeferredModel(
     BaseModel,
-    populate_by_name=True,
-    populate_by_alias=True,
+    validate_by_name=True,
+    validate_by_alias=True,
     defer_build=True,
     allow_inf_nan=False,
     url_preserve_empty_path=True,
@@ -22,7 +22,7 @@ class DeferedModel(
 ): ...
 
 
-class ConfigModel(DeferedModel, extra="forbid"): ...
+class ConfigModel(DeferredModel, extra="forbid"): ...
 
 
 class ConfigGroup(ConfigModel):

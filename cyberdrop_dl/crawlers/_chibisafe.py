@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from pydantic import Field
 
 from cyberdrop_dl.crawlers.crawler import Crawler
-from cyberdrop_dl.models import DeferedModel
+from cyberdrop_dl.models import DeferredModel
 from cyberdrop_dl.utils.dataclass import DictDataclass
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
@@ -33,7 +33,7 @@ class File(DictDataclass):
     original: str | None = None
 
 
-class Album(DeferedModel):
+class Album(DeferredModel):
     id: str = ""
     name: str = Field(validation_alias="title")
     files: list[File]
