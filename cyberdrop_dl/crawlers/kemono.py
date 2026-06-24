@@ -1,29 +1,25 @@
 from __future__ import annotations
 
-import asyncio
 import datetime  # noqa: TC003
-import functools
 import itertools
 import re
-from collections import defaultdict
 from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Concatenate, NamedTuple
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, NamedTuple, override
 
 from pydantic import BeforeValidator, Field
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.models import DeferedModel
-from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
+from cyberdrop_dl.models.validators import falsy_as_none, falsy_as_tuple
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import unique
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
-
-    from bs4 import BeautifulSoup
+    from collections.abc import AsyncGenerator, Generator
 
     from cyberdrop_dl.config.crawlers import KemonoConfig
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -31,23 +27,8 @@ if TYPE_CHECKING:
 
 _DEFAULT_PAGE_SIZE = 50
 _DISCORD_CHANNEL_PAGE_SIZE = 150
-_POST_SELECTOR = "article.post-card a"
+
 _find_http_urls = re.compile(r"(?:http(?!.*\.\.)[^ ]*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]|</|'))").finditer
-
-
-class PostSelectors:
-    FILES = "div[class*=__files]"
-    CONTENT = "div[class*=__content]"
-    ATTACHMENTS = "a[class*=__attachment-link]"
-    IMAGES = "div[class=fileThumb]"
-    VIDEOS = "video[class*=__video] source"
-    ALL_CONTENT = f"{FILES}, {CONTENT}"
-
-    DATE_PUBLISHED = "div[class*=__published] time[class=timestamp]"
-    DATE_ADDED = "div[class*=__added]"
-
-    TITLE = "h1[class*=__title]"
-    USERNAME = "a[class*=__user-name]"
 
 
 class DiscordChannel(NamedTuple):
@@ -78,26 +59,19 @@ class Embed(NamedTuple):
     description: str
 
 
-EmbedOrNone = Annotated[Embed | None, BeforeValidator(falsy_as_none)]
-FileOrNone = Annotated[File | None, BeforeValidator(falsy_as_none)]
-Tags = Annotated[list[str], BeforeValidator(lambda x: falsy_as(x, []))]
-
-
 class Post(DeferedModel):
     id: str
     content: str = ""
-    file: FileOrNone = None
-    attachments: list[File] = []  # noqa: RUF012
+    file: Annotated[File | None, BeforeValidator(falsy_as_none)] = None
+    attachments: tuple[File, ...] = ()
     published: datetime.datetime | None = None
     added: datetime.datetime | None = None
     edited: datetime.datetime | None = None
     timestamp: int | None = None
-    tags: Tags = []  # noqa: RUF012
-    embed: EmbedOrNone = None
+    tags: Annotated[tuple[str, ...], BeforeValidator(falsy_as_tuple)] = ()
+    embed: Annotated[Embed | None, BeforeValidator(falsy_as_none)] = None
 
-    # `Any` to skip validation, but these are `yarl.URL`. We generate them internally so no validation is needed
-    soup_attachments: list[Any] = []  # noqa: RUF012
-
+    @override
     def model_post_init(self, *_: object) -> None:
         if date := self.published or self.added:
             self.timestamp = int(date.timestamp())
@@ -132,52 +106,6 @@ class DiscordPost(Post):
         return f"discord/server/{self.server_id}/{self.channel_id}#{self.id}"
 
 
-class PartialUserPost(NamedTuple):
-    """A simplified version of Post that we can built from a soup, for sites that do not have an API.
-
-    Cons: We need to make a request for every individual post"""
-
-    title: str = ""
-    content: str = ""
-    user_name: str = ""
-    published: str | None = None
-    added: str | None = None
-
-    @staticmethod
-    def from_soup(soup: BeautifulSoup) -> PartialUserPost:
-        params = {}
-        selectors = (
-            PostSelectors.TITLE,
-            PostSelectors.ALL_CONTENT,
-            PostSelectors.USERNAME,
-            PostSelectors.DATE_PUBLISHED,
-            PostSelectors.DATE_ADDED,
-        )
-        for name, selector in zip(PartialUserPost._fields, selectors, strict=True):
-            if tag := soup.select_one(selector):
-                params[name] = tag.get_text().strip()
-
-        return PartialUserPost(**params)
-
-
-def fallback_if_no_api[**P](
-    func: Callable[Concatenate[KemonoBaseCrawler, P], Coroutine[None, None, None]],
-) -> Callable[Concatenate[KemonoBaseCrawler, P], Coroutine[None, None, None]]:
-    """Calls a fallback method is the current instance does not define an API"""
-
-    @functools.wraps(func)
-    async def wrapper(self: KemonoBaseCrawler, *args: P.args, **kwargs: P.kwargs) -> None:
-        if getattr(self, "API_ENTRYPOINT", None):
-            return await func(self, *args, **kwargs)
-
-        if fallback_func := getattr(self, f"{func.__name__}_w_no_api", None):
-            return await fallback_func(*args, **kwargs)
-
-        raise ValueError
-
-    return wrapper
-
-
 class KemonoBaseCrawler(Crawler, is_abc=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Model": "/<service>/user/<user_id>",
@@ -204,7 +132,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         self._user_names: dict[User, str] = {}
         self.__known_discord_servers: dict[str, DiscordServer] = {}
         self.__known_attachment_servers: dict[str, str] = {}
-        self.__discord_servers_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self.__discord_servers_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
         self.__ad_posts: list[str] = []
 
     @property
@@ -220,8 +148,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         return self._my_config.ignore_ads
 
     async def __async_post_init__(self) -> None:
-        if getattr(self, "API_ENTRYPOINT", None):
-            await self._get_usernames(self.API_ENTRYPOINT / "creators")
+        await self._get_usernames(self.API_ENTRYPOINT / "creators")
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:  # noqa: PLR0911
         match scrape_item.url.parts[1:]:
@@ -245,7 +172,6 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             case _:
                 raise ValueError
 
-    @fallback_if_no_api
     @error_handling_wrapper
     async def search(self, scrape_item: ScrapeItem, query: str) -> None:
         api_url = self.__make_api_url_w_offset(scrape_item.url, "posts")
@@ -253,7 +179,6 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         scrape_item.setup_as_profile(title)
         await self.__iter_user_posts(scrape_item, api_url)
 
-    @fallback_if_no_api
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem) -> None:
         path = (scrape_item.url / "posts").path
@@ -265,7 +190,6 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             await self.__iter_user_posts(scrape_item, api_url.update_query(q="#ad"))
         await self.__iter_user_posts(scrape_item, api_url)
 
-    @fallback_if_no_api
     @error_handling_wrapper
     async def discord_server(self, scrape_item: ScrapeItem, server_id: str) -> None:
         scrape_item.setup_as_forum("")
@@ -276,13 +200,12 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             self.create_task(self.run(new_scrape_item))
             scrape_item.add_children()
 
-    @fallback_if_no_api
     @error_handling_wrapper
     async def discord_channel(self, scrape_item: ScrapeItem, channel_id: str) -> None:
         scrape_item.setup_as_profile("")
         api_url = self.__make_api_url_w_offset(scrape_item.url, f"discord/channel/{channel_id}")
-        async for posts in self._pager(api_url, step_size=_DISCORD_CHANNEL_PAGE_SIZE):
-            if type(posts) is list:
+        async for posts in self._api_pager(api_url, step_size=_DISCORD_CHANNEL_PAGE_SIZE):
+            if type(posts) is not list:
                 error_msg = (
                     f"[{self.NAME}] Invalid API response for Discord channel '{channel_id}' posts (URL: {api_url}). "
                     f"Expected a list, but got type {type(posts).__name__}. "
@@ -291,7 +214,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
                 raise ScrapeError(422, error_msg)
 
             for post_data in posts:
-                if not isinstance(post_data, dict):
+                if type(post_data) is not dict:
                     error_msg = (
                         f"[{self.NAME}] Invalid post data type in list for "
                         f"Discord channel '{channel_id}' (URL template: {api_url}). "
@@ -309,7 +232,6 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             if len(posts) < _DISCORD_CHANNEL_PAGE_SIZE:
                 break
 
-    @fallback_if_no_api
     @error_handling_wrapper
     async def post(self, scrape_item: ScrapeItem) -> None:
         api_url = self.__make_api_url_w_offset(scrape_item.url)
@@ -318,7 +240,6 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         self._register_attachments_servers(json_resp["attachments"])
         self._handle_user_post(scrape_item, post)
 
-    @fallback_if_no_api
     @error_handling_wrapper
     async def favorites(self, scrape_item: ScrapeItem, type_: str) -> None:
         session_cookie = self.cookies.get("session")
@@ -454,12 +375,9 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         self.create_task(self.write_metadata(scrape_item, f"post_{post.id}", post))
 
         files = (self.__make_file_url(file) for file in post.all_files)
-        seen: set[AbsoluteHttpURL] = set()
-        for url in itertools.chain(files, post.soup_attachments):
-            if url not in seen:
-                seen.add(url)
-                self.create_task(self.handle_direct_link(scrape_item, url))
-                scrape_item.add_children()
+        for url in unique(files):
+            self.create_task(self.handle_direct_link(scrape_item, url))
+            scrape_item.add_children()
 
         if post.embed:
             embed_url = self.parse_url(post.embed.url)
@@ -499,7 +417,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
 
     async def __iter_user_posts(self, scrape_item: ScrapeItem, url: AbsoluteHttpURL) -> None:
         filtering_ads = url.query.get("q") == "#ad"
-        async for json_resp in self._pager(url):
+        async for json_resp in self._api_pager(url):
             # From search results
             if isinstance(json_resp, dict):
                 posts = json_resp.get("posts", [])
@@ -529,74 +447,22 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             if len(posts) < _DEFAULT_PAGE_SIZE:
                 break
 
-    async def _pager(self, url: AbsoluteHttpURL, step_size: int | None = None) -> AsyncGenerator[Any]:
-        """Yields JSON responses from API calls, or soup for web page calls, with configurable increments."""
-        current_step_size = step_size or _DEFAULT_PAGE_SIZE
+    async def _api_pager(self, url: AbsoluteHttpURL, step_size: int | None = None) -> AsyncGenerator[Any]:
+        step_size = step_size or _DEFAULT_PAGE_SIZE
         init_offset = int(url.query.get("o") or 0)
 
-        request = self.__api_request if "api" in url.parts else self.request_soup
-        for current_offset in itertools.count(init_offset, current_step_size):
-            yield await request(url.update_query(o=current_offset))
+        for offset in itertools.count(init_offset, step_size):
+            yield await self.__api_request(url.update_query(o=offset))
 
     async def __api_request(self, url: AbsoluteHttpURL) -> Any:
-        """Get JSON from the API, with a custom Accept header."""
-
         # When using the 'text/css' header, the response is missing the charset header
         # and charset detection may return a random codec if the body has non english chars, so we force utf-8
         async with self.request(url, headers={"Accept": "text/css"}) as resp:
             return await resp.json(encoding="utf-8", content_type=False)
 
-    # ~~~~~~~~~~ NO API METHODS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    @error_handling_wrapper
-    async def profile_w_no_api(self, scrape_item: ScrapeItem) -> None:
-        scrape_item.setup_as_profile("")
-        soup: BeautifulSoup
-        async for soup in self._pager(scrape_item.url):
-            n_posts = 0
-
-            for new_scrape_item in self.iter_children(scrape_item, soup, _POST_SELECTOR):
-                n_posts += 1
-                self.create_task(self.post_w_no_api_task(new_scrape_item))
-
-            if n_posts < _DEFAULT_PAGE_SIZE:
-                break
-
-    @error_handling_wrapper
-    async def post_w_no_api(self, scrape_item: ScrapeItem) -> None:
-        soup = await self.request_soup(scrape_item.url)
-        service, _, user_id, _, post_id = scrape_item.url.parts[1:6]
-        partial_post = PartialUserPost.from_soup(soup)
-        if not partial_post.title or not partial_post.user_name:
-            raise ScrapeError(422)
-
-        def files() -> Generator[AbsoluteHttpURL]:
-            for selector in (
-                PostSelectors.VIDEOS,
-                PostSelectors.IMAGES,
-                PostSelectors.ATTACHMENTS,
-            ):
-                for file in soup.select(selector):
-                    yield self.parse_url(css.attr(file, "href"))
-
-        post = UserPost(
-            user_id=user_id,
-            service=service,
-            id=post_id,
-            title=partial_post.title,
-            content=partial_post.content,
-            published=partial_post.published,  # type: ignore[reportArgumentType]  # pyright: ignore[reportArgumentType]
-            added=partial_post.added,  # type: ignore[reportArgumentType]  # pyright: ignore[reportArgumentType]
-            soup_attachments=list(files()),
-        )
-
-        self._handle_user_post(scrape_item, post)
-
-    post_w_no_api_task = auto_task_id(post_w_no_api)
-
 
 class KemonoCrawler(KemonoBaseCrawler):
-    SUPPORTED_PATHS: ClassVar = KemonoBaseCrawler.SUPPORTED_PATHS | {
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = KemonoBaseCrawler.SUPPORTED_PATHS | {
         "Discord Server": "/discord/<server_id>",
         "Discord Server Channel": "/discord/server/<server_id>/<channel_id>#...",
     }

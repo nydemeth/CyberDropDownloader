@@ -12,6 +12,7 @@ from cyberdrop_dl.utils import fast_cache
 class DeferedModel(
     BaseModel,
     populate_by_name=True,
+    populate_by_alias=True,
     defer_build=True,
     allow_inf_nan=False,
     url_preserve_empty_path=True,
