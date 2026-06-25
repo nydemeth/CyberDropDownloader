@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from aiohttp import hdrs
 
-from cyberdrop_dl import aio, constants, ffmpeg, storage
+from cyberdrop_dl import aio, constants, env, ffmpeg, storage
 from cyberdrop_dl.clients import etag
 from cyberdrop_dl.constants import FileExt, HashMode
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
@@ -115,11 +115,7 @@ class DownloadClient:
         if not media_item.is_segment and (content_type := _get_content_type(resp.headers)):
             _check_content_type(content_type, media_item.ext)
 
-        try:
-            media_item.size = int(resp.headers[hdrs.CONTENT_LENGTH])
-        except KeyError:
-            msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
-            raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None
+        media_item.size = _get_content_length(resp.headers)
         if not media_item.path:
             _check_content_length(resp.headers)
             downloaded = await self._predownload_skip(media_item, domain)
@@ -484,3 +480,13 @@ def make_speed_checker(media_item: MediaItem, hook: ProgressHook, speed_threshol
             raise SlowDownloadError(origin=media_item)
 
     return check_download_speed
+
+
+def _get_content_length(headers: Mapping[str, str]) -> int:
+    try:
+        return int(headers[hdrs.CONTENT_LENGTH])
+    except KeyError:
+        if env.ALLOW_MISSING_CONTENT_LENGTH:
+            return 0
+        msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
+        raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None
