@@ -16,6 +16,7 @@ from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
 from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
+from cyberdrop_dl.scrape_source import URLSource
 from cyberdrop_dl.utils import cleanup
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,17 @@ if TYPE_CHECKING:
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.scrape_source import URLSource
 
 
-async def _scrape(manager: Manager) -> None:
+def scrape(manager: Manager, source: URLSource) -> None:
+    from cyberdrop_dl import aio
+
+    with setup_file_logging(manager.config.logs.files.main, level=manager.config.logs.effective_level):
+        aio.run(_scrape(manager, source))
+
+
+async def _scrape(manager: Manager, source: URLSource) -> None:
     from cyberdrop_dl import ffmpeg
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
@@ -39,7 +48,7 @@ async def _scrape(manager: Manager) -> None:
         log_spacer()
         logger.info("Starting CDL...")
         async with ScrapeMapper(manager)() as scrape_mapper:
-            stats = await scrape_mapper.run()
+            stats = await scrape_mapper.run(source)
 
         await _post_runtime(manager)
         stats_summary = manager.print_stats(stats)
@@ -89,13 +98,6 @@ async def _notify(config: Config, stats_summary: str) -> None:
         await apprise.notify(urls, stats_summary)
 
 
-def scrape(manager: Manager) -> None:
-    from cyberdrop_dl import aio
-
-    with setup_file_logging(manager.config.logs.files.main, level=manager.config.logs.effective_level):
-        aio.run(_scrape(manager))
-
-
 def _validate_inputs(args: ArgumentCollection) -> None:
     try:
         cyclopts.validators.LimitedChoice(min=1, max=1)(args)
@@ -128,27 +130,24 @@ def download(
             validator=cyclopts.validators.Path(exists=True, dir_okay=False),
         ),
     ] = None,
-    cli: CLIarguments | None = None,
+    cli_args: CLIarguments | None = None,
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
-    with prepare_manager(urls, input_file, cli, cli_overrides)() as manager:
-        scrape(manager)
-
-
-def prepare_manager(
-    urls: tuple[HttpURL, ...], input_file: Path | None, cli: CLIarguments | None, cli_overrides: Config | None
-) -> Manager:
-    check_for_v9_files()
     if input_file:
         input_file = input_file.resolve().absolute()
+    with prepare_manager(cli_args, cli_overrides)() as manager:
+        scrape(manager, input_file or urls)
+
+
+def prepare_manager(cli_args: CLIarguments | None, cli_overrides: Config | None) -> Manager:
+    check_for_v9_files()
 
     from cyberdrop_dl.manager import Manager
 
-    cli = cli or CLIarguments()
-    cli.urls = urls
-    appdata, config = _prepare_appdata_and_config(cli, cli_overrides)
-    manager = Manager(cli, appdata, config, input_file)
+    cli_args = cli_args or CLIarguments()
+    appdata, config = _prepare_appdata_and_config(cli_args, cli_overrides)
+    manager = Manager(cli_args, appdata, config)
     set_console_level(manager.config.logs.effective_console_level)
     manager.appdata.mkdirs()
     return manager

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -22,10 +23,11 @@ from cyberdrop_dl.utils import text_editor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from cyberdrop_dl.manager import Manager
 
-
+_INPUT_FILE: ContextVar[Path] = ContextVar("_INPUT_FILE")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/Cyberdrop-DL/cyberdrop-dl/refs/heads/main/CHANGELOG.md"
 _changelog_content: str = ""
 
@@ -38,12 +40,13 @@ def _changelog() -> str:
     return _changelog_content
 
 
-def run(manager: Manager) -> None:
+def run(manager: Manager, input_file: Path) -> None:
+    _INPUT_FILE.set(input_file)
     choices: dict[str, Callable[[Manager], bool | None]] = {
         "Download": lambda _: True,
         "Create file hashes": _scan_and_create_hashes,
         "Sort files in download folder": _sort_files,
-        "Edit URLs.txt": _edit_urls,
+        "Edit URLs.txt": lambda _: _edit_urls(),
         "Edit config": _edit_config,
         "View changelog": lambda _: _view_changelog(),
         "Exit": lambda _: sys.exit(0),
@@ -93,10 +96,9 @@ def _edit_config(manager: Manager) -> None:
     enter_to_continue()
 
 
-def _edit_urls(manager: Manager) -> None:
-    assert manager.input_file
+def _edit_urls() -> None:
     try:
-        text_editor.open(manager.input_file)
+        text_editor.open(_INPUT_FILE.get())
     except ValueError as e:
         console.error(e)
 
@@ -132,7 +134,7 @@ def _app_header(manager: Manager) -> None:
     paths = {
         "Config file": manager.config.source,
         "Database file": manager.appdata.db_file,
-        "URLs file": manager.input_file,
+        "URLs file": _INPUT_FILE.get(),
         "Cache file": manager.appdata.cache_file,
         "Logs": manager.config.logs.effective_log_folder,
         "Main log file": manager.config.logs.files.main,

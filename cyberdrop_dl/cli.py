@@ -37,14 +37,15 @@ def main_menu(
             show_default=False,
         ),
     ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
-    cli: CLIarguments | None = None,
+    cli_args: CLIarguments | None = None,
 ) -> None:
     "Show a TUI menu equivalent to the CLI commands"
-    with prepare_manager((), input_file, cli, cli_overrides=None)() as manager:
+    input_file = input_file.resolve().absolute()
+    with prepare_manager(cli_args, cli_overrides=None)() as manager:
         from cyberdrop_dl import program_ui
 
-        program_ui.run(manager)
-        scrape(manager)
+        program_ui.run(manager, input_file)
+        scrape(manager, input_file)
 
 
 @app.command

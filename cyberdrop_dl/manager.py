@@ -44,7 +44,6 @@ class Manager:
         cli_args: CLIarguments | None = None,
         appdata: AppData | None = None,
         config: Config | None = None,
-        input_file: Path | None = None,
     ) -> None:
         from cyberdrop_dl.commands import CLIarguments
 
@@ -52,7 +51,6 @@ class Manager:
         self._appdata: AppData | None = appdata
         self.cli_args: CLIarguments = cli_args or CLIarguments()
         self._config: Config | None = config
-        self.input_file: Path | None = input_file
 
         self._completed_downloads: list[MediaItem] = []
         self._hasher: Hasher | None = None
