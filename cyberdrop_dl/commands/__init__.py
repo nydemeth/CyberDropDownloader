@@ -23,7 +23,7 @@ type SQLiteFile = Annotated[Path, file_validator(".db")]
 
 
 @Parameter(name="*")
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True)
 class CLIarguments:
     urls: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
 

@@ -126,8 +126,8 @@ and base your crawler on that. A simple crawler to use as base is [CloudFlareStr
 - You **MAY** use HTTP code `422` (Unprocessable entity) for **expected** errors if no other HTTP code feels adequate
 - You **MAY** use a short string instead of an HTTP code to convey a better context for an error (if required)
   The string **SHOULD** be at most 20 characters long as it will be shown on the `Scrape Errors` sections of the TUI
-- You **SHOULD NOT** write logic in a defensive way for **unexpected** errors. If you need to perform an operation that **MAY** fail
-  but is not **expected** to fail (ex: a dictionary key lookup on an API response), do not try to catch the exception, let it bubble up
+- You **SHOULD NOT** write logic in a defensive way for **unexpected** errors. If you need to perform an operation that could fail
+  but is not **expected** to fail (ex: a dictionary key lookup on an API response), do not try to catch the exception, let it bubble up.
   It will eventually be logged by the `error_handling_wrapper`
 - You **SHOULD** model site specific data into dataclasses, if possible
 - You **MUST** create a new task for any coroutine whose result is not needed to complete the current task

@@ -2,6 +2,7 @@ import logging
 
 from cyclopts import App
 
+from cyberdrop_dl.commands import CLIarguments
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.prompts import ask_should_create_config
@@ -11,21 +12,23 @@ logger = logging.getLogger(__name__)
 
 
 @app.command()
-def file() -> None:
-    "Show the default config file path"
-    app.console.print(AppData.default().config_file)
+def file(*, cli: CLIarguments | None = None) -> None:
+    "Show path to the config file"
+    app.console.print(cli.config_file if cli else AppData.default().config_file)
 
 
 @app.command()
-def edit() -> None:
+def edit(*, cli: CLIarguments | None = None) -> None:
     "Open the default config file on a text editor"
     from cyberdrop_dl.utils import text_editor
 
-    file = AppData.default().config_file
-    if not file.exists():
-        if not ask_should_create_config(file):
-            return
-        Config().save_to(file)
+    file = cli.config_file if cli else None
+    if not file:
+        file = AppData.default().config_file
+        if not file.exists():
+            if not ask_should_create_config(file):
+                return
+            Config().save_to(file)
 
     text_editor.open(file)
 

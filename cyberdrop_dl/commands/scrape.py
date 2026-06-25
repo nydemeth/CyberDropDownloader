@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -19,7 +18,6 @@ from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
 from cyberdrop_dl.utils import cleanup
 
-INTERACTIVE: ContextVar[bool] = ContextVar("_INTERACTIVE", default=False)
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -91,28 +89,11 @@ async def _notify(config: Config, stats_summary: str) -> None:
         await apprise.notify(urls, stats_summary)
 
 
-def _show_interactive_ui(manager: Manager) -> None:
-    if not INTERACTIVE.get():
-        return
-
-    from cyberdrop_dl import program_ui
-
-    program_ui.run(manager)
-
-
 def _main(manager: Manager) -> None:
     from cyberdrop_dl import aio
 
-    set_console_level(manager.config.logs.effective_console_level)
-    manager.appdata.mkdirs()
-    with manager():
-        _show_interactive_ui(manager)
-
-        with setup_file_logging(
-            manager.config.logs.files.main,
-            level=manager.config.logs.effective_level,
-        ):
-            aio.run(_scrape(manager))
+    with setup_file_logging(manager.config.logs.files.main, level=manager.config.logs.effective_level):
+        aio.run(_scrape(manager))
 
 
 def _validate_inputs(args: ArgumentCollection) -> None:
@@ -140,8 +121,11 @@ def interactive(
     cli: CLIarguments | None = None,
 ) -> None:
     "Show a TUI menu equivalent to the CLI commands"
-    INTERACTIVE.set(True)
-    download(input_file=input_file, cli=cli or CLIarguments())
+    with _prepare_manager((), input_file, cli, cli_overrides=None)() as manager:
+        from cyberdrop_dl import program_ui
+
+        program_ui.run(manager)
+        _main(manager)
 
 
 def download(
@@ -168,6 +152,13 @@ def download(
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
+    with _prepare_manager(urls, input_file, cli, cli_overrides)() as manager:
+        _main(manager)
+
+
+def _prepare_manager(
+    urls: tuple[HttpURL, ...], input_file: Path | None, cli: CLIarguments | None, cli_overrides: Config | None
+) -> Manager:
     check_for_v9_files()
     if input_file:
         input_file = input_file.resolve().absolute()
@@ -177,7 +168,10 @@ def download(
     cli = cli or CLIarguments()
     cli.urls = urls
     appdata, config = _prepare_appdata_and_config(cli, cli_overrides)
-    _main(Manager(cli, appdata, config, input_file))
+    manager = Manager(cli, appdata, config, input_file)
+    set_console_level(manager.config.logs.effective_console_level)
+    manager.appdata.mkdirs()
+    return manager
 
 
 def _prepare_appdata_and_config(cli: CLIarguments, cli_overrides: Config | None = None) -> tuple[AppData, Config]:

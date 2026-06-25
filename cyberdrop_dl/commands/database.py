@@ -1,8 +1,8 @@
 from typing import Annotated
 
 from cyclopts import App, Parameter
-from cyclopts.types import ResolvedExistingFile
 
+from cyberdrop_dl.commands import CLIarguments, SQLiteFile
 from cyberdrop_dl.config.appdata import AppData
 
 app = App(name="database", help="Commands for managing the database")
@@ -10,8 +10,8 @@ app = App(name="database", help="Commands for managing the database")
 
 @app.command()
 def transfer(
-    db_path: Annotated[
-        ResolvedExistingFile,
+    database_file: Annotated[
+        SQLiteFile,
         Parameter(help="Path to the SQLite database file to migrate"),
     ],
     *,
@@ -25,10 +25,10 @@ def transfer(
     """Migrate an old database to the latest schema version."""
     from cyberdrop_dl.database.transfer import run as transfer_db
 
-    transfer_db(db_path, force=force)
+    transfer_db(database_file, force=force)
 
 
 @app.command()
-def file() -> None:
-    "Show path of default database"
-    app.console.print(AppData.default().db_file)
+def file(*, cli: CLIarguments | None = None) -> None:
+    "Show file path to the database"
+    app.console.print(cli.database_file if cli else AppData.default().db_file)
