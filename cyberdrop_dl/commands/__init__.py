@@ -1,7 +1,7 @@
 import dataclasses
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from cyclopts import Parameter, Token, validators
 
@@ -35,3 +35,8 @@ class CLIarguments:
 
     database_file: SQLiteFile | None = None
     "SQLite file to use as database"
+
+    def __json__(self) -> dict[str, Any]:
+        me: dict[str, Any] = {k: None if v is None else str(v) for k, v in dataclasses.asdict(self).items()}
+        me["urls"] = tuple(map(str, self.urls))
+        return me

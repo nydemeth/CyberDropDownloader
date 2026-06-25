@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Annotated
 
 import cyclopts.validators
@@ -20,8 +21,6 @@ from cyberdrop_dl.utils import cleanup
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager

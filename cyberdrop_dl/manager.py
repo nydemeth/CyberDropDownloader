@@ -118,7 +118,7 @@ class Manager:
     def log_config_settings(self) -> None:
         logger.info(f"Running cyberdrop-dl v{__version__}")
         _log_enviroment()
-        _log_cli_args(self.cli_args)
+        logger.debug({"CLI options": self.cli_args.__json__()})
         _log_config(self.config)
         _log_ffmpeg()
         _log_database(self.appdata.db_file)
@@ -226,10 +226,6 @@ def _log_enviroment() -> None:
             "argv": sys.argv[1:],
         }
     )
-
-
-def _log_cli_args(cli_args: CLIarguments) -> None:
-    logger.debug({"CLI options": cli_args.model_dump(mode="json")})
 
 
 def _log_config(config: Config) -> None:
