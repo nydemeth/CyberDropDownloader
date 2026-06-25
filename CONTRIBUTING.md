@@ -1,7 +1,7 @@
 # Contributing
 
 > [!NOTE]
-> The words **SHOULD**/**SHOULD_NOT**, **MAY**/**MAY NOT** and **MUST**/**MUST NOT** in this document reflects the same meaning as defined by RFC 2129 <https://www.rfc-editor.org/info/rfc2119>
+> The words **MAY**, **SHOULD**/**SHOULD NOT** and **MUST**/**MUST NOT** in this document reflects the same meaning as defined by RFC 2129 <https://www.rfc-editor.org/info/rfc2119>
 
 ## Reporting issues
 
@@ -12,7 +12,7 @@ reference to the existing issue.
 You **SHOULD** [read the wiki](https://script-ware.gitbook.io/cyberdrop-dl/frequently-asked-questions) as it
 includes solutions to some common problems.
 
-If your issue hasn't been reported yet, **MAY** open a new issue at <https://github.com/Cyberdrop-DL/cyberdrop-dl/issues/new/choose>.
+If your issue hasn't been reported yet, you **MAY** open a new issue at <https://github.com/Cyberdrop-DL/cyberdrop-dl/issues/new/choose>.
 
 ## Feature requests
 
@@ -60,9 +60,7 @@ Once you have `uv` installed, follow these steps:
 #### Formatting
 
 This project uses [ruff](https://docs.astral.sh/ruff) for formatting, linting and import sorting.
-We recommend [setting up your IDE](https://docs.astral.sh/ruff/editors/) to format and check with `ruff`, but you can always run
-
-`uv run ruff check --fix` then `uv run ruff format` in the root directory before submitting a pull request.
+We recommend [setting up your IDE](https://docs.astral.sh/ruff/editors/) to format and check with `ruff`, but
 
 #### Type checking
 
@@ -85,16 +83,19 @@ the commit will be rejected and `ruff` will try to fix the files. If `ruff` can 
 you will need to look at the output and fix them manually. When everything is fixed (either by `ruff` itself or manually)
 all you need to do is `git add` those files again and retry your commit.
 
+> [!TIP]
+> You can trigger a formatting manually by runnnig `uv run ruff check --fix` then `uv run ruff format`
+
 ## Implementing new changes
 
-> [!NOTE]
+> [!IMPORTANT]
 > `cyberdrop-dl` requires python 3.12+. You **MUST NOT** use any syntax features not compatible with it
-
-### Submitting a Pull Request (PR)
 
 > [!IMPORTANT]  
 > Before you start writing any code, you **SHOULD** search the [repository](https://github.com/Cyberdrop-DL/cyberdrop-dl/pulls) for an open or closed PR
 > that relates to your submission. You don't want to duplicate effort.
+
+### Submitting a Pull Request (PR)
 
 - Checkout a **new** branch before working on any changes, branching from `main`. You **MUST NOT** work directly on `main`
 - Implement your changes. Make sure to follow [code style conventions](#code-style). You **SHOULD** add tests for any new non-crawler specific functionality you introduce
