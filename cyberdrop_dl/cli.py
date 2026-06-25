@@ -8,6 +8,7 @@ from cyclopts.help import DefaultFormatter
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.commands import CLIarguments
+from cyberdrop_dl.commands.cache import app as cache_app
 from cyberdrop_dl.commands.cleanup import app as cleanup_app
 from cyberdrop_dl.commands.config import app as config_app
 from cyberdrop_dl.commands.database import app as database_app
@@ -65,7 +66,7 @@ def report() -> None:
     app.console.print(generate_report())
 
 
-for cmd in download, database_app, cleanup_app, config_app:
+for cmd in download, database_app, cleanup_app, config_app, cache_app:
     app.command(cmd)
 
 

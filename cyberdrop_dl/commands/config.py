@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 @app.command()
 def file(*, cli: CLIarguments | None = None) -> None:
     "Show path to the config file"
-    app.console.print(cli.config_file if cli else AppData.default().config_file)
+    file = cli.config_file if cli else None
+    file = file or AppData.default().config_file
+    app.console.print(file)
 
 
 @app.command()
