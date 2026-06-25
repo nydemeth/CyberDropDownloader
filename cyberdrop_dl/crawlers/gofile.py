@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, NotRequired, TypedDict
 from typing_extensions import ReadOnly
 
 from cyberdrop_dl import env
+from cyberdrop_dl.cache import cached_fn
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
@@ -77,6 +78,9 @@ class GoFileCrawler(Crawler):
 
     def __post_init__(self) -> None:
         self._api_key: str = ""
+        self._create_temp_account = cached_fn(
+            self._create_temp_account, self.cache, key="account_token", ttl=86400 * 60
+        )
 
     @property
     def headers(self) -> dict[str, str]:
@@ -228,18 +232,13 @@ class GoFileCrawler(Crawler):
             self.update_cookies({"accountToken": self._api_key})
 
     async def _create_temp_account(self) -> str:
-        if token := self.cache.get("account_token"):
-            return token
-
         self.log.info("Creating temp account")
         api_url = _API_ENTRYPOINT / "accounts"
         json_resp = await self.request_json(api_url, method="POST", data={}, headers=self.headers)
         if json_resp["status"] != "ok":
             raise ScrapeError(401, "Couldn't generate GoFile temp account", origin=api_url)
 
-        token = json_resp["data"]["token"]
-        self.cache.save("account_token", token, ttl=86400 * 60)
-        return token
+        return json_resp["data"]["token"]
 
 
 def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:
