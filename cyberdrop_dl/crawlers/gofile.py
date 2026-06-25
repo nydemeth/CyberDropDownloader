@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, NotRequired, TypedDict
 from typing_extensions import ReadOnly
 
 from cyberdrop_dl import env
-from cyberdrop_dl.cache import cached_fn
+from cyberdrop_dl.cache import disk_cached_method
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
@@ -78,9 +78,6 @@ class GoFileCrawler(Crawler):
 
     def __post_init__(self) -> None:
         self._api_key: str = ""
-        self._create_temp_account = cached_fn(
-            self._create_temp_account, self.cache, key="account_token", ttl=86400 * 60
-        )
 
     @property
     def headers(self) -> dict[str, str]:
@@ -231,6 +228,7 @@ class GoFileCrawler(Crawler):
                 self._api_key = await self._create_temp_account()
             self.update_cookies({"accountToken": self._api_key})
 
+    @disk_cached_method(key="account_token", ttl=86400 * 60)
     async def _create_temp_account(self) -> str:
         self.log.info("Creating temp account")
         api_url = _API_ENTRYPOINT / "accounts"

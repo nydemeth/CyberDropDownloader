@@ -7,13 +7,13 @@ import functools
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Protocol, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Protocol, Self, TypedDict, cast, overload
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.constants import MISSING
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Generator
+    from collections.abc import Awaitable, Callable, Coroutine, Generator
     from pathlib import Path
     from types import CoroutineType
 
@@ -128,6 +128,68 @@ class TTLCacheAdapter[T]:
             return
 
 
+def _has_expired(self: _CachedValue[Any]) -> bool:
+    if self["ttl"] is None:
+        return False
+    return time.time() - self["created_at"] >= self["ttl"]
+
+
+def _ttl_from_callable[T](fn: Callable[..., Awaitable[T]]) -> TTLCacheAdapter[T]:
+    *parts, _ = ".".join([fn.__module__, fn.__qualname__]).split(".")
+    return TTLCacheAdapter(_IN_MEMORY_CACHE, tuple(parts))
+
+
+class _HasTTLCache[T](Protocol):
+    @property
+    def cache(self) -> TTLCacheAdapter[T]: ...
+
+
+type _SupportsDiskCacheCallable[T] = Callable[[_HasTTLCache[Any]], Awaitable[T]]
+
+
+class _CachedMethod[T, R]:
+    """Use as a class method decorator."""
+
+    def __init__(self, fn: Callable[[Any], Awaitable[R]], key: str | None, ttl: float | None) -> None:
+        self.wrapped: Callable[[Any], Awaitable[R]] = fn
+        self.__doc__ = fn.__doc__
+        self.name: str = fn.__name__
+        self.key: str = key or fn.__name__
+        self.ttl: float | None = ttl
+        self._cached_fn: CachedAsyncFunc[R] | None = None
+
+    def _get_cache(self, inst: T) -> TTLCacheAdapter[R]:  # pyright: ignore[reportUnusedParameter]
+        raise NotImplementedError
+
+    @overload
+    def __get__(self, inst: None, owner: type[object] | None = None) -> Self: ...
+
+    @overload
+    def __get__(self, inst: T, owner: type[object] | None = None) -> CachedAsyncFunc[R]: ...
+
+    def __get__(self, inst: T | None, owner: type[object] | None = None) -> CachedAsyncFunc[R] | Self:
+        if inst is None:
+            return self
+
+        if self._cached_fn is None:
+
+            async def call_method() -> R:
+                return await self.wrapped(inst)
+
+            self._cached_fn = cached_fn(call_method, self._get_cache(inst), key=self.key, ttl=self.ttl)
+        return self._cached_fn
+
+
+class _InMemoryCachedMethod[R](_CachedMethod[object, R]):
+    def _get_cache(self, inst: object) -> TTLCacheAdapter[R]:  # noqa: ARG002
+        return _ttl_from_callable(self.wrapped)
+
+
+class _DiskCachedMethod[R](_CachedMethod[_HasTTLCache[Any], R]):
+    def _get_cache(self, inst: _HasTTLCache[Any]) -> TTLCacheAdapter[R]:
+        return inst.cache
+
+
 def cached_fn[T](
     fn: Callable[[], Awaitable[T]],
     cache: TTLCacheAdapter[T] | None = None,
@@ -136,9 +198,8 @@ def cached_fn[T](
     ttl: float | None = None,
 ) -> CachedAsyncFunc[T]:
 
-    *parts, fn_name = ".".join([fn.__module__, fn.__qualname__]).split(".")
-    key = key or fn_name
-    cache = cache or TTLCacheAdapter(_IN_MEMORY_CACHE, tuple(parts))
+    key = key or fn.__name__
+    cache = cache or _ttl_from_callable(fn)
     lock = asyncio.Lock()
 
     @functools.wraps(fn)
@@ -158,7 +219,27 @@ def cached_fn[T](
     return cast("CachedAsyncFunc[T]", cast("object", wrapper))
 
 
-def _has_expired(self: _CachedValue[Any]) -> bool:
-    if self["ttl"] is None:
-        return False
-    return time.time() - self["created_at"] >= self["ttl"]
+def cached_method[T](
+    key: str | None = None, *, ttl: float | None = None
+) -> Callable[[Callable[[Any], Coroutine[Any, Any, T]]], _InMemoryCachedMethod[T]]:
+    """Keep the last result of this method in memory until TTL expires
+
+    TTL == None -> never expires"""
+
+    def wrapper(method: Callable[[object], Awaitable[T]]) -> _InMemoryCachedMethod[T]:
+        return _InMemoryCachedMethod(method, key, ttl)
+
+    return wrapper
+
+
+def disk_cached_method[T](
+    key: str | None = None, *, ttl: float | None = None
+) -> Callable[[Callable[[Any], Coroutine[Any, Any, T]]], _DiskCachedMethod[T]]:
+    """Keep the last result of this method in memory until TTL expires
+
+    Cached values will persist across runs (saved to cache.json file)"""
+
+    def wrapper(method: _SupportsDiskCacheCallable[T]) -> _DiskCachedMethod[T]:
+        return _DiskCachedMethod(method, key, ttl)
+
+    return wrapper

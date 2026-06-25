@@ -7,7 +7,14 @@ from unittest import mock
 import pytest
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.cache import _IN_MEMORY_CACHE, TTLCacheAdapter, cache_context, cached_fn
+from cyberdrop_dl.cache import (
+    _IN_MEMORY_CACHE,
+    TTLCacheAdapter,
+    _DiskCachedMethod,
+    cache_context,
+    cached_fn,
+    disk_cached_method,
+)
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.utils import json
@@ -183,3 +190,27 @@ async def test_cache_returns_same_value_while_not_expired() -> None:
     await asyncio.sleep(ttl + 0.1)
     _ = await factory()
     assert spy_.calls == 2
+
+
+async def test_ttl_cache_method() -> None:
+    cache: dict[str, Any] = {}
+    calls = 0
+
+    class A:
+        def __init__(self) -> None:
+            self.cache: TTLCacheAdapter[Any] = TTLCacheAdapter(cache)
+
+        @disk_cached_method(ttl=0.2)
+        async def compute(self) -> int:
+            nonlocal calls
+            calls += 1
+            return calls
+
+    inst = A()
+    assert type(inst.compute) is not _DiskCachedMethod
+    assert await inst.compute() == 1
+    assert await inst.compute() == 1
+    inst.compute.clear()
+    assert await inst.compute() == 2
+    await asyncio.sleep(0.2 + 0.1)
+    assert await inst.compute() == 3
