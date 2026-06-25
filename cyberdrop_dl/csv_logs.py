@@ -30,9 +30,10 @@ _CSV_DELIMITER = ","
 @dataclasses.dataclass(slots=True, kw_only=True)
 class CSVFiles:
     main_log: Path
-    unsupported_urls_log: Path
-    download_error_log: Path
-    scrape_error_log: Path
+    unsupported_urls: Path
+    download_errors: Path
+    scrape_errors: Path
+    last_forum_post: Path
     jsonl_file: Path
 
     def __iter__(self) -> Iterator[Path]:
@@ -58,10 +59,11 @@ class CSVLogsManager:
         files = config.logs.files
         files = CSVFiles(
             main_log=files.main,
-            unsupported_urls_log=files.unsupported,
-            download_error_log=files.download_errors,
-            scrape_error_log=files.scrape_errors,
+            unsupported_urls=files.unsupported,
+            download_errors=files.download_errors,
+            scrape_errors=files.scrape_errors,
             jsonl_file=files.jsonl_file,
+            last_forum_post=files.last_forum_post,
         )
         return cls(files)
 
@@ -106,14 +108,17 @@ class CSVLogsManager:
 
     def write_unsupported(self, url: AbsoluteHttpURL, origin: AbsoluteHttpURL | None = None) -> None:
         """Writes to the unsupported urls log."""
-        _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls_log, url=url, origin=origin))
+        _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls, url=url, origin=origin))
+
+    def write_last_post_log(self, url: AbsoluteHttpURL) -> None:
+        _ = self.task_group.create_task(self._write_to_csv(self.files.last_forum_post, url=url))
 
     def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
         """Writes to the download error log."""
         origin = get_origin(media_item)
         _ = self.task_group.create_task(
             self._write_to_csv(
-                self.files.download_error_log,
+                self.files.download_errors,
                 url=media_item.url,
                 error=error_message,
                 referer=media_item.referer,
@@ -129,7 +134,7 @@ class CSVLogsManager:
     ) -> None:
         """Writes to the scrape error log."""
         _ = self.task_group.create_task(
-            self._write_to_csv(self.files.scrape_error_log, url=url, error=error_message, origin=origin)
+            self._write_to_csv(self.files.scrape_errors, url=url, error=error_message, origin=origin)
         )
 
     def write_response(

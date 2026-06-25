@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, final
 
 from bs4 import BeautifulSoup, Tag
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -25,7 +26,7 @@ from cyberdrop_dl.utils import css, extr_text, is_blob_or_svg
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Iterable, Sequence
+    from collections.abc import Generator, Iterable, Sequence
 
     from aiohttp import ClientResponse
 
@@ -406,36 +407,41 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         await self._thread(scrape_item, thread)
 
     async def _thread(self, scrape_item: ScrapeItem, thread: ThreadProtocol) -> None:
-        title: str = ""
-        async for soup in self.thread_pager(scrape_item):
-            if not title:
-                try:
-                    title = self.create_title(get_post_title(soup, self.SELECTORS), thread_id=thread.id)
-                except ScrapeError as e:
-                    self.log.debug("Got an unprocessable soup", exc_info=e)
-                    raise
-                scrape_item.append_folders(title)
+        first_page, pages = await aio.peek_first(self.web_pager(scrape_item.url, self.get_next_page))
+        try:
+            title = get_post_title(first_page, self.SELECTORS)
+        except ScrapeError as e:
+            self.log.debug("Got an unprocessable soup", exc_info=e)
+            raise
+        else:
+            scrape_item.append_folders(self.create_title(title, thread_id=thread.id))
 
-            self._thread_page(scrape_item, thread, soup)
+        post_url = None
+        try:
+            async for soup in pages:
+                for post in self._iter_posts(thread, soup):
+                    post_url = self.make_post_url(thread, post.id)
+                    new_scrape_item = scrape_item.create_new(thread.url, add_parent=post_url)
+                    new_scrape_item.uploaded_at = post.timestamp
+                    self.create_task(self.post(new_scrape_item, post))
+                    scrape_item.add_children()
+        finally:
+            if post_url and post_url != thread.url:
+                self.manager.logs.write_last_post_log(post_url)
 
-    def _thread_page(self, scrape_item: ScrapeItem, thread: ThreadProtocol, soup: BeautifulSoup) -> None:
+    def _iter_posts(self, thread: ThreadProtocol, soup: BeautifulSoup) -> Generator[ForumPost]:
         for article in soup.select(self.SELECTORS.posts.article):
-            current_post = ForumPost.new(article, self.SELECTORS.posts)
-            if thread.post_id and current_post.id < thread.post_id:
+            post = ForumPost.new(article, self.SELECTORS.posts)
+            if thread.post_id and post.id < thread.post_id:
                 continue
 
-            post_url = self.make_post_url(thread, current_post.id)
-            new_scrape_item = scrape_item.create_new(thread.url, add_parent=post_url)
-            new_scrape_item.uploaded_at = current_post.timestamp
-            self.create_task(self.post(new_scrape_item, current_post))
-            scrape_item.add_children()
+            yield post
 
     @error_handling_wrapper
     async def post(self, scrape_item: ScrapeItem, post: ForumPostProtocol) -> None:
         scrape_item.setup_as_post("")
         post_title = self.create_separate_post_title(None, str(post.id), post.date)
         scrape_item.append_folders(post_title)
-        seen = set()
         stats: dict[str, int] = {}
 
         async with self.new_task_group(scrape_item) as tg:
@@ -447,14 +453,13 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
                 self._embeds,
                 self._lazy_load_embeds,
             ):
-                for link in scraper(post):
-                    seen.add(link)
+                for url in scraper(post):
                     scraper_name = scraper.__name__.removeprefix("_")
                     stats[scraper_name] = stats.get(scraper_name, 0) + 1
-                    tg.create_task(self.process_child(scrape_item, link, embeds="embeds" in scraper_name))
+                    tg.create_task(self.process_child(scrape_item, url, embeds="embeds" in scraper_name))
                     scrape_item.add_children()
 
-        if seen:
+        if stats:
             self.log.info(f"post #{post.id} {stats = }")
 
     def _external_links(self, post: ForumPostProtocol) -> Iterable[str]:
@@ -487,10 +492,6 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         selector = self.SELECTORS.posts.lazy_load_embeds
         for lazy_media in css.iselect(post.content, selector.element):
             yield extr_text(css.attr(lazy_media, selector.attribute), "loadMedia(this, '", "')")
-
-    async def thread_pager(self, scrape_item: ScrapeItem) -> AsyncGenerator[BeautifulSoup]:
-        async for soup in self.web_pager(scrape_item.url, self.get_next_page):
-            yield soup
 
     def get_next_page(self, soup: BeautifulSoup) -> str | None:
         try:

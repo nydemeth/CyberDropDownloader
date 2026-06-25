@@ -109,6 +109,7 @@ logs:
   expire_after: null
   files:
     download_errors: download_errors.csv
+    last_forum_post: last_forum_post.csv
     main: downloader.log
     scrape_errors: scrape_errors.csv
     unsupported: unsupported.csv

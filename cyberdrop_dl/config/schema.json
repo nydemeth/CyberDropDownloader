@@ -604,6 +604,10 @@
         "unsupported": {
           "$ref": "#/$defs/CSVPath",
           "default": "unsupported.csv"
+        },
+        "last_forum_post": {
+          "$ref": "#/$defs/CSVPath",
+          "default": "last_forum_post.csv"
         }
       },
       "title": "LogFiles",
