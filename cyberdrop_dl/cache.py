@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
+import functools
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, cast
 
 from cyberdrop_dl import __version__
+from cyberdrop_dl.constants import MISSING
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Awaitable, Callable, Generator
     from pathlib import Path
+    from types import CoroutineType
 
 logger = logging.getLogger(__name__)
+_IN_MEMORY_CACHE: dict[str, Any] = {}
 
 
 class _CachedValue[T](TypedDict):
@@ -32,7 +37,7 @@ def _has_expired(self: _CachedValue[Any]) -> bool:
 class TTLCacheAdapter[T]:
     _cache: dict[str, Any]
     _keys: tuple[str, ...] = ()
-    _root: dict[str, _CachedValue[Any]] = dataclasses.field(init=False)
+    _root: dict[str, _CachedValue[Any]] = dataclasses.field(init=False, repr=False)
 
     def create_lookup_path(self, *keys: str) -> str:
         return ".".join([*self._keys, *keys])
@@ -56,15 +61,15 @@ class TTLCacheAdapter[T]:
 
     def __getitem__(self, key: str, /) -> T:
         cache_hit = self._get(key)
-        if cache_hit is None:
+        if cache_hit is MISSING:
             raise KeyError(key)
         return cache_hit["value"]
 
-    def _get(self, key: str) -> _CachedValue[T] | None:
+    def _get(self, key: str) -> _CachedValue[T] | MISSING:  # pyright: ignore[reportInvalidTypeForm]
         try:
             cache_hit = self.root[key]
         except KeyError:
-            return None
+            return MISSING
 
         try:
             expired = _has_expired(cache_hit)
@@ -74,7 +79,7 @@ class TTLCacheAdapter[T]:
 
         if expired:
             del self[key]
-            return None
+            return MISSING
         return cache_hit
 
     def __delitem__(self, key: str) -> None:
@@ -82,7 +87,7 @@ class TTLCacheAdapter[T]:
 
     def get(self, key: str) -> T | None:
         cache_hit = self._get(key)
-        return None if cache_hit is None else cache_hit["value"]
+        return None if cache_hit is MISSING else cache_hit["value"]
 
     def save(self, key: str, value: T, *, ttl: float | None = None) -> None:
         """NOTE: cached values MUST be JSON serializable"""
@@ -95,6 +100,12 @@ class TTLCacheAdapter[T]:
     def __setitem__(self, name: str, value: T) -> None:
         """NOTE: cached values MUST be JSON serializable"""
         self.save(name, value, ttl=None)
+
+    def discard(self, key: str) -> None:
+        try:
+            del self[key]
+        except KeyError:
+            return
 
 
 @contextlib.contextmanager
@@ -114,3 +125,44 @@ def cache_context(cache_file: Path, cache: dict[str, Any]) -> Generator[None]:
         cache["version"] = __version__
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True))
+
+
+class CachedAsyncFunc[T](Protocol):
+    def __call__(self) -> CoroutineType[Any, Any, T]: ...
+
+    def clear(self) -> None: ...
+
+
+def cached_fn[T](
+    fn: Callable[[], Awaitable[T]],
+    cache: TTLCacheAdapter[T] | None = None,
+    *,
+    key: str | None = None,
+    ttl: float | None = None,
+) -> CachedAsyncFunc[T]:
+
+    lock = asyncio.Lock()
+
+    *parts, fn_name = ".".join([fn.__module__, fn.__qualname__]).split(".")
+    key = key or fn_name
+    cache = cache or TTLCacheAdapter(_IN_MEMORY_CACHE, tuple(parts))
+
+    @functools.wraps(fn)
+    async def wrapper() -> T:
+        try:
+            return cache[key]
+        except KeyError:
+            pass
+
+        async with lock:
+            try:
+                return cache[key]
+            except KeyError:
+                pass
+
+            value = await fn()
+            cache.save(key, value, ttl=ttl)
+            return value
+
+    wrapper.clear = lambda: cache.discard(key)  # pyright: ignore[reportAttributeAccessIssue]
+    return cast("CachedAsyncFunc[T]", cast("object", wrapper))

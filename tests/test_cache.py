@@ -1,11 +1,13 @@
+import asyncio
 import time
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.cache import TTLCacheAdapter, cache_context
+from cyberdrop_dl.cache import _IN_MEMORY_CACHE, TTLCacheAdapter, cache_context, cached_fn
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.utils import json
@@ -101,3 +103,83 @@ def test_invalid_cache(logs: pytest.LogCaptureFixture) -> None:
         },
     }
     assert logs.messages == ["Invalid cache entry a.b, ignoring"]
+
+
+async def test_cache_fn() -> None:
+
+    call = 0
+
+    async def update() -> int:
+        nonlocal call
+        call += 1
+        return call
+
+    fn = cached_fn(update)
+    assert await fn() == 1
+    assert await fn() == 1
+
+    fn = cached_fn(update, ttl=0.2)
+    assert await fn() == 1
+    assert await fn() == 1
+
+    fn2 = cached_fn(update, key="update2", ttl=0.2)
+    assert await fn2() == 2
+    assert await fn2() == 2
+    await asyncio.sleep(0.2 + 0.1)
+    assert await fn2() == 3
+    assert _IN_MEMORY_CACHE["test_cache"]["test_cache_fn"]["<locals>"] == {
+        "update": {
+            "value": 1,
+            "ttl": None,
+            "created_at": mock.ANY,
+        },
+        "update2": {
+            "value": 3,
+            "ttl": 0.2,
+            "created_at": mock.ANY,
+        },
+    }
+    fn.clear()
+    assert "update" not in _IN_MEMORY_CACHE["test_cache"]["test_cache_fn"]["<locals>"]
+    assert await fn() == 4
+
+
+class Spy:
+    def __init__(self, value: object) -> None:
+        self.value: object = value
+        self.calls: int = 0
+
+    async def __call__(self) -> object:
+        self.calls += 1
+        return self.value
+
+
+async def test_cached_fn_concurrent_calls_execute_only_once() -> None:
+    spy = Spy("test 2")
+
+    async def factory() -> object:
+        await asyncio.sleep(0.02)
+        return await spy()
+
+    factory = cached_fn(factory, ttl=60)
+    results = await asyncio.gather(*(factory() for _ in range(10)))
+    assert len(set(results)) == 1
+    assert spy.calls == 1
+
+
+async def test_cache_returns_same_value_while_not_expired() -> None:
+    ttl = 0.5
+    spy_ = Spy("test 1")
+
+    def spy():
+        return spy_()
+
+    factory = cached_fn(spy, ttl=ttl)
+    first = await factory()
+    second = await factory()
+
+    assert first == second
+    assert spy_.calls == 1
+    await asyncio.sleep(ttl + 0.1)
+    _ = await factory()
+    assert spy_.calls == 2
