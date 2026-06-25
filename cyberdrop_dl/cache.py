@@ -21,43 +21,62 @@ logger = logging.getLogger(__name__)
 _IN_MEMORY_CACHE: dict[str, Any] = {}
 
 
+class CachedAsyncFunc[T](Protocol):
+    def __call__(self) -> CoroutineType[Any, Any, T]: ...
+
+    def clear(self) -> None: ...
+
+
 class _CachedValue[T](TypedDict):
     value: T
     ttl: float | None
     created_at: float
 
 
-def _has_expired(self: _CachedValue[Any]) -> bool:
-    if self["ttl"] is None:
-        return False
-    return time.time() - self["created_at"] >= self["ttl"]
+@contextlib.contextmanager
+def cache_context(cache_file: Path, cache: dict[str, Any]) -> Generator[None]:
+    # TODO: Add a background task to dump cache to disk every 5 minutes
+    try:
+        content = cache_file.read_text()
+    except FileNotFoundError:
+        cache_file.parent.mkdir(exist_ok=True, parents=True)
+        cache_file.touch()
+    else:
+        data = json.loads(content)
+        assert type(data) is dict
+        cache.update(data)
+    try:
+        yield
+    finally:
+        cache["version"] = __version__
+        cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True))
 
 
 @dataclasses.dataclass(slots=True)
 class TTLCacheAdapter[T]:
     _cache: dict[str, Any]
     _keys: tuple[str, ...] = ()
-    _root: dict[str, _CachedValue[Any]] = dataclasses.field(init=False, repr=False)
+    __root: dict[str, _CachedValue[Any]] = dataclasses.field(init=False, repr=False)
 
-    def create_lookup_path(self, *keys: str) -> str:
+    def _lookup_path(self, *keys: str) -> str:
         return ".".join([*self._keys, *keys])
 
     @property
-    def root(self) -> dict[str, _CachedValue[Any]]:
+    def _root(self) -> dict[str, _CachedValue[Any]]:
         try:
-            return self._root
+            return self.__root
         except AttributeError:
             root = self._cache
             for key in self._keys:
                 try:
                     root = root.setdefault(key, {})
                 except (KeyError, TypeError, ValueError, AttributeError):
-                    logger.exception(f"Invalid cache entry {self.create_lookup_path()}, ignoring")
+                    logger.exception(f"Invalid cache entry {self._lookup_path()}, ignoring")
                     root = {}
                     break
 
-            self._root = root
-            return self._root
+            self.__root = root
+            return self.__root
 
     def __getitem__(self, key: str, /) -> T:
         cache_hit = self._get(key)
@@ -65,25 +84,26 @@ class TTLCacheAdapter[T]:
             raise KeyError(key)
         return cache_hit["value"]
 
+    def _has_expired(self, key: str, cache_hit: _CachedValue[T]) -> bool:
+        try:
+            return _has_expired(cache_hit)
+        except (KeyError, TypeError, ValueError, AttributeError):
+            logger.exception(f"Invalid cache entry {self._lookup_path(key)}, ignoring")
+            return True
+
     def _get(self, key: str) -> _CachedValue[T] | MISSING:  # pyright: ignore[reportInvalidTypeForm]
         try:
-            cache_hit = self.root[key]
+            cache_hit = self._root[key]
         except KeyError:
             return MISSING
 
-        try:
-            expired = _has_expired(cache_hit)
-        except (KeyError, TypeError, ValueError, AttributeError):
-            logger.exception(f"Invalid cache entry {self.create_lookup_path(key)}, ignoring")
-            expired = True
-
-        if expired:
+        if self._has_expired(key, cache_hit):
             del self[key]
             return MISSING
         return cache_hit
 
     def __delitem__(self, key: str) -> None:
-        del self.root[key]
+        del self._root[key]
 
     def get(self, key: str) -> T | None:
         cache_hit = self._get(key)
@@ -91,7 +111,7 @@ class TTLCacheAdapter[T]:
 
     def save(self, key: str, value: T, *, ttl: float | None = None) -> None:
         """NOTE: cached values MUST be JSON serializable"""
-        self.root[key] = {
+        self._root[key] = {
             "value": value,
             "ttl": ttl,
             "created_at": time.time(),
@@ -108,31 +128,6 @@ class TTLCacheAdapter[T]:
             return
 
 
-@contextlib.contextmanager
-def cache_context(cache_file: Path, cache: dict[str, Any]) -> Generator[None]:
-    try:
-        content = cache_file.read_text()
-    except FileNotFoundError:
-        cache_file.parent.mkdir(exist_ok=True, parents=True)
-        cache_file.touch()
-    else:
-        data = json.loads(content)
-        assert type(data) is dict
-        cache.update(data)
-    try:
-        yield
-    finally:
-        cache["version"] = __version__
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True))
-
-
-class CachedAsyncFunc[T](Protocol):
-    def __call__(self) -> CoroutineType[Any, Any, T]: ...
-
-    def clear(self) -> None: ...
-
-
 def cached_fn[T](
     fn: Callable[[], Awaitable[T]],
     cache: TTLCacheAdapter[T] | None = None,
@@ -141,24 +136,19 @@ def cached_fn[T](
     ttl: float | None = None,
 ) -> CachedAsyncFunc[T]:
 
-    lock = asyncio.Lock()
-
     *parts, fn_name = ".".join([fn.__module__, fn.__qualname__]).split(".")
     key = key or fn_name
     cache = cache or TTLCacheAdapter(_IN_MEMORY_CACHE, tuple(parts))
+    lock = asyncio.Lock()
 
     @functools.wraps(fn)
     async def wrapper() -> T:
-        try:
+        with contextlib.suppress(KeyError):
             return cache[key]
-        except KeyError:
-            pass
 
         async with lock:
-            try:
+            with contextlib.suppress(KeyError):
                 return cache[key]
-            except KeyError:
-                pass
 
             value = await fn()
             cache.save(key, value, ttl=ttl)
@@ -166,3 +156,9 @@ def cached_fn[T](
 
     wrapper.clear = lambda: cache.discard(key)  # pyright: ignore[reportAttributeAccessIssue]
     return cast("CachedAsyncFunc[T]", cast("object", wrapper))
+
+
+def _has_expired(self: _CachedValue[Any]) -> bool:
+    if self["ttl"] is None:
+        return False
+    return time.time() - self["created_at"] >= self["ttl"]

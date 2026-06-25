@@ -44,7 +44,7 @@ def test_ttl_cache_creation() -> None:
 def test_ttl_cache_add() -> None:
     cache = {}
     ttl_cache = TTLCacheAdapter(cache, ("a", "b"))
-    assert ttl_cache.create_lookup_path("account") == "a.b.account"
+    assert ttl_cache._lookup_path("account") == "a.b.account"
     ttl_cache.save("account", 123, ttl=60)
     assert cache == {
         "a": {
@@ -95,7 +95,7 @@ def test_invalid_cache(logs: pytest.LogCaptureFixture) -> None:
 
     ttl_cache["key"] = 4
     assert cache == {"a": [1, 2, 5]}
-    assert ttl_cache.root == {
+    assert ttl_cache._root == {
         "key": {
             "value": 4,
             "ttl": None,
