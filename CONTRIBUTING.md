@@ -1,20 +1,23 @@
 # Contributing
 
+> [!NOTE]
+> The words **SHOULD**/**SHOULD_NOT**, **MAY**/**MAY NOT** and **MUST**/**MUST NOT** in this document reflects the same meaning as defined by RFC 2129 <https://www.rfc-editor.org/info/rfc2119>
+
 ## Reporting issues
 
-Search for existing issues before creating a new one. If a bug already has issue, comment on the existing issue
+You **SHOULD** search for existing issues before creating a new one. If a bug already has issue, you **MAY** comment on the existing issue
 with extra information that might help reproduce or fix the problem. Duplicate issues will be closed with a
 reference to the existing issue.
 
 You **SHOULD** [read the wiki](https://script-ware.gitbook.io/cyberdrop-dl/frequently-asked-questions) as it
 includes solutions to some common problems.
 
-If your issue is a bug and hasn't been reported, open a new issue at <https://github.com/Cyberdrop-DL/cyberdrop-dl/issues/new/choose>.
+If your issue hasn't been reported yet, **MAY** open a new issue at <https://github.com/Cyberdrop-DL/cyberdrop-dl/issues/new/choose>.
 
 ## Feature requests
 
 You **MAY** request a new feature by [opening an issue](#submitting-an-issue). If you would like to implement a new feature,
-you **SHOULD** open an issue or a discussion with a proposal first and at least one use case. You **MAY** submit a PR directly if your feature is small
+you **SHOULD** open an issue/discussion with a proposal first and at least one use case. You **MAY** submit a PR directly if your feature is small
 with a narrow scope.
 
 ## Setting up the development environment
@@ -50,7 +53,7 @@ Once you have `uv` installed, follow these steps:
    uv run pytest
 ```
 
-## Code Style
+## Code style
 
 ### Standards
 
@@ -108,7 +111,7 @@ If everything is okay, your changes will be merged into the project.
 There's no standard template for a new crawler, but there are a few conventions. Some of these conventions are enforced by tests.
 
 You **SHOULD** look at the code of another (hopefully similar) crawler
-and based your crawler on that. A simple crawler to use as base is [CloudFlareStream](cyberdrop_dl/crawlers/cloudflare_stream.py).
+and base your crawler on that. A simple crawler to use as base is [CloudFlareStream](cyberdrop_dl/crawlers/cloudflare_stream.py).
 
 - All crawlers **MUST** inherit from the [base crawler](cyberdrop_dl/crawlers/crawler.py).
 - All crawlers **MUST** have the word `Crawler` at the end of their class name
