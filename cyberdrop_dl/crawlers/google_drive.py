@@ -38,7 +38,8 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -123,7 +124,7 @@ class GoogleDriveCrawler(Crawler):
         title = self.create_title(folder_name, folder_id)
         scrape_item.setup_as_album(title, album_id=folder_id)
 
-        for index, (_, child) in enumerate(self.iter_tags(soup, _FOLDER_ITEM_SELECTOR), 1):
+        for index, child in enumerate(self.iter_urls(soup, _FOLDER_ITEM_SELECTOR), 1):
             new_scrape_item = scrape_item.create_child(child)
             self.create_task(self.run(new_scrape_item))
             scrape_item.add_children()
@@ -176,7 +177,7 @@ class GoogleDriveCrawler(Crawler):
 
     @error_handling_wrapper
     async def _file(self, scrape_item: ScrapeItem, export_url: AbsoluteHttpURL) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         link, name = await self._get_file_info(export_url)

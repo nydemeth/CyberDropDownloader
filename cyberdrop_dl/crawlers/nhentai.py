@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import LoginError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -68,7 +69,7 @@ class NHentaiCrawler(Crawler):
                 title = self.create_title(title_tag.get_text(strip=True) + title)
                 scrape_item.setup_as_album(title)
 
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
+            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper

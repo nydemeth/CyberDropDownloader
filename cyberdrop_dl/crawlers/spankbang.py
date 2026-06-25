@@ -7,7 +7,8 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text, json
+from cyberdrop_dl.utils import css, extr_text, json
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class Selector:
-    STREAM_DATA = ".main-container > script:-soup-contains('var stream_data')"
+    STREAM_DATA = ".main-container script:-soup-contains('var stream_data')"
     PLAYLIST_TITLE = "[data-testid=playlist-title]"
     NEXT_PAGE = ".pagination li.next > a[href]"
 
@@ -148,7 +149,7 @@ class SpankBangCrawler(Crawler):
 
     async def _iter_videos(self, scrape_item: ScrapeItem, soup: BeautifulSoup) -> None:
         async with self.new_task_group(scrape_item) as tg:
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
+            for new_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
                 tg.create_task(self.run(new_item))
 
 

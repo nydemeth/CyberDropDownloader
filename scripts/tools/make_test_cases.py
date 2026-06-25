@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl.__main__ import run_cdl
-from cyberdrop_dl.crawlers.crawler import SKIP_DOWNLOAD
+from cyberdrop_dl.config.appdata import AppData, AppDirs
+from cyberdrop_dl.crawlers import SKIP_DOWNLOAD
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-KEYS = ("url", "filename", "debrid_link", "original_filename", "referer", "album_id", "uploaded_at", "download_folder")
+KEYS = ("url", "filename", "debrid_url", "original_filename", "referer", "album_id", "uploaded_at", "download_folder")
 ROOT = Path(__file__).resolve().parents[2]
 TEST_FOLDER = ROOT / "tests/crawlers/test_cases"
 
@@ -21,7 +22,7 @@ TestCase = dict[str, Any]
 
 
 def parse_jsonl(file: Path) -> Generator[tuple[str, str, TestCase]]:
-    base = Path.cwd() / "Downloads"
+    base = Path.cwd() / "downloads"
     for line in file.read_text(encoding="utf-8").splitlines():
         media = json.loads(line)
         url = media["parents"][0] if media["parents"] else media["referer"]
@@ -31,15 +32,20 @@ def parse_jsonl(file: Path) -> Generator[tuple[str, str, TestCase]]:
 
 def run(url_txt: Path, main_log: Path) -> None:
     with tempfile.TemporaryDirectory() as temp:
+        appdata = AppData.from_dirs(AppDirs.from_path(Path(temp) / "test_appdata"))
+        appdata.config_file.parent.mkdir(parents=True, exist_ok=True)
+        appdata.config_file.touch()
         _ = SKIP_DOWNLOAD.set(True)
         _ = run_cdl(
             [
-                "--download",
-                "--appdata-folder",
-                temp,
+                "download",
+                "--database-file",
+                str(appdata.db_file),
+                "--config-file",
+                str(appdata.config_file),
                 "--input-file",
                 str(url_txt),
-                "--main-log",
+                "--log-file",
                 str(main_log),
                 "--dump-json",
                 "--ui",

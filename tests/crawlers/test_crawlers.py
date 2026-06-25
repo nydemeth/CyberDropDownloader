@@ -5,12 +5,11 @@ import importlib.util
 import re
 from collections.abc import Callable, Generator, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NotRequired
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 from unittest import mock
 
 import pytest
 from pydantic import TypeAdapter
-from typing_extensions import TypedDict
 
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
@@ -112,7 +111,7 @@ async def test_crawler(running_manager: Manager, test_case: CrawlerTestCase) -> 
             await crawler.__async_init__()
             item = ScrapeItem(
                 url=crawler.parse_url(test_case.url),
-                download_folder=running_manager.config.settings.files.download_folder,
+                download_folder=running_manager.config.download_folder,
             )
             await crawler.run(item)
 
@@ -213,7 +212,7 @@ async def test_direct_http_crawler(running_manager: Manager, url: str, filename:
             await scrape_mapper.run()
             item = ScrapeItem(
                 url=parse_url(test_case.url),
-                download_folder=running_manager.config.settings.files.download_folder,
+                download_folder=running_manager.config.download_folder,
             )
             await crawler.fetch(item)
 
@@ -223,7 +222,7 @@ async def test_direct_http_crawler(running_manager: Manager, url: str, filename:
 
 
 def test_invalid_crawler_modules_should_raise_import_error() -> None:
-    from cyberdrop_dl.crawlers.crawler import Registry
+    from cyberdrop_dl.crawlers import Registry
 
     with pytest.raises(ImportError, match="Could not import crawlers from module"):
         Registry._import_module("cyberdrop_dl.crawler.fake_crawler_12345")
@@ -232,8 +231,9 @@ def test_invalid_crawler_modules_should_raise_import_error() -> None:
 def test_public_methods_have_error_handling_wrapper() -> None:
     import inspect
 
-    from cyberdrop_dl.crawlers.crawler import Crawler, Registry
-    from cyberdrop_dl.utils import is_error_wrapped
+    from cyberdrop_dl.crawlers import Registry
+    from cyberdrop_dl.crawlers.crawler import Crawler
+    from cyberdrop_dl.utils.errors import is_error_wrapped
 
     def returns_none(func: Callable[..., Any]) -> bool:
         return_ = inspect.signature(func).return_annotation
@@ -255,10 +255,8 @@ def test_public_methods_have_error_handling_wrapper() -> None:
             if name not in base_methods and not is_error_wrapped(method) and returns_none(method)
         )
 
-    Registry.import_all()
-
     errors: list[Exception] = []
-    for crawler in sorted(Registry.concrete | Registry.generic, key=lambda x: x.__name__):
+    for crawler in sorted(Registry.get_crawlers(generic=True), key=lambda x: x.__name__):
         unwrapped_methods = sorted(unsafe_public_methods(crawler))
         if unwrapped_methods:
             errors.append(ValueError(crawler.__name__, unwrapped_methods))

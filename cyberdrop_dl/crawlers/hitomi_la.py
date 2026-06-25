@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.filepath import get_filename_and_ext
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import DictDataclass, error_handling_wrapper
-from cyberdrop_dl.utils.filepath import get_filename_and_ext
+from cyberdrop_dl.utils.dataclass import DictDataclass
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable, Mapping

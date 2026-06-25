@@ -14,25 +14,15 @@ will be changed to:
 
 > `Downloads/folderA/image.jpg`
 
-## `disable_download_attempts`
+## `mtime`
 
 | Type   | Default |
 | ------ | ------- |
-| `bool` | `false` |
-
-By default the program will retry a download twice. You can set this to `true` to disable it and always retry until the download completes.
-
-However, to make sure the program will not run endlessly, there are certain situations where a file will never be retried, like if the program receives a `404` HTTP status, meaning the link is dead.
-
-## `disable_file_timestamps`
-
-| Type   | Default |
-| ------ | ------- |
-| `bool` | `false` |
+| `bool` | `True`  |
 
 By default the program will do it's absolute best to try and find the upload date of a file. It'll then set the `last modified` and `last accessed` dates on the file to match. On Windows and macOS, it will also try to set the `created` date.
 
-Setting this to `true` will disable this function, and the dates for those metadata entries will be the date the file was downloaded.
+Setting this to `false` will disable this function, and the dates for those metadata entries will be the date the file was downloaded.
 
 ## `include_album_id_in_folder_name`
 
@@ -114,38 +104,6 @@ No **FORUM** limit, no **FORUM_POST** limit, no **FILE_HOST_PROFILE** limit, max
 
 Setting this to `true` will remove the "(DOMAIN)" portion of folder names on new downloads.
 
-## `remove_generated_id_from_filenames`
-
-| Type   | Default |
-| ------ | ------- |
-| `bool` | `false` |
-
-Setting this to `true` will remove the alphanumeric ID added to the end of filenames by some websites.
-
-This option only works for URLs from `cyberdrop.me` at the moment.
-
-Multipart archive filenames will be corrected to follow the proper naming pattern for their format.
-
-Supported formats: `.rar` `.7z` `.tar` `.gz` `.bz2` `.zip`
-
-## `scrape_single_forum_post`
-
-| Type   | Default |
-| ------ | ------- |
-| `bool` | `false` |
-
-Setting this to `true` will prevent Cyberdrop-DL from scraping an entire thread if the input URL had an specific post in it.
-
-CDL will only download files within that post.
-
-For most forum sites, the post id is part of the fragment in the URL.
-
-ex: `/thread/iphone-16-16e-16-plus-16-pro-16-promax.256047/page-64#post-7512404` has a post id of `7512404`
-
-If `scrape_single_forum_post` is `false`, CDL will download all post in the thread, from post `7512404` until the last post
-
-If `scrape_single_forum_post` is `true`, CDL will only download files within post `7512404` itself and stop.
-
 ## `separate_posts`
 
 | Type   | Default |
@@ -201,15 +159,15 @@ Setting it to `{default}` will use the default format, which is different for ea
 | `Reddit`                              | `{title}`                          |
 | `WordPress`                           | `{date:%Y-%m-%d} - {id} - {title}` |
 | `eFukt`                               | `{date:%Y-%m-%d} {title}`          |
-| `Tiktok`                              | `{date:%Y-%m-%d} - {id}`          |
+| `Tiktok`                              | `{date:%Y-%m-%d} - {id}`           |
 
 A date without a `format_spec` defaults to ISO 8601 format
 
 You can use any valid format string supported by python, with the following restrictions:
 
 - You can not have positional arguments in the format string. ex: `post {0} from date {1}`
-- You can not have unnamed fields in the format string. ex:  `post {} from date {}`
-- You can not perform operations within the format string. ex:  `post {id + 1} from date {date}`
+- You can not have unnamed fields in the format string. ex: `post {} from date {}`
+- You can not perform operations within the format string. ex: `post {id + 1} from date {date}`
 - All the fields named in the format string must be valid fields for that format option. CDL will validate this at startup
 
 ## `skip_download_mark_completed`
@@ -273,7 +231,7 @@ Restricts the max number of nested folders CDL will create when `maximum_thread_
 
 Values:
 
-- `None`: Create as many nested folders as required (AKA, the same number as  `maximum_thread_depth` allows)
+- `None`: Create as many nested folders as required (AKA, the same number as `maximum_thread_depth` allows)
 - `0`: Do not create subfolders, use a flat structure for any nested thread.
 - `1+`: Create a max of `n` folders
 

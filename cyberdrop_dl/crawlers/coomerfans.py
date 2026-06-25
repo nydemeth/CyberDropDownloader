@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, extr_text
+from cyberdrop_dl.utils import css, extr_text
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -53,7 +54,7 @@ class CoomerFansCrawler(Crawler):
 
     @property
     def ignore_content(self) -> bool:
-        return self.manager.config.settings.ignore_options.ignore_coomer_post_content
+        return self.config.crawlers.coomer.ignore_post_content
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -106,7 +107,7 @@ class CoomerFansCrawler(Crawler):
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem) -> None:
         async for soup in self.web_pager(scrape_item.url):
-            for _, child in self.iter_children(scrape_item, soup, "a.view-post[href]"):
+            for child in self.iter_children(scrape_item, soup, "a.view-post[href]"):
                 self.create_task(self.run(child))
 
 

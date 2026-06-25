@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import itertools
 import time
-from hashlib import sha256
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
 
+from typing_extensions import ReadOnly
+
+from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
-from cyberdrop_dl.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import error_handling_wrapper
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
-
-    from typing_extensions import ReadOnly
 
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.gofile.io")
@@ -71,7 +72,7 @@ class GoFileCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "GoFile"
     _RATE_LIMIT: ClassVar[RateLimit] = 4, 10
 
-    _SALT: ClassVar[str] = "g4f8fd9f12h14g"
+    _SALT: ClassVar[str] = env.GOFILE_SALT or "9844d94d963d30"
     _BROWSER_LANG: ClassVar[str] = "en-US"
 
     def __post_init__(self) -> None:
@@ -80,7 +81,7 @@ class GoFileCrawler(Crawler):
     @property
     def headers(self) -> dict[str, str]:
         headers = {
-            "User-Agent": (ua := self.manager.config.global_settings.general.user_agent),
+            "User-Agent": (ua := self.config.network.user_agent),
             "Origin": "https://gofile.io",
             "Referer": "https://gofile.io/",
         }
@@ -186,7 +187,7 @@ class GoFileCrawler(Crawler):
         )
 
         if password:
-            sha256_password = sha256(password.encode(), usedforsecurity=False).hexdigest()
+            sha256_password = hashlib.sha256(password.encode(), usedforsecurity=False).hexdigest()
             api_url = api_url.update_query(password=sha256_password)
 
         for page in itertools.count(1):
@@ -220,7 +221,7 @@ class GoFileCrawler(Crawler):
     @error_handling_wrapper
     async def _get_credentials(self, _) -> None:
         with self.disable_on_error("Unable to get api_key"):
-            if key := self.manager.config.auth.gofile.api_key:
+            if key := self.config.auth.gofile.api_key:
                 self._api_key = key
             else:
                 self._api_key = await self._create_temp_account()
@@ -258,10 +259,12 @@ def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:
 
 
 def _has_single_not_nested_file(scrape_item: ScrapeItem, folder: Folder) -> bool:
-    return folder["childrenCount"] == 1 and folder["name"] == folder["code"] and scrape_item.type != FILE_HOST_ALBUM
+    return (
+        folder["childrenCount"] == 1 and folder["name"] == folder["code"] and scrape_item.type != ScrapeItemType.ALBUM
+    )
 
 
 def _create_web_token(user_agent: str, brower_lang: str, api_key: str, salt: str) -> str:
     # https://gofile.io/dist/js/wt.obf.js
     token = f"{user_agent}::{brower_lang}::{api_key}::{int(time.time() // 14400)}::{salt}"
-    return sha256(token.encode()).hexdigest()
+    return hashlib.sha256(token.encode()).hexdigest()

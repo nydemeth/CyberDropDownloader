@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import deserialize, error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import parse_url
+from cyberdrop_dl.utils.dataclass import deserialize
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
@@ -66,7 +68,7 @@ class WhypItCrawler(Crawler):
 
     @error_handling_wrapper
     async def track(self, scrape_item: ScrapeItem, track_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         track = await self.api.track(track_id, token=scrape_item.url.query.get("token"))

@@ -10,7 +10,8 @@ from pydantic import TypeAdapter
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import dates, error_handling_wrapper
+from cyberdrop_dl.utils import dates
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -114,7 +115,7 @@ class PCloudCrawler(Crawler):
 
         link = await self._request_download_url(scrape_item, file)
         # https://docs.pcloud.com/structures/datetime.html
-        scrape_item.uploaded_at = dates.parse_http(file.modified)
+        scrape_item.upload_date = dates.parse_http(file.modified)
         filename, ext = self.get_filename_and_ext(file.name)
         # Adding the code as query just for logging messages. It will be discarded in the actual db
         db_url = (scrape_item.url.origin() / "file" / file._id).with_query(code=scrape_item.url.query["code"])

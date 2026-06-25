@@ -7,7 +7,7 @@ from mega.transfer_it import TransferItClient
 from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_wrapper
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from mega.data_structures import Node
@@ -22,7 +22,7 @@ class TransferItCrawler(Crawler, db_path="path_qs_frag", cdl_user_agent=True):
     DOMAIN: ClassVar[str] = "transfer.it"
 
     def __post_init__(self) -> None:
-        self.core: TransferItClient = TransferItClient(self.manager.http_client._session, user_agent=CDL_USER_AGENT)
+        self.core: TransferItClient = TransferItClient(self.client._session, user_agent=CDL_USER_AGENT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:

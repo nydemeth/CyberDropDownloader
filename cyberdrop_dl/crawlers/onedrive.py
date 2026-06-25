@@ -4,16 +4,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from functools import partial
+import dataclasses
+import functools
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import error_handling_wrapper
-from cyberdrop_dl.utils.dates import to_timestamp
+from cyberdrop_dl.utils import dates
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -30,7 +29,7 @@ APP_ID = "1141147648"
 APP_UUID = "5cbed6ac-a083-4e14-b191-b4ba07653de2"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class AccessDetails:
     container_id: str
     resid: str
@@ -52,7 +51,7 @@ class AccessDetails:
         return AccessDetails(container_id, resid, auth_key, redeem)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class OneDriveItem:
     id: str
     url: AbsoluteHttpURL
@@ -62,7 +61,7 @@ class OneDriveItem:
     access_details: AccessDetails
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class OneDriveFile(OneDriveItem):
     download_url: AbsoluteHttpURL
 
@@ -74,7 +73,7 @@ class OneDriveFile(OneDriveItem):
         return cls(**info)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class OneDriveFolder(OneDriveItem):
     children: list[dict[str, Any]]
 
@@ -127,7 +126,7 @@ class OneDriveCrawler(Crawler):
     async def link_with_credentials(
         self, scrape_item: ScrapeItem, og_share_link: AbsoluteHttpURL | None = None
     ) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         if og_share_link and await self.check_complete_from_referer(og_share_link):
@@ -164,7 +163,7 @@ class OneDriveCrawler(Crawler):
 
         subfolders: list[AccessDetails] = []
         old_ad = folder.access_details
-        new_access_details = partial(AccessDetails, auth_key=old_ad.auth_key, redeem=old_ad.redeem)
+        new_access_details = functools.partial(AccessDetails, auth_key=old_ad.auth_key, redeem=old_ad.redeem)
 
         for item in folder.children:
             if is_folder(item):
@@ -234,7 +233,7 @@ def parse_api_response(json_resp: dict[str, Any], access_details: AccessDetails)
         "url": create_api_url(new_access_details),
         "web_url": AbsoluteHttpURL(web_url_str, encoded="%" in web_url_str),
         "name": json_resp["name"],
-        "date": to_timestamp(datetime.fromisoformat(date_str)),
+        "date": dates.parse_iso(date_str).timestamp(),
         "access_details": new_access_details,
     }
 

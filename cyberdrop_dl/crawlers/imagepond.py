@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, ClassVar, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
+from cyberdrop_dl.utils import css, open_graph
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -100,7 +101,7 @@ class ImagePondCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         async with self.request(scrape_item.url) as resp:
@@ -141,5 +142,5 @@ class ImagePondCrawler(Crawler):
         scrape_item.setup_as_profile(title)
 
         async for soup in self.web_pager(scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.USER_FILES):
+            for new_item in self.iter_children(scrape_item, soup, Selector.USER_FILES):
                 self.create_task(self.run(new_item))

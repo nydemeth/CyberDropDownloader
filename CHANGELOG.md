@@ -22,13 +22,213 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - UNRELEASED
+
+⚠️**IMPORTANT**
+
+> This version is incompatible with any previous release. Config file options need to be manually migrated by user.
+>
+> CDL will refuse to start if the current database schema is older than `v9.15.0`. Run `cyberdrop-dl database transfer` to upgrade older databases
+
+### Added
+
+- New `--cookies` option to read cookies from a file/folder
+- New `--hashes` option to control which hashes CDL computes for new downloads
+- New `--database-file` option
+- New `--cache-file` option
+- New `download` subcommand (replaces the `--download` argument)
+- New `config` subcommand
+- New `hash` subcommand
+- New `report` subcommand
+
+### Changed
+
+- The config file format has changed. All configs (`Auth`, `Global` and `Setttings`) are now a single file. Several options have new names, new defaults and new groups
+- A default config file will noo longer be created. You can manually create a default one from the `Edit config` option on the main menu
+- Validate config in strict mode. If a config has an unknown entry, CDL will refuse to run instead of ignoring it
+- Apprise URLs are now part of the main config file instead of a dedicated `apprise.txt` file
+- Refuse to start if the current database schema is older than `v9.15.0`
+- Cookies with not be automatically loaded from `AppData/cookies`. Path to cookies needs to be specified with `--cookies`
+- Always remove generated id from filenames (Cyberdrop)
+- Compute `xxh128`, `md5` and `sha256` hashes by default
+- `--deep-scrape` will no longer reset after a single run
+- `--input-file` is now a CLI only arg
+- If supplied, `--input-file` needs to be a valid file that exists
+- Refuse to run if both URLs and `--input-file` are passed as arguments
+- Detect and report BasedFlare anti-bot protection
+- Limit max queued downloads of a single site to the config concurrency limit x10 (capped at 50). All scraping for a site will be paused if its queue is full
+
+The following options, which were CLI only arguments, now have dedicated config entries:
+
+- `--ui` (entry: `ui.mode`)
+- `--portrait` (entry: `ui.portrait`)
+- `--stats`
+
+Several config options have new names:
+
+- `--disable-crawlers` -> `--crawlers.disabled`
+- `--disable-file-timestamps` -> `--mtime`
+- `--maximum-audio-duration` -> `--audio.duration.max`
+- `--maximum-image-size` -> `--image.size.max`
+- `--maximum-number-of-children` -> `--max-children`
+- `--maximum-other-size` -> `--non-media.size.max`
+- `--maximum-thread-depth` -> `--max-thread-depth`
+- `--maximum-thread-folder-depth` -> `--max-thread-folder-depth`
+- `--maximum-video-duration` -> `--video.duration.max`
+- `--maximum-video-size` -> `--video.size.max`
+- `--minimum-audio-duration` -> `--audio.duration.min`
+- `--minimum-image-size` -> `--image.size.min`
+- `--minimum-other-size` -> `--non-media.size.min`
+- `--minimum-video-duration` -> `--video.duration.min`
+- `--minimum-video-size` -> `--video.size.min`
+- `--required-free-space` -> `--min-free-space`
+- `--print-stats` -> `--stats` , `--no-stats`
+- `--send-deleted-to-trash` -> `--hashing.dedupe.use-trash-bin`
+
+#### Jdownloader
+
+- `--jdownloader-autostart` -> `--jdownloader.autostart`
+- `--jdownloader-download-dir` -> `--jdownloader.download-dir`
+- `--jdownloader-whitelist` -> `--jdownloader.whitelist`
+- `--send-unsupported-to-jdownloader` -> `--jdownloader` / `--no-jdownloader`
+
+#### Sorting
+
+- `--sort-downloads` -> `--sort` / `--no-sort`
+- `--scan-folder` -> `--sort.input-folder`
+- `--sort-folder` -> `--sort.output-folder`
+- `--sort-incrementer-format` -> `--sort.formats.incrementer`
+- `--sorted-audio` -> `--sort.formats.audio`
+- `--sorted-image` -> `--sort.formats.image`
+- `--sorted-other` -> `--sort.formats.non-media`
+- `--sorted-video` -> `--sort.formats.video`
+
+#### Ignore options (filters)
+
+The behavior of `--filename-regex` has been reversed (files that DO NOT match the regex will skipped)
+The behavior of `--before` and `--after` has been reversed and the `--exclude` prefix removed (they now **include** instead of excluding files)
+
+- `--exclude-audio` -> `--no-audio`
+- `--exclude-images` -> `--no-images`
+- `--exclude-other` -> `--no-non-media`
+- `--exclude-videos` -> `--no-videos`
+- `--exclude-before` -> `--before`
+- `--exclude-after` -> `--after`
+- `--exclude-files-with-no-extension` -> `--allow-files-with-no-extension`
+- `--filename-regex-filter` -> `--filename-regex`
+- `--ignore-coomer-ads` -> `--crawlers.coomer.ignore-ads`
+- `--ignore-coomer-post-content` -> `--crawlers.coomer.ignore-post-content`
+- `--download-tiktok-src-quality-videos` -> - `--crawlers.tiktok.original`
+
+#### Logs
+
+- `--log-level` -> `--logs.level`
+- `--console-log-level` -> `--logs.console-level`
+- `--log-folder` -> `--logs.folder`
+- `--logs-expire-after` -> `--logs.expire-after`
+- `--main-log` -> `--logs.files.main` with alias `--log-file`
+- `--download-error-urls` -> `--logs.files.download-errors`
+- `--rotate-logs` -> `--logs-rotate`
+- `--scrape-error-urls` -> `--logs.files.scrape-errors`
+- `--unsupported-urls` -> `--logs.files.unsupported`
+
+#### DownloadOptions
+
+- `--block-download-sub-folders` -> `--subfolders`, `--no-subfolders`
+- `--include-album-id-in-folder-name` -> `--subfolders.include.album-id`
+- `--include-thread-id-in-folder-name` -> `--subfolders.include.thread-id`
+- `--remove-domains-from-folder-names` -> `--subfolders.include.domain`
+- `--separate-posts-format` -> `--subfolders.separate-posts-format`
+- `--separate-posts` -> `--subfolders.separate-posts`
+- `--skip-download-mark-completed` -> `--skip-and-mark-completed`
+- `--max-simultaneous-downloads` -> `--downloads`
+- `--max-simultaneous-downloads-per-domain` -> `--downloads.per-domain`
+- `--slow-download-speed` -> `--slow-speed`
+- `--download-attempts` -> `--attempts`
+- `--download-delay` -> `--delay`
+- `--download-speed-limit` -> `--speed-limit`
+
+#### Generic crawlers
+
+- `--wordpress-media` -> `--crawlers.generic.wordpress-media`
+- `--wordpress-html` -> `--crawlers.generic.wordpress-html`
+- `--discourse` -> `--crawlers.generic.discourse`
+- `--chevereto` -> `--crawlers.generic.chevereto`
+
+### Removed
+
+- Support for python 3.11
+- All retry settings + menu option
+- `--log-level` and `--console-log-level` (`--logs.level` and `--logs.console-level`) no longer accept integers. Only log level names as valid, ex: `INFO`, `DEBUG`, `WARNING`
+- Posts filtering by URL params (Wordpress)
+- Auto cookie extraction support
+
+Several config options have been removed:
+
+- `--appdata-folder`
+- `--add-md5-hash`
+- `--add-sha256-hash`
+- `--auto-import`
+- `--browser`
+- `--completed-after`
+- `--completed-before`
+- `--disable-download-attempt-limit`
+- `--download-tiktok-audios`
+- `--last-forum-post`
+- `--max-items-retry`
+- `--remove-generated-id-from-filename`
+- `--retry-all`
+- `--retry-failed`
+- `--retry-maintenance`
+- `--save-pages-html`
+- `--scrape-single-forum-post`
+- `--sites`
+- `--skip-check-for-partial-files`
+- `--update-last-forum-post`
+
+The following authentication entries has been removed:
+
+- `Imgur.client_id`
+- `Kemono.session`
+- `Coomer.session`
+
+### Fixed
+
+- Do not skip initialization segments (HLS) (#1977)
+- 403 errors on embeded videos (twing)
+
+## [9.15.2] - 2026-06-16
+
+### Fixed
+
+- Update website salt (Gofile)
+- Free space check on network drives (Windows)
+
+## [9.15.1] - 2026-06-11
+
+### Fixed
+
+- Video metadata extraction (Spankbang)
+- Crashing when `--dump-json` option is used
+
+## [9.15.0] - 2026-06-10
+
+### Changed
+
+- Reject any download without a valid `Content-Length` header
+- Report any download with size < `Content-Length` as corrupted and delete them
+
+### Fixed
+
+- Channel downloads (Rumble)
+
 ## [9.14.0] - 2026-06-03
 
 ⚠️**IMPORTANT**
 
 > If you has ever used a Pixeldrain API key with `cyberdrop-dl-pacthed` version >=8.5.0, you should consider them compromised and disable them.
 >
-> See: [GHSA-f5pf-q7c7-m3vv](https://github.com/Cyberdrop-DL/cyberdrop-dl/security/advisories/GHSA-f5pf-q7c7-m3vv)
+> See: [GHSA-f5pf-q7c7-m3vv (CVE-2026-54254)](https://github.com/Cyberdrop-DL/cyberdrop-dl/security/advisories/GHSA-f5pf-q7c7-m3vv)
 
 ### Added
 

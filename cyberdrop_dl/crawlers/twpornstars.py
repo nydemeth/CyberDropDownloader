@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.twitter_images import TwimgCrawler
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedDomains
@@ -16,7 +17,7 @@ class Selector:
 
     TITLE = "h1.user-page, h1.tag-page, h1.block__title"
     THUMBS = "div.block-thumbs a.thumb__link"
-    _VIDEO = "video.video-js > source"
+    _VIDEO = "video#video_tag_html5_api > source"
     _PHOTO = "img.thumb__img"
     MEDIA = f"{_VIDEO}, {_PHOTO}"
 
@@ -50,7 +51,7 @@ class TwPornstarsCrawler(TwimgCrawler):
 
     @error_handling_wrapper
     async def media(self, scrape_item: ScrapeItem) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         soup = await self.request_soup(scrape_item.url)
@@ -61,6 +62,12 @@ class TwPornstarsCrawler(TwimgCrawler):
             return
         await self.photo(scrape_item, src)
 
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        """Prepare headers with x.com referer for video.twimg.com URLs."""
+        headers = super()._prepare_headers(scrape_item)
+        headers["Referer"] = "https://x.com/"
+        return headers
+
     @error_handling_wrapper
     async def collection(self, scrape_item: ScrapeItem) -> None:
         title: str = ""
@@ -70,5 +77,5 @@ class TwPornstarsCrawler(TwimgCrawler):
                 title = self.create_title(name.removesuffix("'s pics and videos"))
                 scrape_item.setup_as_album(title)
 
-            for _, new_item in self.iter_children(scrape_item, soup, Selector.THUMBS):
+            for new_item in self.iter_children(scrape_item, soup, Selector.THUMBS):
                 self.create_task(self.run(new_item))

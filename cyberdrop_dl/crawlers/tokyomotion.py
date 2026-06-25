@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
+from cyberdrop_dl.utils import css, open_graph
+from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -87,7 +88,7 @@ class TokioMotionCrawler(Crawler):
 
     @error_handling_wrapper
     async def photo(self, scrape_item: ScrapeItem) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         soup = await self.request_soup(scrape_item.url)
@@ -162,7 +163,7 @@ class TokioMotionCrawler(Crawler):
     @error_handling_wrapper
     async def crawl_children(self, scrape_item: ScrapeItem, selector: str) -> None:
         async for soup in self._web_pager(scrape_item.url):
-            for _, new_item in self.iter_children(scrape_item, soup, selector):
+            for new_item in self.iter_children(scrape_item, soup, selector):
                 self.create_task(self.run(new_item))
 
     async def _web_pager(self, url: AbsoluteHttpURL) -> AsyncIterator[BeautifulSoup]:

@@ -10,18 +10,15 @@ from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.exceptions import get_origin
-from cyberdrop_dl.logs import log_spacer
+from cyberdrop_dl.filepath import sanitize_filename
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.filepath import sanitize_filename
 
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Iterable, Iterator
 
-    from yarl import URL
-
     from cyberdrop_dl.clients.response import AbstractResponse
-    from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 
 
@@ -33,17 +30,14 @@ _CSV_DELIMITER = ","
 @dataclasses.dataclass(slots=True, kw_only=True)
 class CSVFiles:
     main_log: Path
-    last_post_log: Path
-    unsupported_urls_log: Path
-    download_error_log: Path
-    scrape_error_log: Path
-    jsonl_file: Path = dataclasses.field(init=False)
+    unsupported_urls: Path
+    download_errors: Path
+    scrape_errors: Path
+    last_forum_post: Path
+    jsonl_file: Path
 
     def __iter__(self) -> Iterator[Path]:
         return iter(dataclasses.astuple(self))
-
-    def __post_init__(self) -> None:
-        self.jsonl_file = self.main_log.with_suffix(".results.jsonl")
 
 
 @dataclasses.dataclass(slots=True)
@@ -61,13 +55,15 @@ class CSVLogsManager:
         self._responses_folder = self.files.main_log.parent / "cdl_responses"
 
     @classmethod
-    def from_manager(cls, manager: Manager) -> Self:
+    def from_config(cls, config: Config) -> Self:
+        files = config.logs.files
         files = CSVFiles(
-            main_log=manager.config.settings.logs.main_log,
-            last_post_log=manager.config.settings.logs.last_forum_post,
-            unsupported_urls_log=manager.config.settings.logs.unsupported_urls,
-            download_error_log=manager.config.settings.logs.download_error_urls,
-            scrape_error_log=manager.config.settings.logs.scrape_error_urls,
+            main_log=files.main,
+            unsupported_urls=files.unsupported,
+            download_errors=files.download_errors,
+            scrape_errors=files.scrape_errors,
+            jsonl_file=files.jsonl_file,
+            last_forum_post=files.last_forum_post,
         )
         return cls(files)
 
@@ -110,20 +106,19 @@ class CSVLogsManager:
 
             await asyncio.to_thread(write)
 
-    def write_last_post_log(self, url: URL) -> None:
-        """Writes to the last post log."""
-        _ = self.task_group.create_task(self._write_to_csv(self.files.last_post_log, url=url))
-
-    def write_unsupported(self, url: URL, origin: URL | None = None) -> None:
+    def write_unsupported(self, url: AbsoluteHttpURL, origin: AbsoluteHttpURL | None = None) -> None:
         """Writes to the unsupported urls log."""
-        _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls_log, url=url, origin=origin))
+        _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls, url=url, origin=origin))
+
+    def write_last_post_log(self, url: AbsoluteHttpURL) -> None:
+        _ = self.task_group.create_task(self._write_to_csv(self.files.last_forum_post, url=url))
 
     def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
         """Writes to the download error log."""
         origin = get_origin(media_item)
         _ = self.task_group.create_task(
             self._write_to_csv(
-                self.files.download_error_log,
+                self.files.download_errors,
                 url=media_item.url,
                 error=error_message,
                 referer=media_item.referer,
@@ -131,10 +126,15 @@ class CSVLogsManager:
             )
         )
 
-    def write_scrape_error(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
+    def write_scrape_error(
+        self,
+        url: AbsoluteHttpURL | str,
+        error_message: str,
+        origin: AbsoluteHttpURL | Path | None = None,
+    ) -> None:
         """Writes to the scrape error log."""
         _ = self.task_group.create_task(
-            self._write_to_csv(self.files.scrape_error_log, url=url, error=error_message, origin=origin)
+            self._write_to_csv(self.files.scrape_errors, url=url, error=error_message, origin=origin)
         )
 
     def write_response(
@@ -152,68 +152,6 @@ class CSVLogsManager:
                 exc,
             )
         )
-
-    async def update_last_forum_post(self, input_file: Path) -> None:
-        """Updates the last forum post."""
-
-        def update() -> None:
-            if input_file.is_file() and self.files.last_post_log.is_file():
-                _update_last_forum_post(input_file, self.files.last_post_log)
-
-        await asyncio.to_thread(update)
-
-
-def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:  # noqa: C901
-    log_spacer()
-    logger.info("Updating Last Forum Posts...\n")
-
-    current_urls, current_base_urls, new_urls, new_base_urls = [], [], [], []
-    try:
-        with input_file.open(encoding="utf8") as f:
-            for line in f:
-                url = base_url = line.strip().removesuffix("/")
-
-                if "https" in url and "/post-" in url:
-                    base_url = url.rsplit("/post", 1)[0]
-
-                # only keep 1 url of the same thread
-                if base_url not in current_base_urls:
-                    current_urls.append(url)
-                    current_base_urls.append(base_url)
-
-    except UnicodeDecodeError:
-        logger.exception("Unable to read input file, skipping update_last_forum_post")
-        return
-
-    with last_post_log.open(encoding="utf8") as f:
-        reader = csv.DictReader(f.readlines())
-        for row in reader:
-            new_url = base_url = row["url"].strip().removesuffix("/")
-
-            if "https" in new_url and "/post-" in new_url:
-                base_url = new_url.rsplit("/post", 1)[0]
-
-            # only keep 1 url of the same thread
-            if base_url not in new_base_urls:
-                new_urls.append(new_url)
-                new_base_urls.append(base_url)
-
-    updated_urls = current_urls.copy()
-    for new_url, base in zip(new_urls, new_base_urls, strict=False):
-        if base in current_base_urls:
-            index = current_base_urls.index(base)
-            old_url = current_urls[index]
-            if old_url == new_url:
-                continue
-            logger.info(f"Updating {base}\n  {old_url = }\n  {new_url = }")
-            updated_urls[index] = new_url
-
-    if updated_urls == current_urls:
-        logger.info("No URLs updated")
-        return
-
-    with input_file.open("w", encoding="utf8") as f:
-        f.write("\n".join(updated_urls))
 
 
 def _write_resp_to_disk(

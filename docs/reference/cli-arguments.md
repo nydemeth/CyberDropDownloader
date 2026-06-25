@@ -38,30 +38,6 @@ For items not explained below, you can find their counterparts in the configurat
 
 Folder where Cyberdrop-DL will store it's database, cache and config files.
 
-### `completed-after`
-
-| Type   | Default |
-| ------ | ------- |
-| `date` | `None`  |
-
-Only retry downloads that were completed on or after this date. The date should be in ISO 8601 format, for example, `2021-12-23`
-
-{% hint style="info" %}
-This option has no effect unless you run CDL with `--retry-all`
-{% endhint %}
-
-### `completed-before`
-
-| Type   | Default |
-| ------ | ------- |
-| `date` | `None`  |
-
-Only retry downloads that were completed on or before this date. The date should be in ISO 8601 format, for example, `2021-12-23`
-
-{% hint style="info" %}
-This option has no effect unless you run CDL with `--retry-all`
-{% endhint %}
-
 ### `config-file`
 
 | Type   | Default |
@@ -126,18 +102,6 @@ Impersonation allows CDL to make requests and appear to be a legitimate web brow
 The current default target is `chrome`. The default target can change on any new release without notice
 {% endhint %}
 
-### `max-items-retry`
-
-| Type             | Default |
-| ---------------- | ------- |
-| `NonNegativeInt` | `0`     |
-
-Max number of links to retry. Using `0` means no limit
-
-{% hint style="info" %}
-This option has no effect unless you run CDL with one of the retry options: `--retry-all`, `--retry-failed` or `--retry-maintenance`
-{% endhint %}
-
 ### `portrait`
 
 | Type       | Default | Action       |
@@ -153,38 +117,6 @@ Force CDL to run with a vertical layout
 | `BoolFlag` | `True`  | `store_false` |
 
 Show stats report at the end of a run
-
-### `retry-all`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-Retry all downloads
-
-### `retry-failed`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-Retry failed downloads
-
-### `retry-maintenance`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-Retry download of maintenance files (bunkr). Requires files to be hashed
-
-### `show-supported-sites`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-Shows a list of all supported sites and exits
 
 ### `ui`
 
@@ -208,6 +140,7 @@ Values are case insensitive, ex: both `disabled` and `DISABLED` are valid
 Bool arguments like options within `Download Options`, `Ignore Options`, `Runtime Options`, etc. can be prefixed with `--no-` to negate them. Ex: `--no-auto-dedupe` will disable auto dedupe, overriding whatever the config option was set to.
 
 <!-- START_CLI_OVERVIEW -->
+
 ```shell
 Usage: cyberdrop-dl COMMAND [OPTIONS] [ARGS]
 
@@ -423,4 +356,5 @@ Bulk asynchronous downloader for multiple file hosts
 │ --refresh-rate  [default: 10.0]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
 <!-- END_CLI_OVERVIEW -->
