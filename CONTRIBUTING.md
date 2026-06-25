@@ -1,7 +1,7 @@
 # Contributing
 
 > [!NOTE]
-> The words **MAY**, **SHOULD**/**SHOULD NOT** and **MUST**/**MUST NOT** in this document reflects the same meaning as defined by RFC 2129 <https://www.rfc-editor.org/info/rfc2119>
+> The words **MAY**, **SHOULD**/**SHOULD NOT** and **MUST**/**MUST NOT** in this document have the same meaning as defined in RFC 2129 <https://www.rfc-editor.org/info/rfc2119>
 
 ## Reporting issues
 
@@ -92,15 +92,16 @@ all you need to do is `git add` those files again and retry your commit.
 > `cyberdrop-dl` requires python 3.12+. You **MUST NOT** use any syntax features not compatible with it
 
 > [!IMPORTANT]  
-> Before you start writing any code, you **SHOULD** search the [repository](https://github.com/Cyberdrop-DL/cyberdrop-dl/pulls) for an open or closed PR
-> that relates to your submission. You don't want to duplicate effort.
+> Before you start writing any code, you **SHOULD** search the [repository](https://github.com/Cyberdrop-DL/cyberdrop-dl/pulls)
+> for an open or closed PR that relates to your submission. You don't want to duplicate effort
 
 ### Submitting a Pull Request (PR)
 
 - Checkout a **new** branch before working on any changes, branching from `main`. You **MUST NOT** work directly on `main`
-- Implement your changes. Make sure to follow [code style conventions](#code-style). You **SHOULD** add tests for any new non-crawler specific functionality you introduce
+- Implement your changes. Make sure to follow [code style conventions](#code-style). You **SHOULD** add tests for
+  any new non-crawler specific functionality you introduce
 - Commit your changes using a descriptive commit message
-- Fork the repository on GitHub, push your branch to the fork and open a pull request against the `main` branch of base repository.
+- Fork the repository on GitHub, push your branch to the fork and open a pull request against the `main` branch of base repository
 - Make sure your pull request has a descriptive title and a short description. Sometimes the title is enough and no description is required
 - You **MUST NOT** use AI to generate your PR title/description. Write it with your own words
 - Wait for a maintainer to review your PR and then address any comments they might have
@@ -114,7 +115,7 @@ There's no standard template for a new crawler, but there are a few conventions.
 You **SHOULD** look at the code of another (hopefully similar) crawler
 and base your crawler on that. A simple crawler to use as base is [CloudFlareStream](cyberdrop_dl/crawlers/cloudflare_stream.py).
 
-- All crawlers **MUST** inherit from the [base crawler](cyberdrop_dl/crawlers/crawler.py).
+- All crawlers **MUST** inherit from the [base crawler](cyberdrop_dl/crawlers/crawler.py)
 - All crawlers **MUST** have the word `Crawler` at the end of their class name
 - All crawlers **MUST** override the `fetch` method. It's the primary method that decides what to do with an URL that matches with that crawler
 - You **MUST** not call any method that may fail (raise an exception) from within `fetch`
@@ -123,16 +124,16 @@ and base your crawler on that. A simple crawler to use as base is [CloudFlareStr
 - You **SHOULD** catch **expected** errors and re-raise them as a `ScrapeError` with an appropiate code and message
 - You **SHOULD** use valid HTTP codes for any `ScrapeError`. ex: raise `ScrapeError(410)` if you know a file was deleted
 - You **MAY** use HTTP code `422` (Unprocessable entity) for **expected** errors if no other HTTP code feels adequate
-- You **MAY** use a short string instead of an HTTP code to convey a better context for an error (if required).
+- You **MAY** use a short string instead of an HTTP code to convey a better context for an error (if required)
   The string **SHOULD** be at most 20 characters long as it will be shown on the `Scrape Errors` sections of the TUI
 - You **SHOULD NOT** write logic in a defensive way for **unexpected** errors. If you need to perform an operation that **MAY** fail
-  but is not **expected** to fail (ex: a dictionary key lookup on an API response), do not try to catch the exception, let it bubble up.
+  but is not **expected** to fail (ex: a dictionary key lookup on an API response), do not try to catch the exception, let it bubble up
   It will eventually be logged by the `error_handling_wrapper`
 - You **SHOULD** model site specific data into dataclasses, if possible
 - You **MUST** create a new task for any coroutine whose result is not needed to complete the current task
 - You **MUST NOT** create `MediaItem` objects manually. You **MUST** use the `handle_file` method
 - You **SHOULD** look at all methods on the base crawler for possible helper functions. Their doctrings explain expected usage of each one.
-- You **MAY** add site specific CLI/config options at [cyberdrop_dl/config/crawlers.py](cyberdrop_dl/config/crawlers.py) to use within the crawler.
+- You **MAY** add site specific CLI/config options at [cyberdrop_dl/config/crawlers.py](cyberdrop_dl/config/crawlers.py) to use within the crawler
 - You **SHOULD NOT** add crawler specific CLI/options unless absolutely necessary
 - You **SHOULD** add at least 1 test case for the crawler
 
