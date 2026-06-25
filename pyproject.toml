@@ -25,7 +25,7 @@ dependencies = [
     "brotli >=1.2.0; implementation_name=='cpython' and sys_platform!='ios'",
     "certifi >=2026.6.17",
     "curl-cffi >=0.15; implementation_name == 'cpython' ",
-    "cyclopts>=4.18.0",
+    "cyclopts>=4.19.0",
     "idna>=3.18",
     "imagesize >=2.0.0",
     "inquirer>=3.4.1",
