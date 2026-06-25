@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import cyclopts.validators
@@ -21,6 +20,8 @@ from cyberdrop_dl.utils import cleanup
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
@@ -89,7 +90,7 @@ async def _notify(config: Config, stats_summary: str) -> None:
         await apprise.notify(urls, stats_summary)
 
 
-def _main(manager: Manager) -> None:
+def scrape(manager: Manager) -> None:
     from cyberdrop_dl import aio
 
     with setup_file_logging(manager.config.logs.files.main, level=manager.config.logs.effective_level):
@@ -106,26 +107,6 @@ def _validate_inputs(args: ArgumentCollection) -> None:
 
 
 _inputs_group = Group(sort_key=-1, validator=_validate_inputs)
-
-
-def interactive(
-    *,
-    input_file: Annotated[
-        Path,
-        Parameter(
-            alias="-i",
-            help="Text/HTML file with URL(s) to download",
-            validator=cyclopts.validators.Path(dir_okay=False),
-        ),
-    ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
-    cli: CLIarguments | None = None,
-) -> None:
-    "Show a TUI menu equivalent to the CLI commands"
-    with _prepare_manager((), input_file, cli, cli_overrides=None)() as manager:
-        from cyberdrop_dl import program_ui
-
-        program_ui.run(manager)
-        _main(manager)
 
 
 def download(
@@ -152,11 +133,11 @@ def download(
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
-    with _prepare_manager(urls, input_file, cli, cli_overrides)() as manager:
-        _main(manager)
+    with prepare_manager(urls, input_file, cli, cli_overrides)() as manager:
+        scrape(manager)
 
 
-def _prepare_manager(
+def prepare_manager(
     urls: tuple[HttpURL, ...], input_file: Path | None, cli: CLIarguments | None, cli_overrides: Config | None
 ) -> Manager:
     check_for_v9_files()

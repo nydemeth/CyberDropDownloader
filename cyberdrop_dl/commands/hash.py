@@ -14,7 +14,7 @@ async def compute_hashes(
     hashes: tuple[Literal["xxh128", "md5", "sha256"], ...] | None = None,
     cli: CLIarguments | None = None,
 ) -> None:
-    """Compute and save hashes of every file inside `folder` (recursively)"""
+    """Compute and save hashes of every file in a folder (recursively)"""
     check_for_v9_files()
     from cyberdrop_dl import stats
     from cyberdrop_dl.config.appdata import AppData
