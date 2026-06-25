@@ -9,7 +9,7 @@ icon: building-circle-xmark
 
 ## Removal of SimpCity Scraping Support
 
-Support for scraping SimpCity has been removed temporarily. This may be disappointing to some users, but the explanation provided should clarify the reasoning behind this decision. Following the recent DDOS attacks, SimpCity has implemented the following security measures to protect their website:
+Support for scraping SimpCity has been was removed on v5.6.3. This may be disappointing to some users, but the explanation provided should clarify the reasoning behind this decision. Following the recent DDOS attacks, SimpCity has implemented the following security measures to protect their website:
 
 - SimpCity has implemented a DDOS-Guard browser check.
 - Access is now restricted to [whitelisted email domains](https://simpcity.su/threads/emails-august-2024.365869/).

@@ -17,37 +17,13 @@ You can download them here: [https://github.com/Cyberdrop-DL/cyberdrop-dl/releas
 
 You only need to download the `Cyberdrop-DL_<version>.zip` file, you don't need to worry about the other files.
 
-Extract the contents of the zip file to any location where you'd like the program to run and store downloaded files. The extracted files will include a start file for Windows, macOS, and Linux
+Extract the contents of the zip file to any location where you'd like the program to run and store downloaded files. The extracted files will include an install files for Windows, macOS, and Linux
 
-If you're using Windows or Linux, simply open the start file, and it will handle the rest for you
+Run the `install` file to install/update `cyberdrop-dl`, then use the `run` file to run it
 
 {% hint style="info" %}
 If you are using Windows, **DO NOT** run the script as admin
 {% endhint %}
-
-On macOS, you should be able to open the start file and have everything set up automatically. However, in some rare cases, macOS users may need to run the following command first::
-
-```shell
-xcode-select --install
-```
-
-<details>
-
-<summary>Optional: Running Cyberdrop-DL Script with Custom Parameters</summary>
-
-You can open the start script from the zip in a text editor like notepad. At the top of the file, you will this line:
-
-```shell
-set "COMMANDLINE_ARGS="
-```
-
-`COMMANDLINE_ARGS`: Provide any arguments to pass to Cyberdrop-Dl. For more information, refer to the [CLI Arguments section](../reference/cli-arguments.md)
-
-{% hint style="info" %}
-You **MUST** put the values _inside_ the double quotes. Ex: `set "COMMANDLINE_ARGS=--disable-cache"`
-{% endhint %}
-
-</details>
 
 ## Manual Install
 

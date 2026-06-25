@@ -29,18 +29,33 @@ Run the following commands inside termux
 #!/bin/sh
 termux-setup-storage
 pkg upgrade -y
-pkg install rust which micro libjpeg-turbo python uv -y
+pkg install rust which micro ffmpeg python uv -y
 
 # Making sure maturin knows we are building ON Android, not FOR Android
 ANDROID_API_LEVEL=24
 export ANDROID_API_LEVEL
 
-uv tool install cyberdrop-dl-patched
+uv tool install --upgrade --force cyberdrop-dl-patched
 uv tool update-shell
-mkdir /sdcard/cyberdrop-dl
-echo 'alias cyberdrop-dl="cyberdrop-dl --appdata-folder /sdcard/cyberdrop-dl"' >> ~/.bashrc
-source ~/.bashrc
 ```
+
+{% hint style="warning" %}
+You will loose your config and database file if you uninstall termux. Use the CLI options to change the location of those files.
+
+```shell
+mkdir /sdcard/cyberdrop-dl
+touch /sdcard/cyberdrop-dl/cyberdrop.db
+touch /sdcard/cyberdrop-dl/config.yaml
+cyberdrop-dl --database-file /sdcard/cyberdrop-dl/cyberdrop.db --config-file /sdcard/cyberdrop-dl/config.yaml
+```
+
+You can setup an alias to always include these options by default when running `cyberdrop-dl`
+
+```shell
+echo 'alias cyberdrop-dl="cyberdrop-dl --database-file /sdcard/cyberdrop-dl/cyberdrop.db --config-file /sdcard/cyberdrop-dl/config.yaml"' >> ~/.bashrc
+```
+
+{% endhint %}
 
 ## How to update `cyberdrop-dl`?
 
