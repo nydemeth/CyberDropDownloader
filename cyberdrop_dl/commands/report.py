@@ -45,10 +45,5 @@ def generate_report() -> str:
     )
 
 
-def report() -> None:
-    """Generate and display information about the system"""
-    print(generate_report())  # noqa: T201
-
-
 if __name__ == "__main__":
-    report()
+    print(generate_report())  # noqa: T201

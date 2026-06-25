@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from cyberdrop_dl import __version__, supported_sites
+from cyberdrop_dl import __version__
+from cyberdrop_dl.commands import supported_sites
 from cyberdrop_dl.constants import CDL_USER_AGENT
 
 REPO_ROOT = Path(__file__).parents[2]
@@ -43,7 +44,7 @@ def _replace_content(text: str, marker: str, new_content: str) -> str:
 def _get_help_message() -> str:
     from rich.console import Console
 
-    from cyberdrop_dl.__main__ import app
+    from cyberdrop_dl.cli import app
 
     with Console(record=True, width=100) as console:
         app.help_print([], console=console)

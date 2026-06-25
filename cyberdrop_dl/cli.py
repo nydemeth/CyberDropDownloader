@@ -8,11 +8,10 @@ from cyclopts.help import DefaultFormatter
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.commands import CLIarguments
-from cyberdrop_dl.commands.clean_up import app as cleanup
-from cyberdrop_dl.commands.config import app as config
-from cyberdrop_dl.commands.database import app as database
+from cyberdrop_dl.commands.cleanup import app as cleanup_app
+from cyberdrop_dl.commands.config import app as config_app
+from cyberdrop_dl.commands.database import app as database_app
 from cyberdrop_dl.commands.hash import compute_hashes
-from cyberdrop_dl.commands.report import report
 from cyberdrop_dl.commands.scrape import download, prepare_manager, scrape
 
 app = App(
@@ -51,13 +50,21 @@ def main_menu(
 @app.command
 def show() -> None:
     """Show a list of all supported sites"""
-    from cyberdrop_dl import supported_sites
+    from cyberdrop_dl.commands import supported_sites
 
     table = supported_sites.as_rich_table()
     app.console.print(table)
 
 
-for cmd in download, database, cleanup, report, config:
+@app.command
+def report() -> None:
+    """Generate and display information about the system"""
+    from cyberdrop_dl.commands.report import generate_report
+
+    app.console.print(generate_report())
+
+
+for cmd in download, database_app, cleanup_app, config_app:
     app.command(cmd)
 
 

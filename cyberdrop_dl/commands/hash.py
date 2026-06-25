@@ -3,7 +3,7 @@ from typing import Literal
 from cyclopts.types import ResolvedExistingDirectory
 
 from cyberdrop_dl.commands import CLIarguments
-from cyberdrop_dl.commands.compat import check_for_v9_files
+from cyberdrop_dl.commands._compat import check_for_v9_files
 from cyberdrop_dl.config import Config
 
 
