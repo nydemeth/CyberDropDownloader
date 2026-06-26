@@ -1,9 +1,11 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
+from pydantic.functional_validators import AfterValidator
 
 from cyberdrop_dl.models import ConfigGroup, ConfigModel
-from cyberdrop_dl.models.types import HttpURL, NonEmptyStr, RemoveDuplicates
+from cyberdrop_dl.models.types import HttpURL, NonEmptyStr
+from cyberdrop_dl.models.validators import remove_duplicates
 
 
 class KemonoConfig(ConfigModel):
@@ -19,8 +21,9 @@ class TikTokConfig(ConfigModel):
 
 
 class BandcampConfig(ConfigModel):
-    formats: RemoveDuplicates[
+    formats: Annotated[
         tuple[Literal["mp3-320", "mp3", "aac-hi", "wav", "flac", "vorbis", "aiff", "alas"], ...],
+        AfterValidator(remove_duplicates),
     ] = (
         "mp3-320",
         "mp3",
@@ -53,7 +56,7 @@ class GenericCrawlers(ConfigModel):
 
 
 class Crawlers(ConfigGroup, name=None):
-    disabled: RemoveDuplicates[tuple[NonEmptyStr, ...]] = ()
+    disabled: set[NonEmptyStr] = Field(default_factory=set)
     "Name of crawlers to disable for the current run"
 
     bandcamp: BandcampConfig = Field(default_factory=BandcampConfig)

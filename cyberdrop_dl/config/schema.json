@@ -70,7 +70,6 @@
       "additionalProperties": false,
       "properties": {
         "formats": {
-          "$ref": "#/$defs/RemoveDuplicates_tuple_Literal__mp3-320____mp3____aac-hi____wav____flac____vorbis____aiff____alas____________",
           "default": [
             "mp3-320",
             "mp3",
@@ -80,7 +79,22 @@
             "vorbis",
             "aiff",
             "alas"
-          ]
+          ],
+          "items": {
+            "enum": [
+              "mp3-320",
+              "mp3",
+              "aac-hi",
+              "wav",
+              "flac",
+              "vorbis",
+              "aiff",
+              "alas"
+            ],
+            "type": "string"
+          },
+          "title": "Formats",
+          "type": "array"
         }
       },
       "title": "BandcampConfig",
@@ -118,8 +132,12 @@
       "additionalProperties": false,
       "properties": {
         "disabled": {
-          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
-          "default": []
+          "items": {
+            "$ref": "#/$defs/NonEmptyStr"
+          },
+          "title": "Disabled",
+          "type": "array",
+          "uniqueItems": true
         },
         "bandcamp": {
           "$ref": "#/$defs/BandcampConfig"
@@ -402,12 +420,20 @@
           "default": null
         },
         "only_hosts": {
-          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
-          "default": []
+          "items": {
+            "$ref": "#/$defs/NonEmptyStr"
+          },
+          "title": "Only Hosts",
+          "type": "array",
+          "uniqueItems": true
         },
         "skip_hosts": {
-          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
-          "default": []
+          "items": {
+            "$ref": "#/$defs/NonEmptyStr"
+          },
+          "title": "Skip Hosts",
+          "type": "array",
+          "uniqueItems": true
         },
         "allow_files_with_no_extension": {
           "default": false,
@@ -574,8 +600,12 @@
           "default": null
         },
         "whitelist": {
-          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
-          "default": []
+          "items": {
+            "$ref": "#/$defs/NonEmptyStr"
+          },
+          "title": "Whitelist",
+          "type": "array",
+          "uniqueItems": true
         }
       },
       "title": "Jdownloader",
@@ -783,28 +813,6 @@
       },
       "title": "OnePaceConfig",
       "type": "object"
-    },
-    "RemoveDuplicates_tuple_Literal__mp3-320____mp3____aac-hi____wav____flac____vorbis____aiff____alas____________": {
-      "items": {
-        "enum": [
-          "mp3-320",
-          "mp3",
-          "aac-hi",
-          "wav",
-          "flac",
-          "vorbis",
-          "aiff",
-          "alas"
-        ],
-        "type": "string"
-      },
-      "type": "array"
-    },
-    "RemoveDuplicates_tuple_NonEmptyStr__________": {
-      "items": {
-        "$ref": "#/$defs/NonEmptyStr"
-      },
-      "type": "array"
     },
     "Sort": {
       "additionalProperties": false,
