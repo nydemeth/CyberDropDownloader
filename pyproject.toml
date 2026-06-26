@@ -38,12 +38,12 @@ dependencies = [
     "pyyaml >=6.0.3",
     "readchar >= 4.2.2",
     "rich >=15.0.0",
-    "rich-rst>=2.0.1",
+    "rich-rst>=2.0.2",
     "send2trash >=2.0.0",
     "truststore >=0.10.4",
     "typing-extensions>=4.15.0",
     "urllib3>=2.7.0",  # Transient dep with CVE
-    "xxhash >=3.7.0",
+    "xxhash >=3.7.1",
     "yarl >=1.24.2"
 ]
 description = "Bulk downloader for multiple file hosts"
@@ -53,7 +53,7 @@ license-files = ["LICENSE"]
 maintainers = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
 readme = "README.md"
 requires-python = ">=3.12"
-version = "10.0.0rc4"
+version = "10.0.0rc5"
 
 [project.optional-dependencies]
 apprise = [
