@@ -33,6 +33,7 @@ crawlers:
   generic:
     chevereto: []
     discourse: []
+    kvs: []
     wordpress_html: []
     wordpress_media: []
   kemono:

@@ -118,7 +118,7 @@
       "additionalProperties": false,
       "properties": {
         "disabled": {
-          "$ref": "#/$defs/RemoveDuplicates_FalsyAsTuple_NonEmptyStr__",
+          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
           "default": []
         },
         "bandcamp": {
@@ -377,18 +377,6 @@
         }
       ]
     },
-    "FalsyAsTuple_HttpURL_": {
-      "items": {
-        "$ref": "#/$defs/HttpURL"
-      },
-      "type": "array"
-    },
-    "FalsyAsTuple_NonEmptyStr_": {
-      "items": {
-        "$ref": "#/$defs/NonEmptyStr"
-      },
-      "type": "array"
-    },
     "Filters": {
       "additionalProperties": false,
       "properties": {
@@ -414,11 +402,11 @@
           "default": null
         },
         "only_hosts": {
-          "$ref": "#/$defs/RemoveDuplicates_FalsyAsTuple_NonEmptyStr__",
+          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
           "default": []
         },
         "skip_hosts": {
-          "$ref": "#/$defs/RemoveDuplicates_FalsyAsTuple_NonEmptyStr__",
+          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
           "default": []
         },
         "allow_files_with_no_extension": {
@@ -438,20 +426,44 @@
       "additionalProperties": false,
       "properties": {
         "wordpress_media": {
-          "$ref": "#/$defs/FalsyAsTuple_HttpURL_",
-          "default": []
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Wordpress Media",
+          "type": "array"
         },
         "wordpress_html": {
-          "$ref": "#/$defs/FalsyAsTuple_HttpURL_",
-          "default": []
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Wordpress Html",
+          "type": "array"
         },
         "discourse": {
-          "$ref": "#/$defs/FalsyAsTuple_HttpURL_",
-          "default": []
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Discourse",
+          "type": "array"
         },
         "chevereto": {
-          "$ref": "#/$defs/FalsyAsTuple_HttpURL_",
-          "default": []
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Chevereto",
+          "type": "array"
+        },
+        "kvs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Kvs",
+          "type": "array"
         }
       },
       "title": "GenericCrawlers",
@@ -562,7 +574,7 @@
           "default": null
         },
         "whitelist": {
-          "$ref": "#/$defs/RemoveDuplicates_FalsyAsTuple_NonEmptyStr__",
+          "$ref": "#/$defs/RemoveDuplicates_tuple_NonEmptyStr__________",
           "default": []
         }
       },
@@ -772,9 +784,6 @@
       "title": "OnePaceConfig",
       "type": "object"
     },
-    "RemoveDuplicates_FalsyAsTuple_NonEmptyStr__": {
-      "$ref": "#/$defs/FalsyAsTuple_NonEmptyStr_"
-    },
     "RemoveDuplicates_tuple_Literal__mp3-320____mp3____aac-hi____wav____flac____vorbis____aiff____alas____________": {
       "items": {
         "enum": [
@@ -788,6 +797,12 @@
           "alas"
         ],
         "type": "string"
+      },
+      "type": "array"
+    },
+    "RemoveDuplicates_tuple_NonEmptyStr__________": {
+      "items": {
+        "$ref": "#/$defs/NonEmptyStr"
       },
       "type": "array"
     },
