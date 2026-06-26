@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from cyberdrop_dl import aio
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator, Iterable, Sequence
+    from collections.abc import AsyncGenerator, Generator, Sequence
     from pathlib import Path
 
 
@@ -24,44 +24,6 @@ if sys.version_info < (3, 14):
 
 
 logger = logging.getLogger(__name__)
-
-
-def filter(cookies: Iterable[Cookie], domains: list[str] | None = None) -> Generator[Cookie]:  # noqa: A001
-    if not domains:
-        yield from cookies
-    else:
-        allowed_domains = tuple(domains)
-        for cookie in cookies:
-            if cookie.domain.endswith(allowed_domains):
-                yield cookie
-
-
-def split(extracted_cookies: Iterable[Cookie]) -> dict[str, MozillaCookieJar]:
-    cookie_jars: dict[str, MozillaCookieJar] = {}
-    for cookie in extracted_cookies:
-        domain = cookie.domain.lstrip(".").removeprefix("www.")
-        cookie_jar = cookie_jars.get(domain)
-        if cookie_jar is None:
-            cookie_jars[domain] = cookie_jar = MozillaCookieJar()
-        cookie_jar.set_cookie(cookie)
-
-    return cookie_jars
-
-
-async def export(cookies: Iterable[Cookie], output_path: Path) -> None:
-    cookie_jars = split(cookies)
-    await asyncio.to_thread(output_path.mkdir, parents=True, exist_ok=True)
-    _ = await aio.gather(
-        *(
-            asyncio.to_thread(
-                cj.save,
-                str(output_path / f"{domain}.txt"),
-                ignore_discard=True,
-                ignore_expires=True,
-            )
-            for domain, cj in cookie_jars.items()
-        )
-    )
 
 
 async def read_netscape_files(cookie_files: Sequence[Path]) -> AsyncGenerator[SimpleCookie]:
