@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, final
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
-from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, open_graph, parse_url
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
@@ -155,7 +154,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             for new_scrape_item in self.iter_children(scrape_item, soup, self.THUMBNAIL_SELECTOR):
                 self.create_task(self.run(new_scrape_item))
 
-    def _extract_upload_date(self, soup: BeautifulSoup) -> int | None:
+    def _extract_upload_date(self, soup: BeautifulSoup) -> float | None:
         try:
             date_str = css.json_ld(soup)["uploadDate"]
         except (LookupError, ValueError, css.SelectorError):
@@ -336,3 +335,19 @@ def _extract_user_name(soup: BeautifulSoup) -> str:
 def _extract_album_id(soup: BeautifulSoup) -> str:
     js_text = css.select_text(soup, Selector.Album.ID)
     return extr_text(js_text, "params['album_id'] =", ";")
+
+
+class GenericKVSCrawler(KernelVideoSharingCrawler, is_generic=True):
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
+        "Video": (
+            "/video/<slug>",
+            "/videos/<slug>",
+        )
+    }
+
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
+        match scrape_item.url.parts[1:]:
+            case ["videos" | "video", _, *_]:
+                return await self.video(scrape_item)
+            case _:
+                raise ValueError

@@ -49,6 +49,7 @@ class GenericCrawlers(ConfigModel):
     wordpress_html: FalsyAsTuple[HttpURL] = ()
     discourse: FalsyAsTuple[HttpURL] = ()
     chevereto: FalsyAsTuple[HttpURL] = ()
+    kvs: FalsyAsTuple[HttpURL] = ()
 
 
 class Crawlers(ConfigGroup, name=None):

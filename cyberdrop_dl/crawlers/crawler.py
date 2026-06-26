@@ -211,7 +211,11 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         assert cls.__name__.endswith("Crawler"), f"{cls.__name__} does not end with 'Crawler'"
         assert cls.__name__ not in Registry.names
         Registry.names.add(cls.__name__)
-        super().__init_subclass__(**kwargs)
+        try:
+            super().__init_subclass__(**kwargs)
+        except TypeError as e:
+            raise TypeError(f"Unknown kwargs arguments for {cls.__name__}.__init_subclass__(): {kwargs!r}") from e
+
         _check_init_overrides(cls)
         cls.NAME: str = cls.__name__.removesuffix("Crawler")
         cls.IS_GENERIC: bool = is_generic
