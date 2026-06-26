@@ -19,7 +19,6 @@ from .validators import (
     bytesize_to_str,
     change_path_suffix,
     falsy_as_none,
-    falsy_as_tuple,
     remove_duplicates,
     strings,
     to_timedelta,
@@ -34,7 +33,6 @@ type FormatStr = Annotated[str, StringConstraints(min_length=1)]
 type CSVPath = Annotated[Path, AfterValidator(change_path_suffix(".csv"))]
 type LogPath = Annotated[Path, AfterValidator(change_path_suffix(".log"))]
 type ByteSizeSerilized = Annotated[ByteSize, PlainSerializer(bytesize_to_str, return_type=str, when_used="json")]
-type FalsyAsTuple[T] = Annotated[tuple[T, ...], BeforeValidator(falsy_as_tuple)]
 type FalsyAsNone[T] = Annotated[T | None, BeforeValidator(falsy_as_none)]
 type Timedelta = Annotated[
     datetime.timedelta,

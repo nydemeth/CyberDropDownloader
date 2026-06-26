@@ -13,7 +13,7 @@ from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.models import DeferredModel
-from cyberdrop_dl.models.validators import falsy_as_none, falsy_as_tuple
+from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import unique
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -68,7 +68,7 @@ class Post(DeferredModel):
     added: datetime.datetime | None = None
     edited: datetime.datetime | None = None
     timestamp: int | None = None
-    tags: Annotated[tuple[str, ...], BeforeValidator(falsy_as_tuple)] = ()
+    tags: Annotated[tuple[str, ...], BeforeValidator(lambda x: falsy_as(x, ()))] = ()
     embed: Annotated[Embed | None, BeforeValidator(falsy_as_none)] = None
 
     @override

@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import Field
 
 from cyberdrop_dl.models import ConfigGroup, ConfigModel
-from cyberdrop_dl.models.types import FalsyAsTuple, HttpURL, NonEmptyStr, RemoveDuplicates
+from cyberdrop_dl.models.types import HttpURL, NonEmptyStr, RemoveDuplicates
 
 
 class KemonoConfig(ConfigModel):
@@ -45,15 +45,15 @@ class OnePaceConfig(ConfigModel):
 
 
 class GenericCrawlers(ConfigModel):
-    wordpress_media: FalsyAsTuple[HttpURL] = ()
-    wordpress_html: FalsyAsTuple[HttpURL] = ()
-    discourse: FalsyAsTuple[HttpURL] = ()
-    chevereto: FalsyAsTuple[HttpURL] = ()
-    kvs: FalsyAsTuple[HttpURL] = ()
+    wordpress_media: tuple[HttpURL, ...] = ()
+    wordpress_html: tuple[HttpURL, ...] = ()
+    discourse: tuple[HttpURL, ...] = ()
+    chevereto: tuple[HttpURL, ...] = ()
+    kvs: tuple[HttpURL, ...] = ()
 
 
 class Crawlers(ConfigGroup, name=None):
-    disabled: RemoveDuplicates[FalsyAsTuple[NonEmptyStr]] = ()
+    disabled: RemoveDuplicates[tuple[NonEmptyStr, ...]] = ()
     "Name of crawlers to disable for the current run"
 
     bandcamp: BandcampConfig = Field(default_factory=BandcampConfig)

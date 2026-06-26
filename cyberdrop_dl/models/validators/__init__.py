@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt, overload
 from pydantic import ByteSize, TypeAdapter
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable
     from pathlib import Path
 
     import yarl
@@ -98,12 +98,6 @@ def falsy_as[T, T2](value: T | Literal[""] | None, default: T2) -> T | T2:
         return default
 
     return value or default
-
-
-def falsy_as_tuple[T](
-    value: Iterable[T] | Literal[""] | tuple[T, ...] | tuple[()] | None,
-) -> tuple[T, ...] | Iterable[T]:
-    return falsy_as(value, ())
 
 
 def falsy_as_none[T](value: T | Literal[""] | None) -> T | None:
