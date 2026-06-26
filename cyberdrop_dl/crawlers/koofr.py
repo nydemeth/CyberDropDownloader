@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any, ClassVar, Literal
 
 from pydantic import dataclasses
@@ -15,7 +14,7 @@ _PRIMARY_URL = AbsoluteHttpURL("https://koofr.eu")
 _SHORT_LINK_CDN = AbsoluteHttpURL("https://k00.fr")
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True)
 class Node:
     name: str
     type: Literal["file", "dir"]
@@ -69,7 +68,7 @@ class KooFrCrawler(Crawler, db_path="path_qs_frag"):
     @error_handling_wrapper
     async def _walk_folder(self, scrape_item: ScrapeItem, content_id: str, path: str) -> None:
         children = await self.api.get_children(content_id, path, scrape_item.password)
-        async with asyncio.TaskGroup() as tg:
+        async with self.new_task_group(scrape_item) as tg:
             for node in children:
                 if node.type == "file":
                     tg.create_task(self._file(scrape_item, node))

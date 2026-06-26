@@ -891,12 +891,14 @@ class API(HTTPMixin, ABC):
         PRIMARY_URL: AbsoluteHttpURL,  # noqa: N803
         config: Config,
         request: Callable[..., RequestContext],
+        cache: TTLCacheAdapter[Any],
         parse_url: Callable[[str | yarl.URL], AbsoluteHttpURL] = parse_url,
     ) -> None:
         self.PRIMARY_URL: Final = PRIMARY_URL
         self.parse_url: Final = parse_url
         self.request: Final = request
         self.config: Final = config
+        self.cache: Final = cache
         self.__post_init__()
 
     @classmethod
@@ -905,6 +907,7 @@ class API(HTTPMixin, ABC):
             PRIMARY_URL=crawler.PRIMARY_URL,
             parse_url=crawler.parse_url,
             request=crawler.request,
+            cache=crawler.cache,
             config=crawler.manager.config,
         )
 
