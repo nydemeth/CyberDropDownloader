@@ -8,6 +8,7 @@ import dataclasses
 import functools
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
+from cyberdrop_dl.cache import disk_cached_method
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -106,7 +107,9 @@ class OneDriveCrawler(Crawler):
     async def __async_post_init__(self) -> None:
         if self.auth_headers:
             return
-        await self.get_badger_token(BADGER_URL)
+        with self.catch_errors(BADGER_URL), self.disable_on_error("Unable to get badger token"):
+            token = await self.get_badger_token()
+            self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {token}"}
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         # ex: https://1drv.ms/t/s!ABCJKL-ABCJKL?e=ABC123 or  https://1drv.ms/t/c/a12345678/aTOKEN?e=ABC123
@@ -194,24 +197,17 @@ class OneDriveCrawler(Crawler):
         await self.handle_file(file.url, scrape_item, filename, ext, debrid_link=file.download_url)
 
     async def make_api_request(self, api_url: AbsoluteHttpURL) -> dict[str, Any]:
-        return await self.request_json(
-            api_url,
-            headers={
-                "Content-Type": "application/json",
-            }
-            | self.auth_headers,
-        )
+        return await self.request_json(api_url, headers={"Content-Type": "application/json", **self.auth_headers})
 
-    @error_handling_wrapper
-    async def get_badger_token(self, badger_url: AbsoluteHttpURL = BADGER_URL) -> None:
-        json_resp: dict[str, Any] = await self.request_json(
-            badger_url,
+    @disk_cached_method("badger_token", ttl=3600 * 20)
+    async def get_badger_token(self) -> str:
+        resp: dict[str, Any] = await self.request_json(
+            BADGER_URL,
             method="POST",
             headers={"Content-Type": "application/json", "AppId": APP_ID},
             json={"appId": APP_UUID},
         )
-        badger_token: str = json_resp["token"]
-        self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {badger_token}"}
+        return resp["token"]
 
 
 def is_share_link(url: AbsoluteHttpURL) -> bool:

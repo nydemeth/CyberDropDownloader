@@ -8,11 +8,15 @@ from cyclopts.help import DefaultFormatter
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.commands import CLIarguments
+from cyberdrop_dl.commands.cache import app as cache_app
 from cyberdrop_dl.commands.cleanup import app as cleanup_app
 from cyberdrop_dl.commands.config import app as config_app
 from cyberdrop_dl.commands.database import app as database_app
 from cyberdrop_dl.commands.hash import compute_hashes
+from cyberdrop_dl.commands.retry import app as retry_app
+from cyberdrop_dl.commands.retry import create_retry_source
 from cyberdrop_dl.commands.scrape import download, prepare_manager, scrape
+from cyberdrop_dl.scrape_source import RetryScrapeSource, RetrySource
 
 app = App(
     name="cyberdrop-dl",
@@ -37,14 +41,21 @@ def main_menu(
             show_default=False,
         ),
     ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
-    cli: CLIarguments | None = None,
+    cli_args: CLIarguments | None = None,
 ) -> None:
     "Show a TUI menu equivalent to the CLI commands"
-    with prepare_manager((), input_file, cli, cli_overrides=None)() as manager:
+    input_file = input_file.resolve().absolute()
+    with prepare_manager(cli_args, cli_overrides=None)() as manager:
         from cyberdrop_dl import program_ui
 
-        program_ui.run(manager)
-        scrape(manager)
+        source = program_ui.run(manager, input_file)
+        scrape(manager, source=_parse_scrape_source(source))
+
+
+def _parse_scrape_source(src: Path | RetrySource) -> Path | RetryScrapeSource:
+    if isinstance(src, Path):
+        return src
+    return create_retry_source(src)
 
 
 @app.command
@@ -64,7 +75,7 @@ def report() -> None:
     app.console.print(generate_report())
 
 
-for cmd in download, database_app, cleanup_app, config_app:
+for cmd in download, database_app, cleanup_app, config_app, cache_app, retry_app:
     app.command(cmd)
 
 

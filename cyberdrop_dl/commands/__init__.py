@@ -5,8 +5,6 @@ from typing import Annotated, Any
 
 from cyclopts import Parameter, Token, validators
 
-from cyberdrop_dl.models.types import HttpURL
-
 
 def _resolve_path(type_: type[Path], tokens: Sequence[Token]) -> Path:
     assert len(tokens) == 1
@@ -25,8 +23,6 @@ type SQLiteFile = Annotated[Path, file_validator(".db")]
 @Parameter(name="*")
 @dataclasses.dataclass(slots=True)
 class CLIarguments:
-    urls: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = ()
-
     config_file: YAMLFile | None = None
     "YAML file to use as config"
 
@@ -37,6 +33,4 @@ class CLIarguments:
     "SQLite file to use as database"
 
     def __json__(self) -> dict[str, Any]:
-        me: dict[str, Any] = {k: None if v is None else str(v) for k, v in dataclasses.asdict(self).items()}
-        me["urls"] = tuple(map(str, self.urls))
-        return me
+        return {k: None if v is None else str(v) for k, v in dataclasses.asdict(self).items()}

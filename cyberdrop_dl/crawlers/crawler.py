@@ -14,6 +14,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Self, final
 
 from cyberdrop_dl import aio, env, signature
+from cyberdrop_dl.cache import TTLCacheAdapter
 from cyberdrop_dl.clients.http import JSON_CHECK, HTTPClient, HTTPMixin, RequestContext
 from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, SKIP_DOWNLOAD, Registry
@@ -210,7 +211,11 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         assert cls.__name__.endswith("Crawler"), f"{cls.__name__} does not end with 'Crawler'"
         assert cls.__name__ not in Registry.names
         Registry.names.add(cls.__name__)
-        super().__init_subclass__(**kwargs)
+        try:
+            super().__init_subclass__(**kwargs)
+        except TypeError as e:
+            raise TypeError(f"Unknown kwargs arguments for {cls.__name__}.__init_subclass__(): {kwargs!r}") from e
+
         _check_init_overrides(cls)
         cls.NAME: str = cls.__name__.removesuffix("Crawler")
         cls.IS_GENERIC: bool = is_generic
@@ -310,6 +315,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @property
     def database(self) -> Database:
         return self.manager.database
+
+    @final
+    @property
+    def cache(self) -> TTLCacheAdapter[Any]:
+        """Get a TTL cache access for entries specific to this crawler
+
+        NOTE: cached values MUST be JSON seriable"""
+        return TTLCacheAdapter(self.manager.cache, ("crawlers", self.DOMAIN))
 
     @final
     @property

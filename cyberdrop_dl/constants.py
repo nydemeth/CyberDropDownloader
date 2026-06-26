@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import datetime
 from contextvars import ContextVar
-from enum import Enum, StrEnum, auto
+from enum import StrEnum, auto
 from typing import TYPE_CHECKING, final
 
-from rich.text import Text
 from typing_extensions import Sentinel
 
 from cyberdrop_dl import __version__, env
@@ -63,12 +62,6 @@ class BlockedDomains:
         exact_match = *exact_match, "x.com"
 
 
-class HashType(StrEnum):
-    md5 = "md5"
-    sha256 = "sha256"
-    xxh128 = "xxh128"
-
-
 class HashMode(CIStrEnum):
     OFF = auto()
     IN_PLACE = auto()
@@ -77,26 +70,6 @@ class HashMode(CIStrEnum):
     @property
     def enabled(self) -> bool:
         return self is not HashMode.OFF
-
-
-class Browser(StrEnum):
-    chrome = auto()
-    firefox = auto()
-    safari = auto()
-    edge = auto()
-    opera = auto()
-    brave = auto()
-    librewolf = auto()
-    opera_gx = auto()
-    vivaldi = auto()
-    chromium = auto()
-
-
-class NotificationResult(Enum):
-    SUCCESS = Text("Success", "green")
-    FAILED = Text("Failed", "bold red")
-    PARTIAL = Text("Partial Success", "yellow")
-    NONE = Text("No Notifications Sent", "yellow")
 
 
 @final

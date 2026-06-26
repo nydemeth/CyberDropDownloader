@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import functools
 import shutil
 import time
 from pathlib import Path
@@ -15,7 +14,6 @@ from typing import IO, TYPE_CHECKING, Any, Self, cast, overload
 from weakref import WeakValueDictionary
 
 from aiolimiter.leakybucket import AsyncLimiter
-from typing_extensions import Sentinel
 
 from cyberdrop_dl.constants import MISSING
 
@@ -31,7 +29,6 @@ if TYPE_CHECKING:
         Iterator,
         Sequence,
     )
-    from types import CoroutineType
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
@@ -118,55 +115,6 @@ class _CachedValue[T]:
     @property
     def has_expired(self) -> bool:
         return time.monotonic() - self.created_at >= self.ttl
-
-
-def cache_wrapper[T](
-    *, ttl: float | None = None
-) -> Callable[[Callable[[], Awaitable[T]]], Callable[[], CoroutineType[Any, Any, T]]]:
-
-    return lambda x: cached(x, ttl=ttl)
-
-
-def cached[T](fn: Callable[[], Awaitable[T]], *, ttl: float | None = None) -> Callable[[], CoroutineType[Any, Any, T]]:
-    if ttl is None:
-        return _perpetual_cache(fn)
-
-    lock = asyncio.Lock()
-    cached_value: _CachedValue[T] | None = None
-
-    @functools.wraps(fn)
-    async def wrapper() -> T:
-        nonlocal cached_value
-        async with lock:
-            if cached_value is not None and not cached_value.has_expired:
-                return cached_value.value
-
-            cached_value = _CachedValue(await fn(), ttl=ttl)
-
-        return cached_value.value
-
-    return wrapper
-
-
-def _perpetual_cache[T](fn: Callable[[], Awaitable[T]]) -> Callable[[], CoroutineType[Any, Any, T]]:
-    lock = asyncio.Lock()
-    cached_value: T | Sentinel = MISSING
-
-    @functools.wraps(fn)
-    async def wrapper() -> T:
-        nonlocal cached_value
-        if cached_value is not MISSING:
-            return cast("T", cached_value)
-
-        async with lock:
-            if cached_value is not MISSING:
-                return cast("T", cached_value)
-
-            cached_value = await fn()
-
-        return cached_value
-
-    return wrapper
 
 
 @dataclasses.dataclass(slots=True, eq=False)
