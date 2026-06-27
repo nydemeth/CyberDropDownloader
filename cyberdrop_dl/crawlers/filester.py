@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import dataclasses
-import random
 import time
 from typing import TYPE_CHECKING, ClassVar
 
@@ -37,6 +36,7 @@ class FilesterCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://filester.me")
     DOMAIN: ClassVar[str] = "filester"
     _RATE_LIMIT: ClassVar[RateLimit] = 4, 1
+    _DOWNLOAD_SLOTS: ClassVar[int | None] = 4
 
     def __post_init__(self) -> None:
         self.api: FilesterAPI = FilesterAPI.from_crawler(self)
@@ -145,10 +145,10 @@ class File:
 
 class FilesterAPI(API):
     async def download(self, slug: str) -> AbsoluteHttpURL:
-        api_url = self.origin / "api/public/download"
+        api_url = self.origin / "v2/api/public/download"
         resp = await self.request_json(api_url, method="POST", json={"file_slug": slug})
-        dl_link = random.choice(_CDN_URLS).with_path(resp["download_url"])
-        return dl_link.with_query(download="true")
+        dl_link = self.parse_url(resp["server"]) / "v2" / resp["file"]
+        return dl_link.with_query(token=resp["token"], download="true")
 
 
 def _encode_password(password: str, nonce: str) -> str:
