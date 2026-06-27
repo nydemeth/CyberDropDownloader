@@ -20,7 +20,6 @@ from cyberdrop_dl.models.types import (
     LogLevel,
     LogPath,
     NonEmptyStr,
-    RemoveDuplicates,
     Timedelta,
 )
 from cyberdrop_dl.models.validators import strings
@@ -152,7 +151,7 @@ class Jdownloader(ConfigGroup, name=None):
     download_dir: FalsyAsNone[Path] = None
     "Output path for Jdownloader. Defaults to `--download-folder`"
 
-    whitelist: RemoveDuplicates[tuple[NonEmptyStr, ...]] = ()
+    whitelist: set[NonEmptyStr] = Field(default_factory=set)
     "Only send unsupported URLs from these domains to Jdownloader. An empty list means 'send all URLs'"
 
 

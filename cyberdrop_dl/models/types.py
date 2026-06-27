@@ -2,28 +2,12 @@ import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import (
-    AfterValidator,
-    BeforeValidator,
-    ByteSize,
-    Field,
-    PlainSerializer,
-    PlainValidator,
-    StringConstraints,
-    WithJsonSchema,
-)
+from pydantic import ByteSize, Field, PlainSerializer, StringConstraints, WithJsonSchema
+from pydantic.functional_validators import AfterValidator, BeforeValidator, PlainValidator
 
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
-from .validators import (
-    bytesize_to_str,
-    change_path_suffix,
-    falsy_as_none,
-    remove_duplicates,
-    strings,
-    to_timedelta,
-    to_yarl_url,
-)
+from .validators import bytesize_to_str, change_path_suffix, falsy_as_none, strings, to_timedelta, to_yarl_url
 
 type LogLevel = Annotated[
     Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], strings.pre_validator(to_upper=True, strip=True)
@@ -42,7 +26,6 @@ type Timedelta = Annotated[
         str, return_type=str, when_used="json"
     ),  # Serialize as str to save it as sexageximal (hh:mm:ss) instead of pydantic's ISO duration (PT1H5M26S)
 ]
-type RemoveDuplicates[T] = Annotated[T, AfterValidator(remove_duplicates)]
 
 
 # Only use this for config validation. To parse URLs internally while scraping, call `parse_url` directly

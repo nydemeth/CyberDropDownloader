@@ -13,7 +13,6 @@ from cyberdrop_dl.models.types import (  # noqa: TC001
     ByteSizeSerilized,
     FalsyAsNone,
     NonEmptyStr,
-    RemoveDuplicates,
     Timedelta,
 )
 
@@ -157,10 +156,10 @@ class Filters(ConfigGroup):
     filename_regex: FalsyAsNone[re.Pattern[str]] = None
     "Only download files that match this regex"
 
-    only_hosts: RemoveDuplicates[tuple[NonEmptyStr, ...]] = ()
+    only_hosts: set[NonEmptyStr] = Field(default_factory=set)
     "Only scrape/download from these domains"
 
-    skip_hosts: RemoveDuplicates[tuple[NonEmptyStr, ...]] = ()
+    skip_hosts: set[NonEmptyStr] = Field(default_factory=set)
     "Skip scrape/download from these domains"
 
     allow_files_with_no_extension: bool = False

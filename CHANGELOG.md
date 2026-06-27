@@ -199,6 +199,7 @@ The following authentication entries has been removed:
 
 - Do not skip initialization segments (HLS) (#1977)
 - 403 errors on embeded videos (twing)
+- Switch to v2 API (Filester)
 
 ## [9.15.2] - 2026-06-16
 
