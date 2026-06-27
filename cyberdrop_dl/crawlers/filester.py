@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
-_CDN_URLS = AbsoluteHttpURL("https://cache1.filester.me"), AbsoluteHttpURL("https://cache6.filester.me")
-
 
 class Selector:
     FILES = ".file-item[onclick]"
