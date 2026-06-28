@@ -6,6 +6,7 @@ from cyclopts import Parameter
 from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, TypeAdapter, model_serializer, model_validator
 
 from cyberdrop_dl import env
+from cyberdrop_dl.constants import DEFAULT_PARAMETER
 from cyberdrop_dl.utils import fast_cache
 
 
@@ -22,6 +23,7 @@ class DeferredModel(
 ): ...
 
 
+@DEFAULT_PARAMETER
 class ConfigModel(DeferredModel, extra="forbid"): ...
 
 

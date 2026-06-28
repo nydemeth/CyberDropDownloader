@@ -5,6 +5,7 @@ from contextvars import ContextVar
 from enum import StrEnum, auto
 from typing import TYPE_CHECKING, final
 
+from cyclopts import Parameter
 from typing_extensions import Sentinel
 
 from cyberdrop_dl import __version__, env
@@ -20,6 +21,14 @@ CDL_USER_AGENT = f"cyberdrop-dl/{__version__}"
 MISSING = Sentinel("MISSING")
 
 MAIN_LOG_FILE: ContextVar[Path] = ContextVar("MAIN_LOG_FILE")
+
+DEFAULT_PARAMETER = Parameter(
+    negative_iterable=[],
+    json_dict=False,
+    json_list=False,
+    consume_multiple=True,
+    allow_repeating=False,
+)
 
 
 class CIStrEnum(StrEnum):

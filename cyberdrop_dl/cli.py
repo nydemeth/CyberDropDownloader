@@ -16,13 +16,14 @@ from cyberdrop_dl.commands.hash import compute_hashes
 from cyberdrop_dl.commands.retry import app as retry_app
 from cyberdrop_dl.commands.retry import create_retry_source
 from cyberdrop_dl.commands.scrape import download, prepare_manager, scrape
+from cyberdrop_dl.constants import DEFAULT_PARAMETER
 from cyberdrop_dl.scrape_source import RetryScrapeSource, RetrySource
 
 app = App(
     name="cyberdrop-dl",
     help="Bulk asynchronous downloader for multiple file hosts",
     version=__version__,
-    default_parameter=Parameter(negative_iterable=[], json_dict=False, json_list=False),
+    default_parameter=DEFAULT_PARAMETER,
     result_action="return_value",
     help_formatter=DefaultFormatter().with_newline_metadata(),  # pyright: ignore[reportUnknownMemberType]
 )
