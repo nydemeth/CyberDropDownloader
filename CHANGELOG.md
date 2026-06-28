@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detect and report BasedFlare anti-bot protection
 - Limit max queued downloads of a single site to the config concurrency limit x10 (capped at 50). All scraping for a site will be paused if its queue is full
 - Always remove generated id from filenames (Cyberdrop)
+- Revert mandatory `Content-Length` header introduced in v9.15.0
 
 The following options, which were CLI only arguments, now have dedicated config entries:
 

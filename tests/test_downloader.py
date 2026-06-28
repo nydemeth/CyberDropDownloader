@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
 import pytest
 
-from cyberdrop_dl import env
 from cyberdrop_dl.clients.downloads import _get_content_length, filter_by_duration
 from cyberdrop_dl.downloader.http import Downloader
-from cyberdrop_dl.exceptions import DownloadError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 
 if TYPE_CHECKING:
@@ -60,17 +57,5 @@ async def test_probe_duration_is_skipped_on_default_config(manager: Manager) -> 
 
 
 def test_missing_content_lenght() -> None:
-
     assert _get_content_length({"Content-Length": "200"}) == 200
-
-    with pytest.raises(DownloadError) as exc:
-        _get_content_length({})
-
-    assert exc.value.status is HTTPStatus.LENGTH_REQUIRED
-    assert exc.value.retry is False
-
-    env.ALLOW_MISSING_CONTENT_LENGTH, old_value = True, env.ALLOW_MISSING_CONTENT_LENGTH
-    try:
-        assert _get_content_length({}) == 0
-    finally:
-        env.ALLOW_MISSING_CONTENT_LENGTH = old_value
+    assert _get_content_length({}) == 0
