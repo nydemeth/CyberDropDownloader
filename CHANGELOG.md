@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--input-file` is now a CLI only arg
 - If supplied, `--input-file` needs to be a valid file that already exists
 - Refuse to run if both URLs and `--input-file` are passed as arguments
+- Using number for any config option that expects a timedelta will be parsed as seconds instead of days
 - Detect and report BasedFlare anti-bot protection
 - Limit max queued downloads of a single site to the config concurrency limit x10 (capped at 50). All scraping for a site will be paused if its queue is full
 - Always remove generated id from filenames (Cyberdrop)

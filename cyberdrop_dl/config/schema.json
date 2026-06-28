@@ -595,7 +595,7 @@
           "title": "Autostart",
           "type": "boolean"
         },
-        "download_dir": {
+        "download_folder": {
           "$ref": "#/$defs/FalsyAsNone_Path_",
           "default": null
         },
@@ -943,12 +943,26 @@
       "additionalProperties": false,
       "properties": {
         "min": {
-          "$ref": "#/$defs/Timedelta",
-          "default": "PT0S"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timedelta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "max": {
-          "$ref": "#/$defs/Timedelta",
-          "default": "PT0S"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timedelta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "_DurationLimit",
@@ -1017,12 +1031,26 @@
       "additionalProperties": false,
       "properties": {
         "min": {
-          "$ref": "#/$defs/ByteSizeSerilized",
-          "default": 0
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ByteSizeSerilized"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "max": {
-          "$ref": "#/$defs/ByteSizeSerilized",
-          "default": 0
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ByteSizeSerilized"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "_SizeLimit",
