@@ -87,12 +87,13 @@ def create_test_live(renderable: JsonableRenderableType, *, transient: bool = Fa
     )
 
 
-def hyperlink(file_path: Path, text: str | None = None) -> Text:
+def hyperlink(file_path: Path | str, text: str | None = None) -> Text:
     from rich.markup import escape
     from rich.text import Text
 
     text = escape(text or str(file_path))
-    return Text.from_markup(f"[link={file_path.as_uri()}]{text}[/link]", style="blue")
+    link = file_path if isinstance(file_path, str) else file_path.as_uri()
+    return Text.from_markup(f"[link={link}]{text}[/link]", style="blue")
 
 
 class DictProgress(Progress):
