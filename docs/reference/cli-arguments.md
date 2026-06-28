@@ -21,123 +21,56 @@ CLI inputs always take priority over config values.
 {% endhint %}
 
 {% hint style="info" %}
-Use `-` instead of `_` to separate words in an config option name when using it as a CLI argument: Ex: `auto_dedupe` needs to be `auto-dedupe` when using it via the CLI
+Use `-` instead of `_` to separate words in an config option name when using it as a CLI argument:
+
+Ex: `delete_partial_files` needs to be `delete-partial-files` when using it via the CLI
 {% endhint %}
 
-You can pass any of the **Config Settings** and **Global Settings** options as a cli argument for the program.
+All config option except authentication credentials have a CLI equivalent to override them.
 
 For items not explained below, you can find their counterparts in the configuration options to see what they do.
 
 ## CLI only arguments
 
-### `appdata-folder`
+These options can onlny be supplied via CLI argmunets. They are not included on the config file
 
-| Type   | Default                       |
-| ------ | ----------------------------- |
-| `Path` | `<Current Working Directory>` |
-
-Folder where Cyberdrop-DL will store it's database, cache and config files.
-
-### `config-file`
+### `--config-file`
 
 | Type   | Default |
 | ------ | ------- |
-| `Path` | `None`  |
+| `Path` | `null`  |
 
-Path to the CDL `settings.yaml` file to load
-
-{% hint style="info" %}
-If both `config` and `config-file` are supplied, `config-file` takes priority
-{% endhint %}
-
-### `download`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-Skips UI, start download immediately
-
-### `download-tiktok-audios`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-Download TikTok audios from posts and save them as separate files
-
-### `download-tiktok-src-quality-videos`
-
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
-
-By default, CDL will download the "optimized for streaming" version of tiktok videos. Setting this option to `True` will download videos in original (source) quality.
-
-`_original` will be added as a suffix to their filename.
-
-{% hint style="warning" %}
-This will make video downloads several times slower
-
-When it is set to `False` (the default) CDL can download 50 videos with a single request.
-When it is set to `True` , CDL needs to make at least 3 requests _per_ video to download them.
-
-There's also a daily limit of the API CDL uses: 5000 requests per day per IP
-
-Setting this option to `True` will consume the daily limit faster
-{% endhint %}
-
-### `impersonate`
-
-| Type                                                                             | Default | Action        |
-| -------------------------------------------------------------------------------- | ------- | ------------- |
-| `chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"` or `null` | `null`  | `store_const` |
-
-Impersonation allows CDL to make requests and appear to be a legitimate web browser. This helps bypass bot-protection on some sites and it's required for any site that only accepts HTTP2 connections.
-
-- The default value (`null`) means CDL will automatically use impersonation for crawlers that were programmed to use it.
-- Passing an specific target (ex: `--impersonate chrome_android`) will make CDL use impersonation for all requests, using that tarjet
+Path to the config file to use for this session. The config file at the default location will be ignored. This file _must_ have a `.yml` or `.yaml` extension
 
 {% hint style="info" %}
-The current default target is `chrome`. The default target can change on any new release without notice
+If provided, this file _must_ exists already, but it can be empty
 {% endhint %}
 
-### `portrait`
+### `--cache-file`
 
-| Type       | Default | Action       |
-| ---------- | ------- | ------------ |
-| `BoolFlag` | `False` | `store_true` |
+| Type   | Default |
+| ------ | ------- |
+| `Path` | `null`  |
 
-Force CDL to run with a vertical layout
-
-### `print-stats`
-
-| Type       | Default | Action        |
-| ---------- | ------- | ------------- |
-| `BoolFlag` | `True`  | `store_false` |
-
-Show stats report at the end of a run
-
-### `ui`
-
-| Type                     | Default      |
-| ------------------------ | ------------ |
-| `CaseInsensitiveStrEnum` | `FULLSCREEN` |
-
-UI can have 1 of these values:
-
-- `DISABLED` : no output at all
-- `ACTIVITY` : only shows a spinner with the text `running CDL...`
-- `SIMPLE`: shows spinner + simplified progress bar
-- `FULLSCREEN`: shows the normal UI/progress view
+Path to the cache file to use for this session. The cache at the default location will be ignored. This file _must_ have a `.json` extension
 
 {% hint style="info" %}
-Values are case insensitive, ex: both `disabled` and `DISABLED` are valid
+If provided, this file _must_ exists already, but it can be empty
+{% endhint %}
+
+### `--database-file`
+
+| Type   | Default |
+| ------ | ------- |
+| `Path` | `null`  |
+
+Path to the database file to use for this session. The database at the default location will be ignored. This file _must_ have a `.db` extension
+
+{% hint style="info" %}
+If provided, this file _must_ exists already, but it can be empty
 {% endhint %}
 
 ## Overview
-
-Bool arguments like options within `Download Options`, `Ignore Options`, `Runtime Options`, etc. can be prefixed with `--no-` to negate them. Ex: `--no-auto-dedupe` will disable auto dedupe, overriding whatever the config option was set to.
 
 <!-- START_CLI_OVERVIEW -->
 
@@ -161,7 +94,7 @@ Bulk asynchronous downloader for multiple file hosts
 │                                      date                                                        │
 │ --completed-before                   only retry downloads that were completed on or before this  │
 │                                      date                                                        │
-│ --config-file                        path to the CDL settings.yaml file to load                  │
+│ --config-file                        path to the CDL config.yaml file to load                  │
 │ --download --no-download             skips UI, start download immediately [default: False]       │
 │ --download-tiktok-audios             download TikTok audios from posts and save them as separate │
 │   --no-download-tiktok-audios        files [default: False]                                      │
