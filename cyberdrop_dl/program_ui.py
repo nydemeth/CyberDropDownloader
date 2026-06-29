@@ -99,8 +99,12 @@ def _edit_config(manager: Manager) -> None:
 
 
 def _edit_urls() -> None:
+    file = _INPUT_FILE.get()
+    if not file.exists():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
     try:
-        text_editor.open(_INPUT_FILE.get())
+        text_editor.open(file)
     except ValueError as e:
         console.error(e)
 
