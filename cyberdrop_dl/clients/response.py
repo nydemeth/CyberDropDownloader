@@ -41,8 +41,8 @@ class ContentDisposition:
 
     @property
     def filename(self) -> str:
-        if name := self.raw_filename:
-            return name
+        if self.raw_filename:
+            return self.raw_filename
 
         msg = "Content disposition has no filename information"
         raise ScrapeError(422, msg)

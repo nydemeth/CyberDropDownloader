@@ -71,7 +71,7 @@ def _scan_and_create_hashes(manager: Manager) -> None:
 
 
 def _sort_files(manager: Manager) -> None:
-    sorter = Sorter.from_manager(manager)
+    sorter = Sorter.from_config(manager.config)
     console.warning(
         f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
     )

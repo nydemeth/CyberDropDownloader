@@ -18,7 +18,7 @@ def _check_for_v9_database() -> None:
         (
             "Found old database file at '%s'",
             "The default database location changed in v10",
-            "Current default to '%s'",
+            "Current default: '%s'",
             "",
         )
     )

@@ -86,15 +86,6 @@ def ask_dir(message: str = "Select dir path", default: Path | None = None) -> Pa
     return ask_path(message, default, validate=is_dir)
 
 
-def ask_file(message: str = "Select file", default: Path | None = None) -> Path:
-
-    def is_file(path: Path) -> None:
-        if not path.is_file():
-            raise IsADirectoryError(str(path))
-
-    return ask_path(message, default, validate=is_file)
-
-
 def ask_path(
     message: str = "Select path",
     default: Path | None = None,

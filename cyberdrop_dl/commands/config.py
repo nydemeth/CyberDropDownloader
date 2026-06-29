@@ -1,5 +1,3 @@
-import logging
-
 from cyclopts import App
 
 from cyberdrop_dl.commands import CLIarguments
@@ -8,7 +6,6 @@ from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.prompts import ask_should_create_config
 
 app = App(name="config", help="Config file operations")
-logger = logging.getLogger(__name__)
 
 
 @app.command()

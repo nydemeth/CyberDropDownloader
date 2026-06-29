@@ -55,9 +55,12 @@ class Manager:
         self._completed_downloads: list[MediaItem] = []
         self._hasher: Hasher | None = None
         self.logs: CSVLogsManager = CSVLogsManager.from_config(self.config)
-        self.http_client: HTTPClient = HTTPClient.from_manager(self)
-        self.download_client: DownloadClient = DownloadClient(self)
 
+        self.http_client = HTTPClient(self.config)
+        if self.config.network.dump_responses:
+            self.http_client.request_done_callback = self.logs.write_response
+
+        self.download_client: DownloadClient = DownloadClient(self)
         self.scrape_mapper: ScrapeMapper
         self.database: Database
         self.deduper: Czkawka
@@ -92,7 +95,7 @@ class Manager:
         self.__resolve_paths()
         self.database = Database(self.appdata.db_file, self.config.ignore_history)
         self.deduper = Czkawka.from_manager(self)
-        self.sorter = Sorter.from_manager(self)
+        self.sorter = Sorter.from_config(self.config)
         with (
             cache_context(self.appdata.cache_file, self.cache),
             enter_context(REFRESH_RATE, self.config.ui.refresh_rate),

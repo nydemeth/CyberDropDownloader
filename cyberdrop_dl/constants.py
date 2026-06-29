@@ -13,7 +13,7 @@ from cyberdrop_dl import __version__, env
 if TYPE_CHECKING:
     from pathlib import Path
 
-STARTUP_TIME_UTC = datetime.datetime.now(datetime.UTC)
+
 LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = datetime.datetime.now().strftime(LOGS_DATETIME_FORMAT)  # noqa: DTZ005

@@ -19,7 +19,7 @@ from cyberdrop_dl.progress.sorting import SortingUI, SortStats
 from cyberdrop_dl.utils import cleanup
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.config import Config
 
 
 logger = logging.getLogger(__name__)
@@ -46,10 +46,10 @@ class Sorter:
         return self._tui.stats
 
     @classmethod
-    def from_manager(cls, manager: Manager) -> Self:
-        settings = manager.config.sort
+    def from_config(cls, config: Config) -> Self:
+        settings = config.sort
         return cls(
-            input_dir=settings.input_folder or manager.config.download_folder,
+            input_dir=settings.input_folder or config.download_folder,
             output_dir=settings.output_folder,
             incrementer_format=settings.formats.incrementer,
             audio_format=settings.formats.audio,
