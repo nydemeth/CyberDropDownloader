@@ -21,7 +21,7 @@ type _ConvertibleToInt = str | SupportsInt | SupportsIndex
 
 
 def bytesize_to_str(value: _ConvertibleToInt) -> str:
-    return ByteSize(value).human_readable(decimal=True)
+    return ByteSize(value).human_readable()
 
 
 def to_yarl_url(value: object) -> yarl.URL:

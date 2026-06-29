@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Create URLs.txt in interactive mode if it does not exists
+- In interactive mode, create `URLs.txt` if it does not exists
+- Use binary units instead of decimal units for file sizes
 
 ## [10.0.0] - 2026-06-28
 

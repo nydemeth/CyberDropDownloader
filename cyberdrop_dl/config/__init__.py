@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
+MIN_REQUIRED_FREE_SPACE = to_bytesize("512MiB")
 MODULE_PATH = Path(__file__).parent
 logger = logging.getLogger(__name__)
 _app: App | None = None
@@ -92,7 +92,7 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
     "Max number of nested folders CDL will create when maximum_thread_depth is greater that 0"
 
     min_free_space: Annotated[ByteSizeSerilized, AfterValidator(lambda x: max(x, MIN_REQUIRED_FREE_SPACE))] = (
-        to_bytesize("5GB")
+        to_bytesize("5GiB")
     )
     "Minimum free space require to start new downloads"
 

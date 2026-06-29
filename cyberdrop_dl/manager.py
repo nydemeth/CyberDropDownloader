@@ -8,8 +8,6 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any, Self, final
 
-from pydantic.types import ByteSize
-
 from cyberdrop_dl import ALL_DEPENDENCIES, __version__, aio, env, ffmpeg, stats
 from cyberdrop_dl.cache import cache_context
 from cyberdrop_dl.clients.downloads import DownloadClient
@@ -21,6 +19,7 @@ from cyberdrop_dl.database import Database
 from cyberdrop_dl.dedupe import Czkawka
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.logs import capture_logs, log_spacer
+from cyberdrop_dl.models.validators import bytesize_to_str
 from cyberdrop_dl.progress import REFRESH_RATE, TUI_DISABLED
 from cyberdrop_dl.sorter import Sorter
 from cyberdrop_dl.utils import enter_context, get_system_information
@@ -139,7 +138,7 @@ class Manager:
     def __print_stats(self, scrape_stats: ScrapeStats) -> None:
 
         elapsed = datetime.timedelta(seconds=int(time.monotonic() - scrape_stats.start_time))
-        total_data_written = ByteSize(self.scrape_mapper.tui.downloads.bytes_downloaded).human_readable(decimal=True)
+        total_data_written = bytesize_to_str(self.scrape_mapper.tui.downloads.bytes_downloaded)
 
         logger.info("Run Stats:", extra={"color": "cyan"})
         logger.info(f"  Config file: {self.config.source}")
@@ -196,7 +195,7 @@ def _log_database(path: Path) -> None:
     except FileNotFoundError:
         db_size = 0
 
-    logger.debug("Database file: %s (%s)", path, ByteSize(db_size).human_readable(decimal=True))
+    logger.debug("Database file: %s (%s)", path, bytesize_to_str(db_size))
 
 
 def _log_enviroment() -> None:

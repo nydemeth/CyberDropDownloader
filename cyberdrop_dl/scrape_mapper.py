@@ -8,13 +8,12 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self
 
-from pydantic.types import ByteSize
-
 from cyberdrop_dl import env, filepath, storage
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
+from cyberdrop_dl.models.validators import bytesize_to_str
 from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.scrape_source import (
     RetryQuery,
@@ -180,9 +179,7 @@ class ScrapeMapper:
         if config.sort.enabled:
             config.sort.output_folder.mkdir(parents=True, exist_ok=True)
 
-        logger.debug(
-            "Using %s as chunk size", ByteSize(self.manager.download_client.chunk_size).human_readable(decimal=True)
-        )
+        logger.debug("Using %s as chunk size", bytesize_to_str(self.manager.download_client.chunk_size))
         await self.manager.http_client.load_cookie_files(await self.manager.get_cookie_files())
         self.tui.mode = self.manager.config.ui.mode
         ## IMPORTANT: Order of each context matters!

@@ -1174,7 +1174,7 @@
     },
     "min_free_space": {
       "$ref": "#/$defs/ByteSizeSerilized",
-      "default": 5000000000
+      "default": 5368709120
     },
     "mtime": {
       "default": true,

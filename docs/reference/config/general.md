@@ -83,12 +83,12 @@ max_folder_name_length: 60
 
 | Type       | Default | Restrictions |
 | ---------- | ------- | ------------ |
-| `ByteSize` | `5GB`   | `>=512MB`    |
+| `ByteSize` | `5GiB`  | `>=512MiB`   |
 
 This is the minimum amount of free space require to start new downloads.
 
 ```yaml
-min_free_space: 5.0GB
+min_free_space: 5.0GiB
 ```
 
 {% hint style="info" %}

@@ -120,7 +120,7 @@ max_file_name_length: 95
 max_folder_name_length: 60
 max_thread_depth: 0
 max_thread_folder_depth: null
-min_free_space: 5.0GB
+min_free_space: 5.0GiB
 mtime: true
 network:
   connection_timeout: 15.0
