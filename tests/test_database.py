@@ -114,11 +114,11 @@ async def test_pre_allocation(tmp_cwd: Path) -> None:
         assert size == 0
 
     async with common.connect(db_file) as db:
-        await common.pre_allocate_100mb(db)
+        await common.pre_allocate_250mb(db)
 
     size = await aio.get_size(db_file)
     assert size
-    assert size >= 100e6
+    assert size >= 250e6
 
 
 async def test_database_version_check(tmp_cwd: Path) -> None:
