@@ -26,9 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- In interactive mode, automatically create `--input-file` on first use if it does not exists. Defaults to `URLs.txt` if not provided
+- In interactive mode, automatically create `--input-file` on first use if it does not exist. Defaults to `URLs.txt` if not provided
 - Use binary units instead of decimal units for file sizes
 - Increased database disk pre-allocation from 100 MiB to 250 MiB
+- Updated celebforum domains
 
 ### Fixed
 
