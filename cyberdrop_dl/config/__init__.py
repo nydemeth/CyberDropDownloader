@@ -11,7 +11,7 @@ from pydantic import AfterValidator, BaseModel, Field, NonNegativeInt, PositiveI
 
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup, InvalidYamlError
-from cyberdrop_dl.models import ConfigModel
+from cyberdrop_dl.models import ConfigModel, merge_models
 from cyberdrop_dl.models.types import ByteSizeSerilized  # noqa: TC001
 from cyberdrop_dl.models.validators import to_bytesize
 from cyberdrop_dl.utils import cleanup
@@ -163,6 +163,14 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
             self.logs.delete_old_logs_and_folders()
             cleanup.rm_empty_dirs(self.logs.effective_log_folder)
         self._resolved = True
+
+    def __or__(self, other: Config) -> Config:
+        if not isinstance(other, Config):
+            return NotImplemented
+        me = merge_models(self, other)
+        me._source = self.source
+        me.logs._created_at = self.logs._created_at
+        return me
 
 
 def _resolve_paths(model: BaseModel) -> None:
