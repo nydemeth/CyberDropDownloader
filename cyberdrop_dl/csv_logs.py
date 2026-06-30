@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.filepath import sanitize_filename
 from cyberdrop_dl.utils import json
 
@@ -17,9 +16,11 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Iterable, Iterator
 
+    import yarl
+
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,6 @@ _CSV_DELIMITER = ","
 
 @dataclasses.dataclass(slots=True, kw_only=True)
 class CSVFiles:
-    main_log: Path
     unsupported_urls: Path
     download_errors: Path
     scrape_errors: Path
@@ -52,20 +52,20 @@ class CSVLogsManager:
     _responses_folder: Path = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        self._responses_folder = self.files.main_log.parent / "cdl_responses"
+        self._responses_folder = self.files.jsonl_file.parent / "cdl_responses"
 
     @classmethod
     def from_config(cls, config: Config) -> Self:
         files = config.logs.files
-        files = CSVFiles(
-            main_log=files.main,
-            unsupported_urls=files.unsupported,
-            download_errors=files.download_errors,
-            scrape_errors=files.scrape_errors,
-            jsonl_file=files.jsonl_file,
-            last_forum_post=files.last_forum_post,
+        return cls(
+            CSVFiles(
+                unsupported_urls=files.unsupported,
+                download_errors=files.download_errors,
+                scrape_errors=files.scrape_errors,
+                jsonl_file=files.jsonl_file,
+                last_forum_post=files.last_forum_post,
+            )
         )
-        return cls(files)
 
     def delete_old_logs(self) -> None:
         if self._ready:
@@ -89,52 +89,44 @@ class CSVLogsManager:
             is_first_write = file not in self._has_headers
             self._has_headers.add(file)
 
-            def write() -> None:
-                if is_first_write:
-                    file.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(_write_to_csv, file, row, write_headers=is_first_write)
 
-                with file.open("a", encoding="utf8", newline="") as csv_file:
-                    writer = csv.DictWriter(
-                        csv_file,
-                        fieldnames=tuple(row),
-                        delimiter=_CSV_DELIMITER,
-                        quoting=csv.QUOTE_ALL,
-                    )
-                    if is_first_write:
-                        writer.writeheader()
-                    writer.writerow(row)
-
-            await asyncio.to_thread(write)
-
-    def write_unsupported(self, url: AbsoluteHttpURL, origin: AbsoluteHttpURL | None = None) -> None:
-        """Writes to the unsupported urls log."""
+    def write_unsupported(self, url: AbsoluteHttpURL, origin: yarl.URL | Path | None = None) -> None:
         _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls, url=url, origin=origin))
 
-    def write_last_post_log(self, url: AbsoluteHttpURL) -> None:
+    def write_last_forum_post(self, url: AbsoluteHttpURL) -> None:
         _ = self.task_group.create_task(self._write_to_csv(self.files.last_forum_post, url=url))
 
-    def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
-        """Writes to the download error log."""
-        origin = get_origin(media_item)
+    def write_download_error(
+        self,
+        url: AbsoluteHttpURL,
+        referer: AbsoluteHttpURL,
+        error_message: str,
+        origin: yarl.URL | Path | None = None,
+    ) -> None:
         _ = self.task_group.create_task(
             self._write_to_csv(
                 self.files.download_errors,
-                url=media_item.url,
+                url=url,
                 error=error_message,
-                referer=media_item.referer,
+                referer=referer,
                 origin=origin,
             )
         )
 
     def write_scrape_error(
         self,
-        url: AbsoluteHttpURL | str,
+        url: yarl.URL | str,
         error_message: str,
-        origin: AbsoluteHttpURL | Path | None = None,
+        origin: yarl.URL | Path | None = None,
     ) -> None:
-        """Writes to the scrape error log."""
         _ = self.task_group.create_task(
-            self._write_to_csv(self.files.scrape_errors, url=url, error=error_message, origin=origin)
+            self._write_to_csv(
+                self.files.scrape_errors,
+                url=url,
+                error=error_message,
+                origin=origin,
+            )
         )
 
     def write_response(
@@ -176,3 +168,19 @@ def _prepare_resp_file(folder: Path, url: AbsoluteHttpURL, created_at: datetime.
     path_safe_url = sanitize_filename(Path(str(url)).as_posix().replace("/", "-"))
     filename = f"{path_safe_url[:max_stem_len]}_{log_date}{ext}"
     return folder / filename
+
+
+def _write_to_csv(file: Path, row: dict[str, object], *, write_headers: bool) -> None:
+    if write_headers:
+        file.parent.mkdir(parents=True, exist_ok=True)
+
+    with file.open("a", encoding="utf8", newline="") as csv_file:
+        writer = csv.DictWriter(
+            csv_file,
+            fieldnames=tuple(row),
+            delimiter=_CSV_DELIMITER,
+            quoting=csv.QUOTE_ALL,
+        )
+        if write_headers:
+            writer.writeheader()
+        writer.writerow(row)
