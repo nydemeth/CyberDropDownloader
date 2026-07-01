@@ -18,7 +18,7 @@ from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.filepath import sanitize_folder
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Mapping, Sequence
+    from collections.abc import Awaitable, Callable, Generator, Iterable, Mapping, Sequence
 
     @final
     class AbsoluteHttpURL(yarl.URL):
@@ -134,7 +134,7 @@ class MediaItem:
     download_filename: str | None = None
     ext: str = ""
     size: int | None = None
-    debrid_url: AbsoluteHttpURL | None = None
+    debrid_url: Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None = None
     duration: float | None = None
     is_segment: bool = False
     album_id: str | None = None
@@ -177,10 +177,20 @@ class MediaItem:
 
     @property
     def real_url(self) -> AbsoluteHttpURL:
+        if self.debrid_url and not callable(self.debrid_url):
+            return self.debrid_url
+        return self.url
+
+    async def resolve(self) -> AbsoluteHttpURL:
+        if callable(self.debrid_url):
+            self.debrid_url = await self.debrid_url()
+
         return self.debrid_url or self.url
 
     def serialize(self) -> dict[str, Any]:
         me = dataclasses.asdict(self)
+        if callable(self.debrid_url):
+            me["debrid_url"] = None
         if self.xxhash:
             me["xxhash"] = f"xxh128:{self.xxhash}"
         for name in ("is_segment",):

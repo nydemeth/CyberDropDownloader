@@ -57,13 +57,15 @@ class FilesterCrawler(Crawler):
         file = _parse_file(soup)
         scrape_item.uploaded_at = self.parse_iso_date(file.uploaded_at)
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
+
         await self.handle_file(
             scrape_item.url,
             scrape_item,
             file.name,
             ext,
             custom_filename=filename,
-            debrid_link=await self.api.download(slug),
+            # Downloads expire after 30 minutes so we delay the request for it
+            debrid_link=lambda: self.api.download(slug),
         )
 
     @error_handling_wrapper

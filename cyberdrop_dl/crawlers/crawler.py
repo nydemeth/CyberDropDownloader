@@ -31,7 +31,16 @@ from cyberdrop_dl.utils.errors import error_handling_context
 if TYPE_CHECKING:
     import datetime
     import http.cookies
-    from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator, Iterable, Mapping
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterator,
+        Awaitable,
+        Callable,
+        Coroutine,
+        Generator,
+        Iterable,
+        Mapping,
+    )
 
     import yarl
     from bs4 import BeautifulSoup, Tag
@@ -468,7 +477,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         ext: str | None = None,
         *,
         custom_filename: str | None = None,
-        debrid_link: AbsoluteHttpURL | None = None,
+        debrid_link: Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None = None,
         m3u8: m3u8.Rendition | None = None,
         metadata: object = None,
         referer: AbsoluteHttpURL | None = None,
