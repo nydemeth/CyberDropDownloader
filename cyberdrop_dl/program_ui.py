@@ -71,7 +71,7 @@ def _scan_and_create_hashes(manager: Manager) -> None:
 
 
 def _sort_files(manager: Manager) -> None:
-    sorter = Sorter.from_manager(manager)
+    sorter = Sorter.from_config(manager.config)
     console.warning(
         f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'",
     )
@@ -99,8 +99,12 @@ def _edit_config(manager: Manager) -> None:
 
 
 def _edit_urls() -> None:
+    file = _INPUT_FILE.get()
+    if not file.exists():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
     try:
-        text_editor.open(_INPUT_FILE.get())
+        text_editor.open(file)
     except ValueError as e:
         console.error(e)
 

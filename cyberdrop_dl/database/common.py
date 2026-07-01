@@ -46,8 +46,8 @@ async def connect(path: Path) -> AsyncGenerator[aiosqlite.Connection]:
         await db_conn.close()
 
 
-async def pre_allocate_100mb(db_conn: aiosqlite.Connection) -> None:
-    """Pre-allocate 100MB of space to the SQL file just in case the user runs out of disk space."""
+async def pre_allocate_250mb(db_conn: aiosqlite.Connection) -> None:
+    """Pre-allocate 250MB of space to the SQL file just in case the user runs out of disk space."""
 
     cursor = await db_conn.execute("PRAGMA freelist_count;")
     free_space = await cursor.fetchone()
@@ -58,7 +58,7 @@ async def pre_allocate_100mb(db_conn: aiosqlite.Connection) -> None:
 
     pre_allocate_script = (
         "CREATE TABLE IF NOT EXISTS t(x);"
-        "INSERT INTO t VALUES(zeroblob(100*1024*1024));"  # 100 MB
+        "INSERT INTO t VALUES(zeroblob(250*1024*1024));"  # 250 MiB
         "DROP TABLE t;"
     )
     _ = await db_conn.executescript(pre_allocate_script)

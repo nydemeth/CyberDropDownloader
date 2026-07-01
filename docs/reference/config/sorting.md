@@ -1,9 +1,7 @@
-# Sorting
+`cyberdrop-dl` has a file sorter built in, but it's not enabled by default.
 
-Cyberdrop-DL has a file sorter built in, but it's disabled by default
-
-You can use the field names below to create a custom path format. You can also use essentially none of them and have a hard coded path.
-However, `filename` and `ext` must always be used.
+You can use the field names below to create a custom path format. You can also use none of them and have a hard coded path for sorted files.
+However, `filename` and `ext` should always be used as files will overwrite each other otherwise.
 
 Common fields for sorting format options (supported for `audio`, `videos`, `images` and `other`):
 
@@ -19,55 +17,58 @@ Common fields for sorting format options (supported for `audio`, `videos`, `imag
 >
 > `filename`: the file's name (stem)
 >
-> `parent_dir`: the name of the folder where the file is located at (its parent folder).  This is normally the album name for photos or the post name for forums/reddit if `separate_post` is enabled
+> `parent_dir`: the name of the folder where the file is located at (its parent folder). This is normally the album name for photos or the post name for forums/reddit if `separate_post` is enabled
 >
 > `sort_dir`: the same path as `sort_folder` from the download options
 
-## `scan_folder`
-
-| Type             | Default |
-| ---------------- | ------- |
-| `Path` or `null` | `null`  |
-
-Sets the starting point for the file scan
-
-Each direct child of the `scan_folder` is recursively scanned, and files are moved based on your settings.
-
-If this is set to `null` (the default), the value of `download_dir` from  the download options is used.
-
-## `sort_downloads`
+# `enabled`
 
 | Type   | Default |
 | ------ | ------- |
 | `bool` | `false` |
 
-Setting this to `true` will allow Cyberdrop-DL to sort downloads after a run is complete.
+Enable/Disabled file sorting at the end of a download session. All other sorting options are ignored if this is `false`
 
-## `sort_folder`
+```yaml
+sort:
+  enabled: false
+```
 
-| Type   | Default                                   |
-| ------ | ----------------------------------------- |
-| `Path` | `Downloads/Cyberdrop-DL Sorted Downloads` |
+# `input_folder`
+
+| Type             | Default |
+| ---------------- | ------- |
+| `Path` or `null` | `null`  |
+
+Sort all files within this folder. Subfolders are recursively scanned, and files are moved based on your settings.
+
+A value of `null` (the default) will use the save folder as `--download-folder`.
+
+```yaml
+sort:
+  input_folder: null
+```
+
+# `output_folder`
+
+| Type   | Default                         |
+| ------ | ------------------------------- |
+| `Path` | `downloads/cyberdrop-dl sorted` |
 
 This is the path to the folder you'd like sorted downloads to be stored in.
 
 {% hint style="warning" %}
-Setting `sort_folder` to the same value as `scan_folder` is not supported and will lead to expected results
+Setting `--sort.output_folder` to the same value as `--sort.input_folder` (or a subfolder of it) is not supported and will lead to expected results
 {% endhint %}
 
-## `sort_incrementer_format`
+```yaml
+sort:
+  output_folder: downloads/cyberdrop-dl sorted
+```
 
-| Type          | Default |
-| ------------- | ------- |
-| `NonEmptyStr` | `({i})` |
+# Formats
 
-When naming collisions happen, Cyberdrop-DL will rename files automatically
-
-> `image.jpg` -> `image (1).jpg`.
-
-You can modify the format as needed, but it must include `{i}` to specify where the auto-increment value should be placed
-
-## `sorted_audio`
+## `audio`
 
 | Type                    | Default                                       |
 | ----------------------- | --------------------------------------------- |
@@ -85,7 +86,13 @@ In addition to the common sorting format fields, this option supports:
 >
 > `sample_rate`: audio sample rate. This is an `int`
 
-## `sorted_image`
+```yaml
+sort:
+  formats:
+    audio: "{sort_dir}/{base_dir}/Audio/{filename}{ext}"
+```
+
+## `image`
 
 | Type                    | Default                                        |
 | ----------------------- | ---------------------------------------------- |
@@ -101,7 +108,13 @@ In addition to the common sorting format fields, this option supports:
 >
 > `resolution`: `width`x`height` ex. 1080x1920. This is a `str`
 
-## `sorted_video`
+```yaml
+sort:
+  formats:
+    image: "{sort_dir}/{base_dir}/Images/{filename}{ext}"
+```
+
+## `video`
 
 | Type                    | Default                                       |
 | ----------------------- | --------------------------------------------- |
@@ -111,11 +124,11 @@ This is the format for the directory structure and naming scheme for video files
 
 In addition to the common sorting format fields, this option supports:
 
-> `codec`: ex. h264.  This is a `str`. It could potentially be `None` for some files
+> `codec`: ex. h264. This is a `str`. It could potentially be `null` for some files
 >
 > `duration`: video total runtime in seconds. This is an `int`
 >
-> `fps`: ex. `24`. This represents a number but is a `str`. It could potentially be `None` for some files
+> `fps`: ex. `24`. This represents a number but is a `str`. It could potentially be `null` for some files
 >
 > `length`: same as `duration`
 >
@@ -125,7 +138,13 @@ In addition to the common sorting format fields, this option supports:
 >
 > `resolution`: `width`x`height` ex. 1080x1920. This is a `str`
 
-## `sorted_other`
+```yaml
+sort:
+  formats:
+    video: "{sort_dir}/{base_dir}/Videos/{filename}{ext}"
+```
+
+## `non_media`
 
 | Type                    | Default                                       |
 | ----------------------- | --------------------------------------------- |
@@ -133,7 +152,31 @@ In addition to the common sorting format fields, this option supports:
 
 This is the format for the directory structure and naming scheme for other files. Set to `null` to skip sorting other files
 
-## Group URLs
+```yaml
+sort:
+  formats:
+    non_media: "{sort_dir}/{base_dir}/Other/{filename}{ext}"
+```
+
+## `incrementer`
+
+| Type          | Default  |
+| ------------- | -------- |
+| `NonEmptyStr` | ` ({i})` |
+
+When naming collisions happen, `cyberdrop-dl` will rename files automatically
+
+> `image.jpg` -> `image (1).jpg`.
+
+You can modify the format as needed, but it must include `{i}` to specify where the auto-increment value should be placed
+
+```yaml
+sort:
+  formats:
+    incrementer: " ({i})"
+```
+
+# Group URLs
 
 It is possible to treat a list of URLs as a group, allowing them to be downloaded to a single folder.
 
@@ -141,7 +184,7 @@ To define a group, put a title above the URLs you want to be in the group, using
 
 To define the end of a group, add a new group with no name. (`---` or `===`)
 
-Here is an example URL file with two groups:
+Here is an example `URLs.txt` file with two groups:
 
 ```text
 https://example.com/file1.jpg
@@ -164,3 +207,20 @@ Those downloads would be sorted as follows:
 | file1.jpg   | file2.jpg | file5.jpg |
 | file4.jpg   | file3.jpg | file6.jpg |
 | file7.jpg   |           |           |
+
+And downloaded to the following folders:
+
+```shell
+└── downloads
+    ├── Group 1
+    │   ├── file2.jpg
+    │   └── file3.jpg
+    ├── Group 2
+    │   ├── file5.jpg
+    │   └── file6.jpg
+    └── Loose Files
+        ├── file1.jpg
+        ├── file4.jpg
+        └── file7.jpg
+
+```

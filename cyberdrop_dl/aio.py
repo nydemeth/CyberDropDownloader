@@ -7,7 +7,6 @@ import asyncio
 import contextlib
 import dataclasses
 import shutil
-import time
 from pathlib import Path
 from stat import S_ISREG
 from typing import IO, TYPE_CHECKING, Any, Self, cast, overload
@@ -104,17 +103,6 @@ class RateLimiter(AsyncLimiter):
     @classmethod
     def no_op(cls) -> Self:
         return cls(max_rate=0, time_period=1)
-
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class _CachedValue[T]:
-    value: T
-    ttl: float
-    created_at: float = dataclasses.field(init=False, default_factory=time.monotonic)
-
-    @property
-    def has_expired(self) -> bool:
-        return time.monotonic() - self.created_at >= self.ttl
 
 
 @dataclasses.dataclass(slots=True, eq=False)

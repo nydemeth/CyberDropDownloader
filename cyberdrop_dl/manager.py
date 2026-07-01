@@ -8,8 +8,6 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any, Self, final
 
-from pydantic.types import ByteSize
-
 from cyberdrop_dl import ALL_DEPENDENCIES, __version__, aio, env, ffmpeg, stats
 from cyberdrop_dl.cache import cache_context
 from cyberdrop_dl.clients.downloads import DownloadClient
@@ -21,6 +19,7 @@ from cyberdrop_dl.database import Database
 from cyberdrop_dl.dedupe import Czkawka
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.logs import capture_logs, log_spacer
+from cyberdrop_dl.models.validators import bytesize_to_str
 from cyberdrop_dl.progress import REFRESH_RATE, TUI_DISABLED
 from cyberdrop_dl.sorter import Sorter
 from cyberdrop_dl.utils import enter_context, get_system_information
@@ -55,9 +54,12 @@ class Manager:
         self._completed_downloads: list[MediaItem] = []
         self._hasher: Hasher | None = None
         self.logs: CSVLogsManager = CSVLogsManager.from_config(self.config)
-        self.http_client: HTTPClient = HTTPClient.from_manager(self)
-        self.download_client: DownloadClient = DownloadClient(self)
 
+        self.http_client = HTTPClient(self.config)
+        if self.config.network.dump_responses:
+            self.http_client.request_done_callback = self.logs.write_response
+
+        self.download_client: DownloadClient = DownloadClient(self)
         self.scrape_mapper: ScrapeMapper
         self.database: Database
         self.deduper: Czkawka
@@ -92,7 +94,7 @@ class Manager:
         self.__resolve_paths()
         self.database = Database(self.appdata.db_file, self.config.ignore_history)
         self.deduper = Czkawka.from_manager(self)
-        self.sorter = Sorter.from_manager(self)
+        self.sorter = Sorter.from_config(self.config)
         with (
             cache_context(self.appdata.cache_file, self.cache),
             enter_context(REFRESH_RATE, self.config.ui.refresh_rate),
@@ -123,7 +125,7 @@ class Manager:
         _log_dependencies()
 
     def print_stats(self, stats: ScrapeStats) -> str:
-        if not self.config.show_stats:
+        if not self.config.ui.show_stats:
             return ""
 
         log_spacer()
@@ -136,7 +138,7 @@ class Manager:
     def __print_stats(self, scrape_stats: ScrapeStats) -> None:
 
         elapsed = datetime.timedelta(seconds=int(time.monotonic() - scrape_stats.start_time))
-        total_data_written = ByteSize(self.scrape_mapper.tui.downloads.bytes_downloaded).human_readable(decimal=True)
+        total_data_written = bytesize_to_str(self.scrape_mapper.tui.downloads.bytes_downloaded)
 
         logger.info("Run Stats:", extra={"color": "cyan"})
         logger.info(f"  Config file: {self.config.source}")
@@ -193,7 +195,7 @@ def _log_database(path: Path) -> None:
     except FileNotFoundError:
         db_size = 0
 
-    logger.debug("Database file: %s (%s)", path, ByteSize(db_size).human_readable(decimal=True))
+    logger.debug("Database file: %s (%s)", path, bytesize_to_str(db_size))
 
 
 def _log_enviroment() -> None:

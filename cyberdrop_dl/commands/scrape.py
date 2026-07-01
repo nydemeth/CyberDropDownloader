@@ -14,7 +14,6 @@ from cyberdrop_dl.config import Config
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
-from cyberdrop_dl.models import merge_models
 from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
 from cyberdrop_dl.scrape_source import URLsSource
 from cyberdrop_dl.utils import cleanup
@@ -117,6 +116,8 @@ def download(
             group=_inputs_group,
             help="URL(s) to download",
             show_default=False,
+            consume_multiple=True,
+            allow_repeating=False,
         ),
     ] = (),
     /,
@@ -160,8 +161,11 @@ def _prepare_appdata_and_config(cli: CLIarguments, cli_overrides: Config | None 
         db_file=cli.database_file,
     )
 
-    default_config = Config.from_file(cli.config_file or appdata.config_file)
-    config = merge_models(default_config, cli_overrides) if cli_overrides else default_config
+    config = Config.from_file(cli.config_file or appdata.config_file)
+
+    if cli_overrides:
+        config = config | cli_overrides
+
     return appdata, config
 
 

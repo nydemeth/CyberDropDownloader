@@ -180,7 +180,7 @@ def _log_error(  # noqa: PLR0913
     item: ScrapeItem | MediaItem | yarl.URL,
     app_error: CDLAppError,
     exc: BaseException | None,
-    origin: ScrapeItem | MediaItem | yarl.URL | Path | None,
+    origin: yarl.URL | Path | None,
 ) -> None:
     origin = origin or get_origin(item)
     is_downloader = bool(getattr(self, "log_prefix", False))
@@ -190,13 +190,13 @@ def _log_error(  # noqa: PLR0913
             f"{self.log_prefix} Failed: {item.url} ({app_error.msg}) \n -> Referer: {item.referer}",
             exc_info=exc,
         )
-        self.manager.logs.write_download_error(item, app_error.csv_msg)
+        self.manager.logs.write_download_error(item.url, item.referer, app_error.csv_msg, origin)
         self.manager.scrape_mapper.tui.files.stats.failed += 1
         self.manager.scrape_mapper.tui.download_errors.add(app_error.ui_error)
         return
 
     logger.error(f"Scrape Failed: {url} ({app_error.msg})", exc_info=exc)
-    self.manager.logs.write_scrape_error(url, app_error.csv_msg, origin)  # pyright: ignore[reportArgumentType]
+    self.manager.logs.write_scrape_error(url, app_error.csv_msg, origin)
     self.manager.scrape_mapper.tui.scrape_errors.add(app_error.ui_error)
 
 

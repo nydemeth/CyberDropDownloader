@@ -21,7 +21,7 @@ type _ConvertibleToInt = str | SupportsInt | SupportsIndex
 
 
 def bytesize_to_str(value: _ConvertibleToInt) -> str:
-    return ByteSize(value).human_readable(decimal=True)
+    return ByteSize(value).human_readable()
 
 
 def to_yarl_url(value: object) -> yarl.URL:
@@ -86,7 +86,7 @@ def to_timedelta(input_date: datetime.timedelta | str | int | None) -> datetime.
     if isinstance(input_date, datetime.timedelta):
         return input_date
     if isinstance(input_date, int):
-        return datetime.timedelta(days=input_date)
+        return datetime.timedelta(seconds=input_date)
     try:
         return _str_to_timedelta(input_date)
     except Exception:  # noqa: BLE001

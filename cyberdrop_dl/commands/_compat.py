@@ -10,15 +10,15 @@ logger = logging.getLogger(__name__)
 
 def _check_for_v9_database() -> None:
     db = Path("AppData/Cache/cyberdrop.db")
-    default = AppData.default()
     if not db.exists():
         return
 
+    default = AppData.default()
     msg = "\n".join(
         (
             "Found old database file at '%s'",
             "The default database location changed in v10",
-            "Current default to '%s'",
+            "Current default: '%s'",
             "",
         )
     )
@@ -41,16 +41,19 @@ def _move_database(source: Path, dest: Path) -> None:
 
     import shutil
 
+    dest.parent.mkdir(parents=True, exist_ok=True)
     _ = shutil.move(source, dest)
     logger.info("Database moved to '%s'", dest)
     time.sleep(3)
 
 
 def _check_for_v9_settings() -> None:
-    default = AppData.default()
+
     settings = Path("AppData/Configs/Default/settings.yaml")
     if not settings.exists():
         return
+
+    default = AppData.default()
     msg = "\n".join(
         (
             "Found old config file at '%s'",

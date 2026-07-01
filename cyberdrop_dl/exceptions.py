@@ -280,7 +280,7 @@ def get_origin(origin: HasParents | Path | yarl.URL | None = None) -> Path | yar
         return origin
     if isinstance(origin, Path):
         return origin
-    return origin.parents[0] if origin.parents else None
+    return origin.parents[0] if origin.parents else None  # pyright: ignore[reportAttributeAccessIssue]
 
 
 @final

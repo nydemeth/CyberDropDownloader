@@ -22,7 +22,21 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [10.0.0] - UNRELEASED
+## [10.0.1] - 2026-06-29
+
+### Changed
+
+- In interactive mode, automatically create `--input-file` on first use if it does not exist. Defaults to `URLs.txt` if not provided
+- Use binary units instead of decimal units for file sizes
+- Increased database disk pre-allocation from 100 MiB to 250 MiB
+- Updated celebforum domains
+
+### Fixed
+
+- `FFmpeg Concat Error` on every stream (CloudflareStream)
+- M3U8 downloads of fragmented MP4s (HLS)
+
+## [10.0.0] - 2026-06-28
 
 ⚠️**IMPORTANT**
 
@@ -47,19 +61,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The config file format has changed. All configs (`Auth`, `Global` and `Setttings`) are now a single file. Several options have new names, new defaults and new groups
 - A default config file will no longer be created. You can manually create a default one from the `Edit config` option on the main menu or running `cyberdrop-dl config new`
+- On Windows, all application files are now stored at `%AppData%/cyberdrop-dl`
+- On Unix systems, application files are stored according to the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/0.8/)
 - Validate config in strict mode. If a config has an unknown entry, CDL will refuse to run instead of ignoring it
 - Apprise URLs are now part of the main config file instead of a dedicated `apprise.txt` file
 - Refuse to start if the current database schema is older than `v9.15.0`
-- Cookies with not be automatically loaded from `AppData/cookies`. Path to cookies needs to be specified with `--cookies`
+- Cookies will not be automatically loaded from `AppData/cookies`. Path to cookies needs to be specified with `--cookies`
 - Retry options will no longer use the original path of the first download attempt. Download path will be generated based on current config options (like normal downloads)
 - Compute `xxh128`, `md5` and `sha256` hashes by default
 - `--deep-scrape` will no longer reset after a single run
 - `--input-file` is now a CLI only arg
 - If supplied, `--input-file` needs to be a valid file that already exists
 - Refuse to run if both URLs and `--input-file` are passed as arguments
+- Integers in config options that expect a timedelta value will be parsed as seconds instead of days
 - Detect and report BasedFlare anti-bot protection
 - Limit max queued downloads of a single site to the config concurrency limit x10 (capped at 50). All scraping for a site will be paused if its queue is full
 - Always remove generated id from filenames (Cyberdrop)
+- Revert mandatory `Content-Length` header introduced in v9.15.0
 
 The following options, which were CLI only arguments, now have dedicated config entries:
 
@@ -91,7 +109,7 @@ Several config options have new names:
 #### Jdownloader
 
 - `--jdownloader-autostart` -> `--jdownloader.autostart`
-- `--jdownloader-download-dir` -> `--jdownloader.download-dir`
+- `--jdownloader-download-dir` -> `--jdownloader.download-folder`
 - `--jdownloader-whitelist` -> `--jdownloader.whitelist`
 - `--send-unsupported-to-jdownloader` -> `--jdownloader` / `--no-jdownloader`
 
@@ -108,7 +126,7 @@ Several config options have new names:
 
 #### Ignore options (filters)
 
-The behavior of `--filename-regex` has been reversed (files that DO NOT match the regex will skipped)
+The behavior of `--filename-regex` has been reversed (files that DO NOT match the regex will be skipped)
 The behavior of `--before` and `--after` has been reversed and the `--exclude` prefix removed (they now **include** instead of excluding files)
 
 - `--exclude-audio` -> `--no-audio`
@@ -119,8 +137,6 @@ The behavior of `--before` and `--after` has been reversed and the `--exclude` p
 - `--exclude-after` -> `--after`
 - `--exclude-files-with-no-extension` -> `--allow-files-with-no-extension`
 - `--filename-regex-filter` -> `--filename-regex`
-- `--ignore-coomer-ads` -> `--crawlers.coomer.ignore-ads`
-- `--ignore-coomer-post-content` -> `--crawlers.coomer.ignore-post-content`
 - `--download-tiktok-src-quality-videos` -> - `--crawlers.tiktok.original`
 
 #### Logs
@@ -141,7 +157,7 @@ The behavior of `--before` and `--after` has been reversed and the `--exclude` p
 - `--include-album-id-in-folder-name` -> `--subfolders.include.album-id`
 - `--include-thread-id-in-folder-name` -> `--subfolders.include.thread-id`
 - `--remove-domains-from-folder-names` -> `--subfolders.include.domain`
-- `--separate-posts-format` -> `--subfolders.separate-posts-format`
+- `--separate-posts-format` -> `--subfolders.separate-posts.format`
 - `--separate-posts` -> `--subfolders.separate-posts`
 - `--skip-download-mark-completed` -> `--skip-and-mark-completed`
 - `--max-simultaneous-downloads` -> `--downloads`
@@ -161,9 +177,11 @@ The behavior of `--before` and `--after` has been reversed and the `--exclude` p
 ### Removed
 
 - Support for python 3.11
-- All retry settings + menu option
 - `--log-level` and `--console-log-level` (`--logs.level` and `--logs.console-level`) no longer accept integers. Only log level names as valid, ex: `INFO`, `DEBUG`, `WARNING`
 - Posts filtering by URL params (Wordpress)
+- Kemono support
+- Coomer support
+- Coomerfans support
 - Auto cookie extraction support
 
 Several config options have been removed:
@@ -188,6 +206,8 @@ Several config options have been removed:
 - `--sites`
 - `--skip-check-for-partial-files`
 - `--update-last-forum-post`
+- `--ignore-coomer-post-content`
+- `--ignore-coomer-ads`
 
 The following authentication entries has been removed:
 
@@ -197,7 +217,7 @@ The following authentication entries has been removed:
 
 ### Fixed
 
-- Do not skip initialization segments (HLS) (#1977)
+- Do not skip initialization segments (HLS)
 - 403 errors on embeded videos (twing)
 - Switch to v2 API (Filester)
 

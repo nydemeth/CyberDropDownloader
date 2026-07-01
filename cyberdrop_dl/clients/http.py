@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     from curl_cffi.requests.session import HttpMethod
 
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("JSON_CHECK", default=None)
@@ -96,14 +95,6 @@ class HTTPClient:
         self._ssl_context = tcp.create_ssl_context(self.config.network.ssl_context)
         self.global_rate_limiter = aio.RateLimiter.w_no_burst(self.config.network.rate_limit)
         self.global_download_limiter = asyncio.Semaphore(self.config.downloads.concurrency)
-
-    @staticmethod
-    def from_manager(manager: Manager) -> HTTPClient:
-        client = HTTPClient(manager.config)
-        if manager.config.network.dump_responses:
-            client.request_done_callback = manager.logs.write_response
-
-        return client
 
     @property
     def curl_session(self) -> AsyncSession[CurlResponse]:

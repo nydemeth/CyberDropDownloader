@@ -148,12 +148,6 @@
         "generic": {
           "$ref": "#/$defs/GenericCrawlers"
         },
-        "kemono": {
-          "$ref": "#/$defs/KemonoConfig"
-        },
-        "coomer": {
-          "$ref": "#/$defs/KemonoConfig"
-        },
         "one_pace": {
           "$ref": "#/$defs/OnePaceConfig"
         },
@@ -595,7 +589,7 @@
           "title": "Autostart",
           "type": "boolean"
         },
-        "download_dir": {
+        "download_folder": {
           "$ref": "#/$defs/FalsyAsNone_Path_",
           "default": null
         },
@@ -609,23 +603,6 @@
         }
       },
       "title": "Jdownloader",
-      "type": "object"
-    },
-    "KemonoConfig": {
-      "additionalProperties": false,
-      "properties": {
-        "ignore_ads": {
-          "default": false,
-          "title": "Ignore Ads",
-          "type": "boolean"
-        },
-        "ignore_post_content": {
-          "default": true,
-          "title": "Ignore Post Content",
-          "type": "boolean"
-        }
-      },
-      "title": "KemonoConfig",
       "type": "object"
     },
     "LogFiles": {
@@ -877,14 +854,8 @@
         "include": {
           "$ref": "#/$defs/_SubFoldersInclude"
         },
-        "separate_posts_format": {
-          "$ref": "#/$defs/FormatStr",
-          "default": "{default}"
-        },
         "separate_posts": {
-          "default": false,
-          "title": "Separate Posts",
-          "type": "boolean"
+          "$ref": "#/$defs/_SeparatePosts"
         }
       },
       "title": "SubFolders",
@@ -934,6 +905,11 @@
           "exclusiveMinimum": 0,
           "title": "Refresh Rate",
           "type": "number"
+        },
+        "show_stats": {
+          "default": true,
+          "title": "Show Stats",
+          "type": "boolean"
         }
       },
       "title": "UIOptions",
@@ -943,12 +919,26 @@
       "additionalProperties": false,
       "properties": {
         "min": {
-          "$ref": "#/$defs/Timedelta",
-          "default": "PT0S"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timedelta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "max": {
-          "$ref": "#/$defs/Timedelta",
-          "default": "PT0S"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timedelta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "_DurationLimit",
@@ -1013,16 +1003,46 @@
       "title": "_FileSizes",
       "type": "object"
     },
+    "_SeparatePosts": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/FormatStr",
+          "default": "{default}"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "_SeparatePosts",
+      "type": "object"
+    },
     "_SizeLimit": {
       "additionalProperties": false,
       "properties": {
         "min": {
-          "$ref": "#/$defs/ByteSizeSerilized",
-          "default": 0
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ByteSizeSerilized"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "max": {
-          "$ref": "#/$defs/ByteSizeSerilized",
-          "default": 0
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ByteSizeSerilized"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "_SizeLimit",
@@ -1154,7 +1174,7 @@
     },
     "min_free_space": {
       "$ref": "#/$defs/ByteSizeSerilized",
-      "default": 5000000000
+      "default": 5368709120
     },
     "mtime": {
       "default": true,
@@ -1166,11 +1186,6 @@
     },
     "notifications": {
       "$ref": "#/$defs/Notifications"
-    },
-    "show_stats": {
-      "default": true,
-      "title": "Show Stats",
-      "type": "boolean"
     },
     "sort": {
       "$ref": "#/$defs/Sort"

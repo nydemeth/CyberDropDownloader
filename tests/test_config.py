@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import time
@@ -14,6 +15,7 @@ import cyberdrop_dl.commands.scrape
 from cyberdrop_dl.config import Config, Files, _resolve_paths, merge_additive_args, settings
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.config.auth import Authentication, Notifications
+from cyberdrop_dl.config.filters import Filters, _FileFilter
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.models import AppriseURL, merge_dicts
 
@@ -338,3 +340,32 @@ def test_log_folder_after_resolution(tmp_cwd: Path) -> None:
     tmp_log_folder = tmp_cwd / "logs"
     logs.resolve_filenames(tmp_log_folder)
     assert logs.folder == tmp_log_folder
+
+
+def test_config_union_preserves_source() -> None:
+    config_1 = Config()
+    config_1._source = Path("config.yaml")
+    config_2 = config_1 | Config()
+    assert config_1 is not config_2
+    assert config_1.source == config_2.source
+
+
+def test_configs_with_same_values_but_diferrent_sources_are_not_equal() -> None:
+    config_1 = Config()
+    config_1._source = Path("config.yaml")
+    config_2 = Config()
+    config_2._source = Path("config2.yaml")
+    assert config_1 != config_2
+
+
+def test_config_union() -> None:
+    config = Config(ignore_history=True, dump_json=True)
+
+    assert config | Config() == config
+    assert config | Config(deep_scrape=True) == Config(ignore_history=True, dump_json=True, deep_scrape=True)
+
+    filters = Filters(files=_FileFilter(audio=False), before=datetime.date.today())  # noqa: DTZ011
+    config_2 = Config(filters=filters)
+    assert config.filters.files.audio is True
+    assert config_2.filters.files.audio is False
+    assert config | config_2 == Config(ignore_history=True, dump_json=True, filters=filters)

@@ -5,6 +5,7 @@ from contextvars import ContextVar
 from enum import StrEnum, auto
 from typing import TYPE_CHECKING, final
 
+from cyclopts import Parameter
 from typing_extensions import Sentinel
 
 from cyberdrop_dl import __version__, env
@@ -12,7 +13,7 @@ from cyberdrop_dl import __version__, env
 if TYPE_CHECKING:
     from pathlib import Path
 
-STARTUP_TIME_UTC = datetime.datetime.now(datetime.UTC)
+
 LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = datetime.datetime.now().strftime(LOGS_DATETIME_FORMAT)  # noqa: DTZ005
@@ -20,6 +21,14 @@ CDL_USER_AGENT = f"cyberdrop-dl/{__version__}"
 MISSING = Sentinel("MISSING")
 
 MAIN_LOG_FILE: ContextVar[Path] = ContextVar("MAIN_LOG_FILE")
+
+DEFAULT_PARAMETER = Parameter(
+    negative_iterable=[],
+    json_dict=False,
+    json_list=False,
+    consume_multiple=True,
+    allow_repeating=False,
+)
 
 
 class CIStrEnum(StrEnum):

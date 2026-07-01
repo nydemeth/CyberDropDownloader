@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from aiohttp import hdrs
 
-from cyberdrop_dl import aio, constants, env, ffmpeg, storage
+from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients import etag
 from cyberdrop_dl.constants import FileExt, HashMode
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
@@ -376,13 +376,13 @@ class DownloadClient:
 
         assert media.size is not None
         if media.ext in FileExt.IMAGE:
-            return media.size in limits.image
+            return not limits.image or media.size in limits.image
         if media.ext in FileExt.VIDEO:
-            return media.size in limits.video
+            return not limits.video or media.size in limits.video
         if media.ext in FileExt.AUDIO:
-            return media.size in limits.audio
+            return not limits.image or media.size in limits.image
 
-        return media.size in limits.non_media
+        return not limits.non_media or media.size in limits.non_media
 
 
 def _check_content_type(content_type: str, ext: str) -> str | None:
@@ -486,7 +486,6 @@ def _get_content_length(headers: Mapping[str, str]) -> int:
     try:
         return int(headers[hdrs.CONTENT_LENGTH])
     except KeyError:
-        if env.ALLOW_MISSING_CONTENT_LENGTH:
-            return 0
+        return 0
         msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
         raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None

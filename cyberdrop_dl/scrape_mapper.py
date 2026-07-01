@@ -8,13 +8,12 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self
 
-from pydantic.types import ByteSize
-
 from cyberdrop_dl import env, filepath, storage
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
+from cyberdrop_dl.models.validators import bytesize_to_str
 from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.scrape_source import (
     RetryQuery,
@@ -28,7 +27,7 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator
 
     from cyberdrop_dl.clients.jdownloader import JDownloader
     from cyberdrop_dl.config import Config
@@ -42,8 +41,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _filter_by_domain(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
-    return any(domain in scrape_item.url.host for domain in domain_list)
+def _filter_by_domain(scrape_item: ScrapeItem, domains: Iterable[str]) -> bool:
+    return any(domain in scrape_item.url.host for domain in domains)
 
 
 @dataclasses.dataclass(slots=True, eq=False)
@@ -110,7 +109,6 @@ class ScrapeMapper:
         default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup()),
     )
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
-    _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
     _factory: CrawlerFactory = dataclasses.field(init=False)
     tui: ScrapingUI = dataclasses.field(init=False, default_factory=ScrapingUI)
     _done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
@@ -181,9 +179,7 @@ class ScrapeMapper:
         if config.sort.enabled:
             config.sort.output_folder.mkdir(parents=True, exist_ok=True)
 
-        logger.debug(
-            "Using %s as chunk size", ByteSize(self.manager.download_client.chunk_size).human_readable(decimal=True)
-        )
+        logger.debug("Using %s as chunk size", bytesize_to_str(self.manager.download_client.chunk_size))
         await self.manager.http_client.load_cookie_files(await self.manager.get_cookie_files())
         self.tui.mode = self.manager.config.ui.mode
         ## IMPORTANT: Order of each context matters!
@@ -321,32 +317,6 @@ class ScrapeMapper:
             return False
 
         return True
-
-    def disable_crawler(self, domain: str) -> type[Crawler] | None:
-        """Disables a crawler at runtime, after the scrape mapper is already running.
-
-        It does not remove the crawler from the crawlers map, it just sets it as `disabled"`
-
-        This has the effect to silently ignore any URL that maps to that crawler, without any "unsupported" or "errors" log messages
-
-        `domain` must match _exactly_, AKA: it must be the value of `crawler.DOMAIN`
-
-        Returns the crawler instance that was disabled (if Any)
-
-        """
-
-        if domain in self._crawlers_disabled_at_runtime:
-            return None
-
-        crawler = next((crawler for crawler in self.crawlers.values() if domain == crawler.DOMAIN), None)
-        if not crawler or crawler.disabled:
-            return None
-
-        crawler.disabled = True
-        self._crawlers_disabled_at_runtime.add(domain)
-        if instance := self._factory.get(crawler):
-            instance.disabled = True
-        return crawler
 
 
 def get_crawlers_mapping() -> dict[str, type[Crawler]]:

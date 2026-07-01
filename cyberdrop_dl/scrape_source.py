@@ -48,7 +48,7 @@ class RetrySource(StrEnum):
     ALL = "retry all"
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class RetryScrapeSource:
     source: RetrySource
     after: datetime.date

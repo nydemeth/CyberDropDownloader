@@ -14,15 +14,23 @@ from cyberdrop_dl.commands.config import app as config_app
 from cyberdrop_dl.commands.database import app as database_app
 from cyberdrop_dl.commands.hash import compute_hashes
 from cyberdrop_dl.commands.retry import app as retry_app
-from cyberdrop_dl.commands.retry import create_retry_source
+from cyberdrop_dl.commands.retry import create_retry_src
 from cyberdrop_dl.commands.scrape import download, prepare_manager, scrape
-from cyberdrop_dl.scrape_source import RetryScrapeSource, RetrySource
+from cyberdrop_dl.constants import DEFAULT_PARAMETER
+from cyberdrop_dl.progress import hyperlink
 
 app = App(
     name="cyberdrop-dl",
-    help="Bulk asynchronous downloader for multiple file hosts",
     version=__version__,
-    default_parameter=Parameter(negative_iterable=[], json_dict=False, json_list=False),
+    default_parameter=DEFAULT_PARAMETER,
+    help_prologue=f"cyberdrop-dl [blue]v{__version__}[/blue]\nBulk [cyan]asynchronous[/cyan] downloader for multiple file hosts",
+    help_format="rich",
+    help_epilogue="\n".join(
+        (
+            f"Github:      {hyperlink('https://github.com/Cyberdrop-DL/cyberdrop-dl').markup}",
+            f"Wiki (docs): {hyperlink('https://script-ware.gitbook.io/cyberdrop-dl').markup}",
+        )
+    ),
     result_action="return_value",
     help_formatter=DefaultFormatter().with_newline_metadata(),  # pyright: ignore[reportUnknownMemberType]
 )
@@ -43,19 +51,15 @@ def main_menu(
     ] = Path("URLs.txt"),  # pyright: ignore[reportCallInDefaultInitializer]
     cli_args: CLIarguments | None = None,
 ) -> None:
-    "Show a TUI menu equivalent to the CLI commands"
+    "Run [cyan]'cyberdrop-dl'[/cyan] without arguments to start the interactive TUI"
     input_file = input_file.resolve().absolute()
     with prepare_manager(cli_args, cli_overrides=None)() as manager:
         from cyberdrop_dl import program_ui
 
         source = program_ui.run(manager, input_file)
-        scrape(manager, source=_parse_scrape_source(source))
-
-
-def _parse_scrape_source(src: Path | RetrySource) -> Path | RetryScrapeSource:
-    if isinstance(src, Path):
-        return src
-    return create_retry_source(src)
+        if not isinstance(source, Path):
+            source = create_retry_src(source)
+        scrape(manager, source)
 
 
 @app.command

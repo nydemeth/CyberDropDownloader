@@ -1,7 +1,7 @@
 #!/bin/sh
 termux-setup-storage
 pkg upgrade -y
-pkg install rust which micro ffmpeg python uv -y
+pkg install rust micro ffmpeg python uv -y
 
 # Making sure maturin knows we are building ON Android, not FOR Android
 ANDROID_API_LEVEL=24
