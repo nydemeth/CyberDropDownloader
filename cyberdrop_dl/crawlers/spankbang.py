@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
@@ -122,17 +123,15 @@ class SpankBangCrawler(Crawler):
 
     @error_handling_wrapper
     async def playlist(self, scrape_item: ScrapeItem, playlist_id: str) -> None:
-        title: str = ""
+        soup, pages = await aio.peek_first(self.web_pager(scrape_item.url))
+        name = css.select_text(soup, Selector.PLAYLIST_TITLE)
+        if (trash := name.casefold().rfind(" playlist")) != -1:
+            name = name[:trash].strip()
 
-        async for soup in self.web_pager(scrape_item.url):
-            if not title:
-                name = css.select_text(soup, Selector.PLAYLIST_TITLE)
-                if (trash := name.casefold().rfind(" playlist")) != -1:
-                    name = name[:trash].strip()
+        title = self.create_title(f"{name} [playlist]", playlist_id)
+        scrape_item.setup_as_album(title, album_id=playlist_id)
 
-                title = self.create_title(f"{name} [playlist]", playlist_id)
-                scrape_item.setup_as_album(title, album_id=playlist_id)
-
+        async for soup in pages:
             await self._iter_videos(scrape_item, soup)
 
     @error_handling_wrapper

@@ -51,12 +51,16 @@ class _AsyncChain:
 chain = _AsyncChain()
 
 
-async def peek_first[T](async_iterable: AsyncIterable[T], /) -> tuple[T, AsyncGenerator[T, None]]:
-    async_iterator = aiter(async_iterable)
+async def next[T](async_iterator: AsyncIterator[T]) -> T:
     try:
-        first = await anext(async_iterator)
+        return await anext(async_iterator)
     except StopAsyncIteration as e:
         raise e.__cause__ or e from None
+
+
+async def peek_first[T](async_iterable: AsyncIterable[T], /) -> tuple[T, AsyncGenerator[T, None]]:
+    async_iterator = aiter(async_iterable)
+    first = await next(async_iterator)
 
     async def yield_again() -> AsyncGenerator[T, None]:
         yield first
