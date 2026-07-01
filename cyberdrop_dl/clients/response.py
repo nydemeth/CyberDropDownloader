@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import datetime
 import json
+import logging
 from abc import ABC, abstractmethod
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Generic, Literal, Self, final, override
@@ -24,6 +25,7 @@ from cyberdrop_dl.utils import parse_url
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+logger = logging.getLogger(__name__)
 
 _ResponseT = TypeVar(
     "_ResponseT",
@@ -91,12 +93,17 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         return self._text
 
     def __json__(self) -> dict[str, Any]:
+        try:
+            content = self._get_content()
+        except ValueError:
+            logger.exception("Unable to decode content of response %s", self.id)
+            content = "<ERROR DECODING CONTENT>"
         return {
             "url": str(self.url),
             "status_code": self.status,
             "created_at": str(self.created_at),
             "response_headers": dict(self.headers),
-            "content": self._get_content(),
+            "content": content,
         }
 
     @abstractmethod
