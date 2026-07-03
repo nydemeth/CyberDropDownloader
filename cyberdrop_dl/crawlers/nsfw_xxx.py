@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -69,14 +70,13 @@ class NsfwXXXCrawler(Crawler):
         await self._collection(scrape_item, api_url, f"@{username}")
 
     async def _collection(self, scrape_item: ScrapeItem, api_url: AbsoluteHttpURL, name: str | None = None) -> None:
-        title: str = ""
-        type_ = api_url.parts[3]
-        async for data in self._api_pager(api_url):
-            if not title:
-                name: str = name or data[type_]["name"].removeprefix("/r/")
-                title = name if type_ == "source" else f"{name} [{type_}]"
-                scrape_item.setup_as_profile(self.create_title(title))
+        col_type = api_url.parts[3]
+        data, pages = await aio.peek_first(self._api_pager(api_url))
+        name: str = name or data[col_type]["name"].removeprefix("/r/")
+        title = name if col_type == "source" else f"{name} [{col_type}]"
+        scrape_item.setup_as_profile(self.create_title(title))
 
+        async for data in pages:
             for post in data["posts"]:
                 web_url = self.PRIMARY_URL / "post" / str(post["content"]["id"])
                 new_scrape_item = scrape_item.create_child(web_url)

@@ -77,10 +77,11 @@ class DownloadClient:
 
         await asyncio.sleep(self.manager.config.downloads.total_delay)
 
+        download_url = await media_item.resolve()
         async with self.http_client.raw_request(
-            media_item.real_url,
+            download_url,
             headers=media_item.headers,
-            impersonate=media_item.domain in _USE_IMPERSONATION,
+            impersonate=media_item.domain in _USE_IMPERSONATION or None,
         ) as resp:
             return await self._process_response(media_item, domain, resume_point, resp)
 
@@ -410,13 +411,17 @@ def _is_html_or_text(content_type: str) -> bool:
 
 
 def _check_content_length(headers: Mapping[str, str]) -> None:
-    content_length, content_type = headers[hdrs.CONTENT_LENGTH], headers.get(hdrs.CONTENT_TYPE)
-    if content_type is None:
-        return
-    if content_length == "322509" and content_type == "video/mp4":
-        raise DownloadError("Bunkr Maintenance", "Bunkr under maintenance")
-    if content_length == "73003" and content_type == "video/mp4":
-        raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
+    match headers.get(hdrs.CONTENT_TYPE):
+        case "video/mp4":
+            match headers.get(hdrs.CONTENT_LENGTH):
+                case "322509":
+                    raise DownloadError("Bunkr Maintenance", "Bunkr under maintenance")
+                case "73003":
+                    raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
+                case _:
+                    return
+        case _:
+            return
 
 
 async def filter_by_duration(media_item: MediaItem, config: Config) -> bool:
