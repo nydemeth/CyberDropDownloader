@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)
 
 _CONTENT_TYPES_OVERRIDES: dict[str, str] = {"text/vnd.trolltech.linguist": "video/MP2T"}
 _SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
-_FREE_SPACE_CHECK_PERIOD: int = 5  # Check every 5 chunks
 _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
 
 
@@ -45,14 +44,15 @@ class DownloadClient:
 
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.download_speed_threshold = self.manager.config.downloads.slow_speed
+        self.config = self.manager.config
+        self.download_speed_threshold = self.config.downloads.slow_speed
         self._supports_ranges: bool = True
-        speed_limit = self.manager.config.downloads.speed_limit
+        speed_limit = self.config.downloads.speed_limit
 
         self.speed_limiter = aio.RateLimiter(speed_limit, time_period=1)
         self.chunk_size: int = 1024 * 1024 * 10  # 10MB
         if speed_limit:
-            upper_limit = int(speed_limit / 1.5 / self.manager.config.downloads.concurrency)
+            upper_limit = int(speed_limit / 1.5 / self.config.downloads.concurrency)
             self.chunk_size = min(
                 self.chunk_size,
                 upper_limit,
@@ -65,18 +65,18 @@ class DownloadClient:
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
         downloaded_filename = await self.manager.database.history.get_downloaded_filename(domain, media_item)
-        download_dir = self.get_download_dir(media_item)
+        media_item.download_folder = _resolve_download_dir(media_item.download_folder, self.config)
         if media_item.is_segment:
-            media_item.partial_file = media_item.path = download_dir / media_item.filename
+            media_item.partial_file = media_item.path = media_item.download_folder / media_item.filename
         else:
-            media_item.partial_file = download_dir / f"{downloaded_filename}{constants.TempExt.PART}"
+            media_item.partial_file = media_item.download_folder / f"{downloaded_filename}{constants.TempExt.PART}"
 
         resume_point = 0
         if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
             resume_point = size
             media_item.headers[hdrs.RANGE] = f"bytes={size}-"
 
-        await asyncio.sleep(self.manager.config.downloads.total_delay)
+        await asyncio.sleep(self.config.downloads.total_delay)
 
         download_url = await media_item.resolve()
         async with self.http_client.raw_request(
@@ -109,7 +109,7 @@ class DownloadClient:
         resp: AbstractResponse[Any],
     ) -> bool:
         await _check_response(media_item, resp, resume_point)
-        media_item.size = _get_content_length(resp.headers) + resume_point
+        media_item.size = _get_content_length(resp.headers)
         _set_upload_date(media_item, resp.headers)
         if not media_item.path:
             downloaded = await self._predownload_skip(media_item, domain)
@@ -168,13 +168,12 @@ class DownloadClient:
         assert media_item.size is not None
         if size < media_item.size:
             await aio.unlink(media_item.partial_file, missing_ok=True)
-            raise DownloadError(
-                "Corrupted File", f"Expected at least {media_item.size:,} bytes but only got {size:,} bytes"
-            )
+            msg = f"Expected at least {media_item.size:,} bytes but only got {size:,} bytes"
+            raise DownloadError("Corrupted File", msg)
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
-        if self.manager.config.downloads.skip_and_mark_completed and not media_item.is_segment:
+        if self.config.downloads.skip_and_mark_completed and not media_item.is_segment:
             logger.info(f"Download removed {media_item.url} due to mark completed option")
             self.manager.scrape_mapper.tui.files.stats.skipped += 1
             # set completed path
@@ -192,7 +191,7 @@ class DownloadClient:
         return downloaded
 
     async def __skip_by_duration(self, media_item: MediaItem) -> bool:
-        proceed = not await filter_by_duration(media_item, self.manager.config)
+        proceed = not await filter_by_duration(media_item, self.config)
         await self.manager.database.history.add_duration(media_item.domain, media_item)
         if not proceed:
             logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
@@ -201,16 +200,12 @@ class DownloadClient:
             self.manager.scrape_mapper.tui.files.stats.skipped += 1
         return not proceed
 
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
     async def mark_incomplete(self, media_item: MediaItem, domain: str) -> None:
-        """Marks the media item as incomplete in the database."""
         if media_item.is_segment:
             return
         await self.manager.database.history.insert_incompleted(domain, media_item)
 
     async def process_completed(self, media_item: MediaItem, domain: str) -> None:
-        """Marks the media item as completed in the database and adds to the completed list."""
         await self.mark_completed(domain, media_item)
         await self.add_file_size(domain, media_item)
 
@@ -219,7 +214,7 @@ class DownloadClient:
 
     async def add_file_size(self, domain: str, media_item: MediaItem) -> None:
         if not media_item.path:
-            media_item.path = self.get_file_location(media_item)
+            media_item.path = media_item.download_folder / media_item.filename
         if await aio.is_file(media_item.path):
             await self.manager.database.history.add_filesize(domain, media_item)
 
@@ -227,7 +222,7 @@ class DownloadClient:
         """Sends to hash client to handle hashing and marks as completed/current download."""
         media_item.downloaded = downloaded
         try:
-            if media_item.is_segment or self.manager.config.hashing.mode != HashMode.IN_PLACE:
+            if media_item.is_segment or self.config.hashing.mode != HashMode.IN_PLACE:
                 return
             await compute_in_place_hash(self.manager.hasher, media_item)
         except Exception:
@@ -235,23 +230,11 @@ class DownloadClient:
         finally:
             self.manager.add_completed(media_item)
 
-    def get_download_dir(self, media_item: MediaItem) -> Path:
-        """Returns the download directory for the media item."""
-        download_folder = media_item.download_folder
-        if self.manager.config.subfolders.create:
-            return download_folder
-
-        while download_folder.parent != self.manager.config.download_folder:
-            download_folder = download_folder.parent
-        media_item.download_folder = download_folder
-        return download_folder
-
-    def get_file_location(self, media_item: MediaItem) -> Path:
-        return self.get_download_dir(media_item) / media_item.filename
-
     async def get_final_file_info(self, media_item: MediaItem, domain: str) -> tuple[bool, bool]:  # noqa: C901, PLR0912, PLR0915
         """Complicated checker for if a file already exists, and was already downloaded."""
-        media_item.path = self.get_file_location(media_item)
+        if not media_item.path:
+            media_item.path = media_item.download_folder / media_item.filename
+
         part_suffix = media_item.path.suffix + constants.TempExt.PART
         media_item.partial_file = media_item.path.with_suffix(part_suffix)
 
@@ -261,9 +244,9 @@ class DownloadClient:
 
         while True:
             if expected_size and not media_item.is_segment:
-                file_size_check = self.check_filesize_limits(media_item)
+                file_size_check = _check_filesize_limits(media_item, self.config)
                 if not file_size_check:
-                    logger.info(f"Download skipped {media_item.url} due to filesize restrictions")
+                    logger.info("Download skipped %s due to filesize restrictions", media_item.url)
                     proceed = False
                     skip = True
                     return proceed, skip
@@ -351,19 +334,19 @@ class DownloadClient:
                 break
         return complete_file, partial_file
 
-    def check_filesize_limits(self, media: MediaItem) -> bool:
-        """Checks if the file size is within the limits."""
-        limits = self.manager.config.filters.sizes.ranges
 
-        assert media.size is not None
-        if media.ext in FileExt.IMAGE:
-            return not limits.image or media.size in limits.image
-        if media.ext in FileExt.VIDEO:
-            return not limits.video or media.size in limits.video
-        if media.ext in FileExt.AUDIO:
-            return not limits.image or media.size in limits.image
+def _check_filesize_limits(media: MediaItem, config: Config) -> bool:
+    limits = config.filters.sizes.ranges
 
-        return not limits.non_media or media.size in limits.non_media
+    assert media.size is not None
+    if media.ext in FileExt.IMAGE:
+        return not limits.image or media.size in limits.image
+    if media.ext in FileExt.VIDEO:
+        return not limits.video or media.size in limits.video
+    if media.ext in FileExt.AUDIO:
+        return not limits.image or media.size in limits.image
+
+    return not limits.non_media or media.size in limits.non_media
 
 
 def _check_content_type(content_type: str, ext: str) -> str | None:
@@ -505,3 +488,13 @@ async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], re
             "Deleting partial file '%s'. Server did not acknowledge byte-range request", media_item.partial_file
         )
         await aio.unlink(media_item.partial_file)
+
+
+def _resolve_download_dir(download_folder: Path, config: Config) -> Path:
+    if config.subfolders.create:
+        return download_folder
+
+    while download_folder.parent != config.download_folder:
+        download_folder = download_folder.parent
+
+    return download_folder
