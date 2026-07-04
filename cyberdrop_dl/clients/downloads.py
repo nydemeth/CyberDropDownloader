@@ -11,6 +11,7 @@ from aiohttp import hdrs
 
 from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients import etag
+from cyberdrop_dl.clients.http import check_http_status
 from cyberdrop_dl.constants import FileExt, HashMode
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.hasher import compute_in_place_hash
@@ -107,34 +108,13 @@ class DownloadClient:
         resume_point: int,
         resp: AbstractResponse[Any],
     ) -> bool:
-        if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
-            await aio.unlink(media_item.partial_file)
-
-        etag.check(resp.headers)
-        await self.http_client.check_http_status(resp)
-
-        if not media_item.is_segment and (content_type := _get_content_type(resp.headers)):
-            _check_content_type(content_type, media_item.ext)
-
-        media_item.size = _get_content_length(resp.headers)
+        await _check_response(media_item, resp, resume_point)
+        media_item.size = _get_content_length(resp.headers) + resume_point
+        _set_upload_date(media_item, resp.headers)
         if not media_item.path:
-            _check_content_length(resp.headers)
             downloaded = await self._predownload_skip(media_item, domain)
             if downloaded is not None:
                 return downloaded
-
-        if resp.status != HTTPStatus.PARTIAL_CONTENT:
-            await aio.unlink(media_item.partial_file, missing_ok=True)
-
-        if (
-            not media_item.is_segment
-            and not media_item.uploaded_at
-            and (last_modified := _get_last_modified(resp.headers))
-        ):
-            logger.warning(
-                f"Unable to parse upload date for {media_item.url}, using `{hdrs.LAST_MODIFIED}` header as file datetime"
-            )
-            media_item.uploaded_at = last_modified
 
         hook = self._make_hook(media_item, resume_point)
         if resume_point:
@@ -142,7 +122,7 @@ class DownloadClient:
 
         with hook:
             await self._append_content(media_item, hook, resp)
-        return True
+            return True
 
     def _make_hook(self, media_item: MediaItem, resume_point: int) -> ProgressHook:
         if media_item.is_segment:
@@ -185,7 +165,7 @@ class DownloadClient:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
 
-        assert media_item.size
+        assert media_item.size is not None
         if size < media_item.size:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(
@@ -407,10 +387,10 @@ def _get_last_modified(headers: Mapping[str, str]) -> int | None:
 
 
 def _is_html_or_text(content_type: str) -> bool:
-    return any(s in content_type for s in ("html", "text"))
+    return "html" in content_type or "text" in content_type
 
 
-def _check_content_length(headers: Mapping[str, str]) -> None:
+def _check_for_placeholder_files(headers: Mapping[str, str]) -> None:
     match headers.get(hdrs.CONTENT_TYPE):
         case "video/mp4":
             match headers.get(hdrs.CONTENT_LENGTH):
@@ -487,10 +467,41 @@ def make_speed_checker(media_item: MediaItem, hook: ProgressHook, speed_threshol
     return check_download_speed
 
 
-def _get_content_length(headers: Mapping[str, str]) -> int:
+def _get_content_length(headers: Mapping[str, str], *, _required: bool = False) -> int:
     try:
         return int(headers[hdrs.CONTENT_LENGTH])
     except KeyError:
-        return 0
+        if not _required:
+            return 0
         msg = f"Download response has no `{hdrs.CONTENT_LENGTH}` header. Refusing to download"
         raise DownloadError(HTTPStatus.LENGTH_REQUIRED, msg, retry=False) from None
+
+
+def _set_upload_date(media_item: MediaItem, headers: Mapping[str, str]) -> None:
+    if not media_item.is_segment and not media_item.uploaded_at and (last_modified := _get_last_modified(headers)):
+        logger.warning(
+            "Unable to parse upload date for %s, using `%s` header as file datetime",
+            media_item.url,
+            hdrs.LAST_MODIFIED,
+        )
+        media_item.uploaded_at = last_modified
+
+
+async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], resume_point: int) -> None:
+    if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
+        logger.warning("Deleting partial file '%s'. Download is corrupted. Partial file is bigger that expected size")
+        await aio.unlink(media_item.partial_file)
+
+    etag.check(resp.headers)
+    await check_http_status(resp)
+
+    if not media_item.is_segment and (content_type := _get_content_type(resp.headers)):
+        _check_content_type(content_type, media_item.ext)
+
+    _check_for_placeholder_files(resp.headers)
+
+    if resp.status != HTTPStatus.PARTIAL_CONTENT and resume_point:
+        logger.warning(
+            "Deleting partial file '%s'. Server did not acknowledge byte-range request", media_item.partial_file
+        )
+        await aio.unlink(media_item.partial_file)
