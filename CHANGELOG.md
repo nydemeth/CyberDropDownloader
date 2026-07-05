@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Wait until download is about to begin request a download token, to prevent `403 Forbidden` errors due to expiration (Filester)
+- Wait until download is about to begin to request a download token, to prevent `403 Forbidden` errors due to expiration (Filester)
 - `Skipped by config` stats not taking into account URLs skipped by host
 - All downloads being limited to 1 per site
 - Some downloads still being rejected if the response has no `Content-Length` header
