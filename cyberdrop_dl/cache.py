@@ -33,6 +33,20 @@ class _CachedValue[T](TypedDict):
     created_at: float
 
 
+def _load_cache(content: str) -> dict[str, Any]:
+    if not content:
+        return {}
+    data = json.loads(content)
+    if type(data) is not dict:
+        raise TypeError("Cache content should be a JSON map")
+    return data
+
+
+def _dump_cache(cache_file: Path, cache: dict[str, Any]):
+    cache["version"] = __version__
+    cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True))
+
+
 @contextlib.contextmanager
 def cache_context(cache_file: Path, cache: dict[str, Any]) -> Generator[None]:
     # TODO: Add a background task to dump cache to disk every 5 minutes
@@ -42,14 +56,16 @@ def cache_context(cache_file: Path, cache: dict[str, Any]) -> Generator[None]:
         cache_file.parent.mkdir(exist_ok=True, parents=True)
         cache_file.touch()
     else:
-        data = json.loads(content)
-        assert type(data) is dict
-        cache.update(data)
+        try:
+            cache.update(_load_cache(content))
+        except (json.JSONDecodeError, TypeError) as e:
+            error = RuntimeError(f"Unable to read cache file at '{cache_file}'")
+            error.add_note("Cache is corrupted. Run `cyberdrop-dl cache clear` to delete the file")
+            raise error from e
     try:
         yield
     finally:
-        cache["version"] = __version__
-        cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True))
+        _dump_cache(cache_file, cache)
 
 
 @dataclasses.dataclass(slots=True)
