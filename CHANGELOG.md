@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Request download URL only when the download is about to begin, to prevent `403 Forbidden` errors due to expiration (Filester)
 - `Skipped by config` stats not taking into account URLs skipped by host
+- All downloads being limited to 1 per site
 
 ## [10.0.1] - 2026-06-29
 
