@@ -125,7 +125,6 @@ markers = [
     "http: tests that makes real network requests"
 ]
 minversion = "9.1.1"
-strict = true
 strict_config = true
 strict_markers = true
 
