@@ -294,8 +294,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             ):
                 yield resp
 
-    @classmethod
-    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
+    def __json_resp_check__(self, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
         """Custom check for JSON responses.
 
         This method is called automatically by the `HttpClient` when a JSON response is received from `cls.DOMAIN`
