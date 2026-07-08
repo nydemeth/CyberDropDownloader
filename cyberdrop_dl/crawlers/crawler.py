@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
+    from cyberdrop_dl.progress.scraping import ScrapingUI
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         return url.path
 
     @final
-    def __init__(self, manager: Manager) -> None:
+    def __init__(self, manager: Manager, task_mng: aio.TaskManager, tui: ScrapingUI) -> None:
         self.manager: Manager = manager
 
         self._startup_lock: asyncio.Lock = asyncio.Lock()
@@ -173,8 +174,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
-        self._task_groups: Final = manager.scrape_mapper.task_groups
-        self.tui: Final = manager.scrape_mapper.tui
+        self._task_mngr: Final = task_mng
+        self.tui: Final = tui
         self.downloader: Downloader = Downloader(
             manager,
             use_server_lock=self._USE_DOWNLOAD_SERVERS_LOCKS,
@@ -343,12 +344,12 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         """Use for coros that need to make HTTP requests
 
         They will skip 1 loop iteration"""
-        _ = self._task_groups.scrape.create_lazy_task(coro)
+        _ = self._task_mngr.scrape.create_lazy_task(coro)
 
     @final
     def create_eager_task(self, coro: Coroutine[Any, Any, Any]) -> None:
         """Run this coro as soon as possible"""
-        _ = self._task_groups.scrape.create_eager_task(coro)
+        _ = self._task_mngr.scrape.create_eager_task(coro)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -570,7 +571,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         return downloaded
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
-        self._task_groups.downloads.create_task(
+        self._task_mngr.downloads.create_task(
             self._download(media_item, m3u8, skip=await self.__should_skip(media_item))
         )
 

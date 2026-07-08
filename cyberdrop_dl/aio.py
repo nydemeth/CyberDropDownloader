@@ -31,6 +31,7 @@ if TYPE_CHECKING:
         Sequence,
     )
     from contextvars import Context
+    from types import TracebackType
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
@@ -38,6 +39,10 @@ _T_co = TypeVar("_T_co", covariant=True)
 
 
 class EagerTaskGroup(asyncio.TaskGroup):
+    def __init__(self) -> None:
+        super().__init__()
+        self.done: asyncio.Event = asyncio.Event()
+
     if sys.version_info < (3, 14, 0):
 
         @override
@@ -61,6 +66,17 @@ class EagerTaskGroup(asyncio.TaskGroup):
 
             return super().create_task(run, name=name, context=context)
 
+    async def __aexit__(
+        self,
+        et: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        try:
+            return await super().__aexit__(et, exc, tb)
+        finally:
+            self.done.set()
+
     def create_lazy_task(
         self,
         coro: Coroutine[Any, Any, _T_co],
@@ -78,6 +94,12 @@ class EagerTaskGroup(asyncio.TaskGroup):
         context: Context | None = None,
     ) -> asyncio.Task[_T_co]:
         return self.create_task(coro, name=name, context=context, eager_start=True)
+
+
+@dataclasses.dataclass(slots=True)
+class TaskManager:
+    scrape: EagerTaskGroup = dataclasses.field(default_factory=EagerTaskGroup)
+    downloads: EagerTaskGroup = dataclasses.field(default_factory=EagerTaskGroup)
 
 
 class _AsyncChain:
