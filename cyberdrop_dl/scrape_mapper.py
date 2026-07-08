@@ -6,9 +6,10 @@ import dataclasses
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 from cyberdrop_dl import env, filepath, storage
+from cyberdrop_dl.aio import EagerTaskGroup  # noqa: ICN003
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
@@ -27,7 +28,7 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator
+    from collections.abc import AsyncGenerator, Generator, Iterable, Iterator
 
     from cyberdrop_dl.clients.jdownloader import JDownloader
     from cyberdrop_dl.config import Config
@@ -104,9 +105,9 @@ class ScrapeMapper:
     _direct_http: DirectHttpFileCrawler = dataclasses.field(init=False)
     _jdownloader: JDownloader = dataclasses.field(init=False)
     _real_debrid: RealDebridCrawler = dataclasses.field(init=False)
-    _task_groups: TaskGroups[asyncio.TaskGroup] = dataclasses.field(
+    task_groups: TaskGroups[EagerTaskGroup] = dataclasses.field(
         init=False,
-        default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup()),
+        default_factory=lambda: TaskGroups(EagerTaskGroup(), EagerTaskGroup()),
     )
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
     _factory: CrawlerFactory = dataclasses.field(init=False)
@@ -136,20 +137,6 @@ class ScrapeMapper:
         self._factory = CrawlerFactory(self.manager)
         self.tui.scrape.get_queue = self._scrape_queue
         self.tui.downloads.get_queue = self._download_queue
-
-    def create_task[T](self, coro: Coroutine[Any, Any, T]) -> None:
-        # skip 1 loop iteration to give priority to download tasks
-        async def lazy() -> T:
-            await asyncio.sleep(0)
-            return await coro
-
-        _ = self._task_groups.scrape.create_task(lazy())
-
-    def create_eager_task[T](self, coro: Coroutine[Any, Any, T]) -> None:
-        _ = self._task_groups.scrape.create_task(coro)
-
-    def create_download_task[T](self, coro: Coroutine[Any, Any, T]) -> None:
-        _ = self._task_groups.downloads.create_task(coro)
 
     def _init_crawlers(self) -> None:
         crawlers = get_crawlers_mapping()
@@ -191,10 +178,10 @@ class ScrapeMapper:
                 self.manager.http_client,
                 storage.monitor(config.min_free_space),
                 self.manager.logs.task_group,
-                self._task_groups.downloads,
+                self.task_groups.downloads,
             ):
                 try:
-                    async with self._task_groups.scrape:
+                    async with self.task_groups.scrape:
                         self.manager.scrape_mapper = self
 
                         yield self
@@ -230,7 +217,7 @@ class ScrapeMapper:
 
         stats, get_items = _parse_source(src, self.manager)
         async with contextlib.aclosing(get_items) as items:
-            self.create_download_task(self._wait_until_scrape_is_done(stats))
+            self.task_groups.downloads.create_task(self._wait_until_scrape_is_done(stats))
             max_children = _build_max_children_map(self.manager.config)
 
             async for item in items:
@@ -238,7 +225,7 @@ class ScrapeMapper:
                 item.download_folder = self.manager.config.download_folder
                 if self._should_scrape(item):
                     stats.update(item)
-                    self.create_eager_task(self._send_to_crawler(item))
+                    self.task_groups.scrape.create_task(self._send_to_crawler(item))
 
         if not stats.count:
             logger.warning("No valid links found")
@@ -254,12 +241,12 @@ class ScrapeMapper:
         if cls := _best_match(self.crawlers, scrape_item.url.host):
             crawler = self._factory[cls]
             await crawler.__async_init__()
-            self.create_eager_task(crawler.run(scrape_item))
+            self.task_groups.scrape.create_task(crawler.run(scrape_item))
             return
 
         if not self._real_debrid.disabled and self._real_debrid.api.is_supported(scrape_item.url):
             logger.info(f"Using RealDebrid for unsupported URL: {scrape_item.url}")
-            self.create_eager_task(self._real_debrid.run(scrape_item))
+            self.task_groups.scrape.create_task(self._real_debrid.run(scrape_item))
             return
 
         try:

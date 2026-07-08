@@ -8,9 +8,10 @@ import builtins
 import contextlib
 import dataclasses
 import shutil
+import sys
 from pathlib import Path
 from stat import S_ISREG
-from typing import IO, TYPE_CHECKING, Any, Self, cast, overload
+from typing import IO, TYPE_CHECKING, Any, Self, TypeVar, cast, overload, override
 from weakref import WeakValueDictionary
 
 from aiolimiter.leakybucket import AsyncLimiter
@@ -29,8 +30,54 @@ if TYPE_CHECKING:
         Iterator,
         Sequence,
     )
+    from contextvars import Context
 
     from _typeshed import OpenBinaryMode, OpenTextMode
+
+_T_co = TypeVar("_T_co", covariant=True)
+
+
+class EagerTaskGroup(asyncio.TaskGroup):
+    if sys.version_info < (3, 14, 0):
+
+        @override
+        def create_task(
+            self,
+            coro: Coroutine[Any, Any, _T_co],
+            *,
+            name: str | None = None,
+            context: Context | None = None,
+            eager_start: bool | None = None,
+        ) -> asyncio.Task[_T_co]:
+            if eager_start is False:
+
+                async def lazy() -> _T_co:
+                    await asyncio.sleep(0)
+                    return await coro
+
+                run = lazy()
+            else:
+                run = coro
+
+            return super().create_task(run, name=name, context=context)
+
+    def create_lazy_task(
+        self,
+        coro: Coroutine[Any, Any, _T_co],
+        *,
+        name: str | None = None,
+        context: Context | None = None,
+    ) -> asyncio.Task[_T_co]:
+        return self.create_task(coro, name=name, context=context, eager_start=False)
+
+    def create_eager_task(
+        self,
+        coro: Coroutine[Any, Any, _T_co],
+        *,
+        name: str | None = None,
+        context: Context | None = None,
+    ) -> asyncio.Task[_T_co]:
+        return self.create_task(coro, name=name, context=context, eager_start=True)
 
 
 class _AsyncChain:

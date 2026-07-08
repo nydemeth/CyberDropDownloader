@@ -50,7 +50,6 @@ if TYPE_CHECKING:
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +173,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
+        self._task_groups: Final = manager.scrape_mapper.task_groups
+        self.tui: Final = manager.scrape_mapper.tui
         self.downloader: Downloader = Downloader(
             manager,
             use_server_lock=self._USE_DOWNLOAD_SERVERS_LOCKS,
@@ -200,7 +201,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
                 await self.__async_post_init__()
             except Exception:
                 self.log.exception("Async initialization failed. Crawler has been disabled")
-                self.manager.scrape_mapper.tui.scrape_errors.add("Crawler Init Error")
+                self.tui.scrape_errors.add("Crawler Init Error")
                 self.disabled = True
             finally:
                 self._ready = True
@@ -338,21 +339,16 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         return TTLCacheAdapter(self.manager.cache, ("crawlers", self.DOMAIN))
 
     @final
-    @property
-    def scrape_mapper(self) -> ScrapeMapper:
-        return self.manager.scrape_mapper
-
-    @final
     def create_task(self, coro: Coroutine[Any, Any, Any]) -> None:
         """Use for coros that need to make HTTP requests
 
         They will skip 1 loop iteration"""
-        _ = self.scrape_mapper.create_task(coro)
+        _ = self._task_groups.scrape.create_lazy_task(coro)
 
     @final
     def create_eager_task(self, coro: Coroutine[Any, Any, Any]) -> None:
-        """Only use for coros that DO NOT make any HTTP requests"""
-        _ = self.scrape_mapper.create_eager_task(coro)
+        """Run this coro as soon as possible"""
+        _ = self._task_groups.scrape.create_eager_task(coro)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -446,7 +442,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.log.info(f"Scraping {url}")
         _ = _ORIGIN.set(url.origin())
-        return self.scrape_mapper.tui.scrape.new(url)
+        return self.tui.scrape.new(url)
 
     @final
     @staticmethod
@@ -564,7 +560,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         current_referer, downloaded = await self.database.history.check_complete(self.DOMAIN, db_path)
         if downloaded:
             logger.info("Skipping %s as it has already been downloaded", url)
-            self.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.previously_completed += 1
 
             if referer and url != referer and str(referer) != current_referer:
                 # Update the referer if it has changed so that check_complete_by_referer can work
@@ -574,7 +570,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         return downloaded
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
-        self.scrape_mapper.create_download_task(
+        self._task_groups.downloads.create_task(
             self._download(media_item, m3u8, skip=await self.__should_skip(media_item))
         )
 
@@ -585,7 +581,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             return True
 
         if _should_skip_by_config(media_item, self.config):
-            self.scrape_mapper.tui.files.stats.skipped += 1
+            self.tui.files.stats.skipped += 1
             return True
 
         return False
@@ -602,7 +598,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         downloaded = await self.database.history.check_complete_by_referer(domain, referer)
         if downloaded:
             logger.info(f"Skipping {referer} as it has already been downloaded")
-            self.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
@@ -613,7 +609,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         downloaded = await self.database.hash.check_hash_exists(hash_type, hash_value)
         if downloaded:
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
-            self.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
@@ -626,7 +622,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         """Maps external links to the scraper class."""
         if reset:
             scrape_item.reset()
-        self.create_task(self.scrape_mapper.send_to_crawler(scrape_item))
+        self.create_task(self.manager.scrape_mapper.send_to_crawler(scrape_item))
 
     @final
     def handle_embed(self, scrape_item: ScrapeItem) -> None:
@@ -661,7 +657,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         url_path = self.__db_path__(url)
         if album_results.get(url_path) is True:
             logger.info(f"Skipping {url} as it has already been downloaded")
-            self.scrape_mapper.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.previously_completed += 1
             return True
         return False
 
