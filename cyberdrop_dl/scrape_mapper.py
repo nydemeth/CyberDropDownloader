@@ -270,31 +270,25 @@ class ScrapeMapper:
             return
 
         if self._jdownloader.is_enabled_for(scrape_item.url):
-            logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
-
-            try:
-                await self._jdownloader.send(
-                    scrape_item.url,
-                    scrape_item.path.as_posix(),
-                    scrape_item.path,
-                )
-
-            except JDownloaderError as e:
-                logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
-                self.manager.logs.write_unsupported(
-                    scrape_item.url,
-                    scrape_item.parents[0] if scrape_item.parents else None,
-                )
-                success = False
-            else:
-                success = True
-
+            success = await self._send_to_jdownloader(scrape_item)
             self.tui.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         logger.warning(f"Unsupported URL: {scrape_item.url}")
         self.manager.logs.write_unsupported(scrape_item.url, scrape_item.parents[0] if scrape_item.parents else None)
         self.tui.scrape_errors.add_unsupported()
+
+    async def _send_to_jdownloader(self, scrape_item: ScrapeItem) -> bool:
+        logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
+        try:
+            await self._jdownloader.send(scrape_item.url, scrape_item.path.as_posix(), scrape_item.path)
+        except JDownloaderError as e:
+            logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
+            origin = scrape_item.parents[0] if scrape_item.parents else None
+            self.manager.logs.write_unsupported(scrape_item.url, origin)
+            return False
+        else:
+            return True
 
     def _should_scrape(self, scrape_item: ScrapeItem) -> bool:
         if scrape_item.url in self._seen_urls:
