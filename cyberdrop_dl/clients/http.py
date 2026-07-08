@@ -257,8 +257,6 @@ class HTTPClient:
                 exc = e
                 raise
             finally:
-                if self.request_done_callback:
-                    self.request_done_callback(request.url, resp, exc)
                 if resp.has_content_not_logged:
                     logger.debug(
                         "Content from %s request [id=%s]\n%s",
@@ -266,6 +264,8 @@ class HTTPClient:
                         request.id,
                         _LazyResponseLog(resp).content(),
                     )
+                if self.request_done_callback:
+                    self.request_done_callback(request.url, resp, exc)
                 del exc
                 del resp
 
