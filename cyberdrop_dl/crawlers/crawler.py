@@ -196,9 +196,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
                 return
 
             self.client.rate_limits[self.DOMAIN] = aio.RateLimiter.w_no_burst(*self._RATE_LIMIT)
-
-            await self.__async_post_init__()
-            self._ready = True
+            try:
+                await self.__async_post_init__()
+            except Exception:
+                self.log.exception("Async initialization failed. Crawler has been disabled")
+                self.manager.scrape_mapper.tui.scrape_errors.add("Crawler Init Error")
+                self.disabled = True
+            finally:
+                self._ready = True
 
     async def __async_post_init__(self) -> None:
         """Perform additional setup that requires I/O
