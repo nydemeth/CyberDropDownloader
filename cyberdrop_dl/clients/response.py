@@ -73,6 +73,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     _text: str = EMPTY_CONTENT
     _cache: dict[str, Any] = dataclasses.field(init=False, compare=False, default_factory=dict)
     _lock: asyncio.Lock = dataclasses.field(init=False, compare=False, default_factory=asyncio.Lock)
+    _fully_serialized: bool = False
     created_at: datetime.datetime = dataclasses.field(
         init=False,
         compare=False,
@@ -95,6 +96,11 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
         return self._text
 
+    @final
+    @property
+    def has_content_not_logged(self) -> bool:
+        return not self._fully_serialized and self._text is not EMPTY_CONTENT
+
     def __json__(self) -> dict[str, Any]:
         try:
             content = self._get_content()
@@ -103,7 +109,9 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
             content = "<ERROR DECODING CONTENT>"
 
         if content is EMPTY_CONTENT:
-            content = "<DID NOT AWAIT FOR CONTENT>"
+            content = "<DID NOT AWAIT FOR CONTENT YET>"
+        else:
+            self._fully_serialized = True
 
         return {
             "url": str(self.url),

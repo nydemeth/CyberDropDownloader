@@ -52,6 +52,9 @@ class _LazyResponseLog:
             resp["content"] = truncated_preview(resp["content"])
         return resp
 
+    def content(self) -> dict[str, Any]:
+        return {"content": self.__json__()["content"]}
+
     def __str__(self) -> str:
         return str(self.__json__())
 
@@ -256,6 +259,13 @@ class HTTPClient:
             finally:
                 if self.request_done_callback:
                     self.request_done_callback(request.url, resp, exc)
+                if resp.has_content_not_logged:
+                    logger.debug(
+                        "Content from %s request [id=%s]\n%s",
+                        request.method,
+                        request.id,
+                        _LazyResponseLog(resp).content(),
+                    )
                 del exc
                 del resp
 
