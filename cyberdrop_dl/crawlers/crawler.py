@@ -156,7 +156,13 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     disabled: bool = False
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}(domain={self.DOMAIN!r}, primary_url={self.PRIMARY_URL!r}, disabled={self.disabled!r}, _ready={self._ready!r})>"
+        fields = (
+            f"domain={self.DOMAIN!r}",
+            f"primary_url={self.PRIMARY_URL!r}",
+            f"disabled={self.disabled!r}",
+            f"_ready={self._ready!r}",
+        )
+        return f"<{type(self).__name__}({', '.join(fields)})>"
 
     @staticmethod
     def __db_path__(url: AbsoluteHttpURL, /) -> str:

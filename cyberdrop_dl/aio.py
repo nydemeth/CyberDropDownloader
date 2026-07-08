@@ -1,4 +1,4 @@
-"""Async versions of builtins and some path operations"""
+"""Async versions of some builtins, itertools and path operations"""
 
 # ruff: noqa: A001
 from __future__ import annotations
@@ -97,7 +97,7 @@ class EagerTaskGroup(asyncio.TaskGroup):
         return self.create_task(coro, name=name, context=context, eager_start=True)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, eq=False)
 class TaskManager:
     scrape: EagerTaskGroup = dataclasses.field(default_factory=EagerTaskGroup)
     downloads: EagerTaskGroup = dataclasses.field(default_factory=EagerTaskGroup)
@@ -186,6 +186,9 @@ class AsyncIOWrapper[AnyStr: (bytes, str)]:
 
     _coro: Awaitable[IO[AnyStr]]
     _io: IO[AnyStr] = dataclasses.field(init=False)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}(io={getattr(self, '_io', None)!r})>"
 
     async def __aenter__(self) -> Self:
         self._io = await self._coro

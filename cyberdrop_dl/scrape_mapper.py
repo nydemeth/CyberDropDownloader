@@ -107,7 +107,7 @@ class ScrapeMapper:
     _direct_http: DirectHttpFileCrawler = dataclasses.field(init=False)
     _jdownloader: JDownloader = dataclasses.field(init=False)
     _real_debrid: RealDebridCrawler = dataclasses.field(init=False)
-    _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
+    _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set, repr=False)
     _factory: CrawlerFactory = dataclasses.field(init=False)
     _ready: bool = dataclasses.field(init=False, default=False)
 
@@ -124,7 +124,7 @@ class ScrapeMapper:
         return sum(crawler.waiting_items for crawler in self._factory)
 
     def _download_queue(self) -> int:
-        total = sum(crawler.downloader.waiting_items for crawler in self._factory)
+        total = sum(crawler.downloader.capacity.waiting for crawler in self._factory)
         self.tui.files.stats.queued = total
         return total
 
