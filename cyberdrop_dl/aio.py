@@ -76,6 +76,7 @@ class EagerTaskGroup(asyncio.TaskGroup):
             return await super().__aexit__(et, exc, tb)
         finally:
             self.done.set()
+            et = exc = tb = None  # prevent ref cycles for GC
 
     def create_lazy_task(
         self,
