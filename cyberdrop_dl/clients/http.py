@@ -52,6 +52,9 @@ class _LazyResponseLog:
             resp["content"] = truncated_preview(resp["content"])
         return resp
 
+    def content(self) -> dict[str, Any]:
+        return {"content": self.__json__()["content"]}
+
     def __str__(self) -> str:
         return str(self.__json__())
 
@@ -254,6 +257,13 @@ class HTTPClient:
                 exc = e
                 raise
             finally:
+                if resp.has_content_not_logged:
+                    logger.debug(
+                        "Content from %s request [id=%s]\n%s",
+                        request.method,
+                        request.id,
+                        _LazyResponseLog(resp).content(),
+                    )
                 if self.request_done_callback:
                     self.request_done_callback(request.url, resp, exc)
                 del exc
@@ -309,8 +319,14 @@ async def _check_json(response: AbstractResponse[Any]) -> None:
     if "json" not in response.content_type:
         return
 
+    try:
+        data = await response.json()
+    except Exception:
+        logger.exception("Unable to decode JSON response from %s", response.url)
+        return
+
     if check := JSON_CHECK.get():
-        check(await response.json(), response)
+        check(data, response)
         return
 
 
