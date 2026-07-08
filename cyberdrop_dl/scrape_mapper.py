@@ -238,7 +238,7 @@ class ScrapeMapper:
                 item.download_folder = self.manager.config.download_folder
                 if self._should_scrape(item):
                     stats.update(item)
-                    self.create_task(self._send_to_crawler(item))
+                    self.create_eager_task(self._send_to_crawler(item))
 
         if not stats.count:
             logger.warning("No valid links found")
@@ -254,12 +254,12 @@ class ScrapeMapper:
         if cls := _best_match(self.crawlers, scrape_item.url.host):
             crawler = self._factory[cls]
             await crawler.__async_init__()
-            self.create_task(crawler.run(scrape_item))
+            self.create_eager_task(crawler.run(scrape_item))
             return
 
         if not self._real_debrid.disabled and self._real_debrid.api.is_supported(scrape_item.url):
             logger.info(f"Using RealDebrid for unsupported URL: {scrape_item.url}")
-            self.create_task(self._real_debrid.run(scrape_item))
+            self.create_eager_task(self._real_debrid.run(scrape_item))
             return
 
         try:
