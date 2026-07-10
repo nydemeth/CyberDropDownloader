@@ -445,7 +445,7 @@ def _skip_by_config(url: AbsoluteHttpURL, config: Config) -> bool:
         return True
 
     hosts = config.filters.only_hosts
-    if hosts and _filter_by_domain(url, hosts):
+    if hosts and not _filter_by_domain(url, hosts):
         logger.info("Skipping %s by only_hosts config", url)
         return True
 
