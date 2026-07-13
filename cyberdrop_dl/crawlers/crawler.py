@@ -610,12 +610,24 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     async def check_complete_by_hash(
-        self: Crawler, url: AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
+        self: Crawler, url: AbsoluteHttpURL, hash_algo: Literal["md5", "sha256"], checksum: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
-        downloaded = await self.database.hash.check_hash_exists(hash_type, hash_value)
+
+        expected_len = 32 if hash_algo == "md5" else 64
+        if len(checksum) != expected_len:
+            self.log.warning(
+                "Hash %s with %s characters does not match the expected size for a %s hex digest (%s characters), ignoring...",
+                checksum,
+                len(checksum),
+                hash_algo,
+                expected_len,
+            )
+            return False
+
+        downloaded = await self.database.hash.check_hash_exists(hash_algo, checksum)
         if downloaded:
-            logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
+            logger.info(f"Skipping {url} as its hash ({hash_algo}:{checksum}) has already been downloaded")
             self.tui.files.stats.prev_completed += 1
         return downloaded
 
