@@ -183,8 +183,9 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
 
     def __compose_file_url(self, file: File) -> AbsoluteHttpURL:
         server = self.parse_url(file.server) if file.server else self.__kemono_cdn__
-        url = server / f"data{file.path}"
-        return url.with_query(f=file.name or url.name)
+        # path can have query params
+        url = self.parse_url(f"/data{file.path}", server)
+        return url.update_query(f=file.name or url.name)
 
     async def __iter_user_posts(self, scrape_item: ScrapeItem, posts: Iterable[UserPostModel]) -> None:
         for post in posts:
