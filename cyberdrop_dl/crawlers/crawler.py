@@ -567,7 +567,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         current_referer, downloaded = await self.database.history.check_complete(self.DOMAIN, db_path)
         if downloaded:
             logger.info("Skipping %s as it has already been downloaded", url)
-            self.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.prev_completed += 1
 
             if referer and url != referer and str(referer) != current_referer:
                 # Update the referer if it has changed so that check_complete_by_referer can work
@@ -605,18 +605,30 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         downloaded = await self.database.history.check_complete_by_referer(domain, referer)
         if downloaded:
             logger.info(f"Skipping {referer} as it has already been downloaded")
-            self.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.prev_completed += 1
         return downloaded
 
     @final
     async def check_complete_by_hash(
-        self: Crawler, url: AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
+        self: Crawler, url: AbsoluteHttpURL, hash_algo: Literal["md5", "sha256"], checksum: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
-        downloaded = await self.database.hash.check_hash_exists(hash_type, hash_value)
+
+        expected_len = 32 if hash_algo == "md5" else 64
+        if len(checksum) != expected_len:
+            self.log.warning(
+                "Hash %s with %s characters does not match the expected size for a %s hex digest (%s characters), ignoring...",
+                checksum,
+                len(checksum),
+                hash_algo,
+                expected_len,
+            )
+            return False
+
+        downloaded = await self.database.hash.check_hash_exists(hash_algo, checksum)
         if downloaded:
-            logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
-            self.tui.files.stats.previously_completed += 1
+            logger.info(f"Skipping {url} as its hash ({hash_algo}:{checksum}) has already been downloaded")
+            self.tui.files.stats.prev_completed += 1
         return downloaded
 
     @final
@@ -664,7 +676,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         url_path = self.__db_path__(url)
         if album_results.get(url_path) is True:
             logger.info(f"Skipping {url} as it has already been downloaded")
-            self.tui.files.stats.previously_completed += 1
+            self.tui.files.stats.prev_completed += 1
             return True
         return False
 
