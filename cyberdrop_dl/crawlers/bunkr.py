@@ -163,11 +163,18 @@ class BunkrCrawler(Crawler):
         if await self.check_complete(src, referer):
             return
 
-        src = await self.api.sign(src)
         name = src.query.get("n") or filename or src.name
         src = src.update_query(n=name)
         filename, ext = self.get_filename_and_ext(name, assume_ext=".mp4")
-        await self.handle_file(src, scrape_item, name, ext, custom_filename=filename, referer=referer)
+        await self.handle_file(
+            src,
+            scrape_item,
+            name,
+            ext,
+            custom_filename=filename,
+            referer=referer,
+            debrid_link=lambda: self.api.sign(src),
+        )
 
     async def _try_request_soup(self, url: AbsoluteHttpURL) -> BeautifulSoup | None:
         try:
