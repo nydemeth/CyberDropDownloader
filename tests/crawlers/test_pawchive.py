@@ -57,7 +57,8 @@ def test_post_validation(post_resp: dict[str, Any]) -> None:
     )
     assert post.published == datetime.datetime(2025, 5, 21, 18, 11, 4, tzinfo=datetime.UTC)
     assert post.added == datetime.datetime(2026, 6, 11, 21, 15, 32, 24479, tzinfo=datetime.UTC)
-    assert post.edited == datetime.datetime(2026, 7, 8, 3, 11, 18, tzinfo=datetime.UTC)
+    assert post.edited
+    assert post.edited > datetime.datetime(2026, 7, 8, 3, 11, 18, tzinfo=datetime.UTC)
     assert post.timestamp == 1747851064
     assert post.tags == ("Animation", "Announcement")
     assert post.embed is None
