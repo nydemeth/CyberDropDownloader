@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import hashlib
 import json
@@ -69,7 +70,7 @@ class FileditchCrawler(Crawler):
         try:
             async with self._startup_lock:
                 self.log.warning("Solving proof of work challenge for %s\n%s", url, dict(pow))
-                solution = await multi_process.async_race(_pow_worker, pow.pow_challenge, pow.pow_diff)
+                solution = await asyncio.to_thread(multi_process.race, _pow_worker, pow.pow_challenge, pow.pow_diff)
 
         except TimeoutError:
             msg = f"Unable to solve challenge {pow.pow_challenge} after {multi_process.TIMEOUT.get()} seconds"
