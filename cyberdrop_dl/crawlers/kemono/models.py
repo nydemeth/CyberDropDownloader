@@ -40,8 +40,8 @@ class File:
 @dataclasses.dataclass(slots=True, frozen=True)
 class Embed:
     url: str
-    subject: str
-    description: str
+    subject: str | None = None
+    description: str | None = None
 
 
 def _parse_tags(tags: object) -> object:

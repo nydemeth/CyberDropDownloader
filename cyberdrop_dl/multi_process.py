@@ -79,7 +79,7 @@ def wait_for_one[T](futures: Iterable[concurrent.futures.Future[T]], /) -> concu
 def race[**P, R](worker: Callable[Concatenate[int, int, P], R], *args: P.args, **kwargs: P.kwargs) -> RaceResult[R]:
     """Execute a worker function across multiple processes, returning the first one to complete.
 
-    Worker id and max workers are injected as the first arguments to the worker. They should be useded as seeds.
+    Worker id and max workers are injected as the first arguments to the worker. They should be used as seeds.
 
     All processes are cancelled on exit.
     """
