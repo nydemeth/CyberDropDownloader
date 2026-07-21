@@ -59,9 +59,10 @@ type OneOrTuple[T] = T | tuple[T, ...]
 type SupportedPaths = dict[str, OneOrTuple[str]]
 type SupportedDomains = OneOrTuple[str]
 type RateLimit = tuple[float, float]
-
+type DebridURL = Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None
 
 _ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
+_CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY", default=True)
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
@@ -292,7 +293,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if impersonate is None:
             impersonate = self._IMPERSONATE
 
-        await self.downloader.capacity.wait(self.FOLDER_DOMAIN)
+        if _CHECK_DL_CAPACITY.get():
+            await self.downloader.capacity.wait(self.FOLDER_DOMAIN)
 
         with enter_context(JSON_CHECK, self.__json_resp_check__):
             async with (
@@ -492,7 +494,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         ext: str | None = None,
         *,
         custom_filename: str | None = None,
-        debrid_link: Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None = None,
+        debrid_link: DebridURL = None,
         m3u8: m3u8.Rendition | None = None,
         metadata: object = None,
         referer: AbsoluteHttpURL | None = None,
@@ -518,7 +520,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             original_filename=filename,
             parents=tuple(scrape_item.parents),
             uploaded_at=scrape_item.uploaded_at,
-            debrid_url=debrid_link,
+            debrid_url=_prepare_debrid_url(debrid_link),
             json_check=self.__json_resp_check__,
         )
 
@@ -1095,3 +1097,14 @@ def compose_ep_name(season: int | None, ep: int | None, name: str | None) -> str
     if not name:
         raise ValueError("Empty episode title")
     return name
+
+
+def _prepare_debrid_url(debrid_url: DebridURL) -> DebridURL:
+    if callable(debrid_url):
+        request_dl_url = debrid_url
+
+        async def debrid_url() -> AbsoluteHttpURL:
+            with enter_context(_CHECK_DL_CAPACITY, False):
+                return await request_dl_url()
+
+    return debrid_url
