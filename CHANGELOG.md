@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Removed twitter.com and x.com from blocked domains
+- Update primary URL to pixhost.cc (Pixhost)
 
 ### Fixed
 
