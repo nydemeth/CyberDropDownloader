@@ -30,7 +30,7 @@ TEST_CASES = [
                 "filename": "107062500_instasave.jpg",
                 "referer": "https://pixhost.cc/gallery/pgv5s",
                 "album_id": "pgv5s",
-                "download_path": "re:Untitled Gallery",
+                "download_path": "re:Untitled Gallery pgv5s",
             }
         ],
         "count": 7,

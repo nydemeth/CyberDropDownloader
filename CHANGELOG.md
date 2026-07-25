@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed twitter.com and x.com from blocked domains
 - Update primary URL to pixhost.cc (Pixhost)
+- Always include album id in folder name when a gallery's title is "Untitled Gallery" (Pixhost)
 
 ### Fixed
 
