@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update primary URL to pixhost.cc (Pixhost)
 - Always include album id in folder name when a gallery's title is "Untitled Gallery" (Pixhost)
 
+### Removed
+
+- Ranoz.gg support (no longer exists)
+
 ### Fixed
 
 - Some URLs being wrongly skipped as duplicates when using any of the `retry` options if they came from the same collection/folder/album.
