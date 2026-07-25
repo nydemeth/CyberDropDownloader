@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import dataclasses
 import functools
 import logging
 import re
@@ -67,7 +66,7 @@ _CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY", default=
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@frozen
 class _PlaceHolderConfigInclude:
     file_id: bool = True
     video_codec: bool = True
@@ -99,7 +98,7 @@ _DB_PATH_BUILDERS: MappingProxyType[str, URLHasher] = MappingProxyType(
 )
 
 
-@dataclasses.dataclass(slots=True, frozen=True, order=True)
+@frozen(order=True, kw_only=False)
 class CrawlerInfo:
     site: str
     primary_url: AbsoluteHttpURL
@@ -111,7 +110,7 @@ class CrawlerInfo:
         return cls(name, "::GENERIC CRAWLER::", (), paths)  # pyright: ignore[reportArgumentType]
 
 
-@dataclasses.dataclass(slots=True)
+@frozen(kw_only=False)
 class SiteCookies:
     raw: http.cookies.BaseCookie[str]
 
@@ -148,10 +147,20 @@ class URLConfig(ConfigDataclass):
     ignore_fragment: bool | None = None
 
 
-@HTTPConfig(rate_limit=(25, 1))
+@final
+@frozen
+class DownloadConfig(ConfigDataclass):
+    __attr_name__: ClassVar[str] = "__dl_config__"
+    slots: int | None = None
+    server_lock: bool | None = None
+
+
 @URLConfig(trim=True, allow_empty_path=False, ignore_fragment=True)
+@HTTPConfig(rate_limit=(25, 1))
+@DownloadConfig(slots=None, server_lock=False)
 class Crawler(HTTPMixin, HLSMixin, ABC):
     __url_config__: ClassVar[URLConfig]
+    __dl_config__: ClassVar[DownloadConfig]
 
     DOMAIN: ClassVar[str]
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
@@ -163,10 +172,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     FOLDER_DOMAIN: ClassVar[str] = ""
     PRIMARY_URL: ClassVar[AbsoluteHttpURL]
     _FORUM: ClassVar[bool] = False
-
-    _DOWNLOAD_SLOTS: ClassVar[int | None] = None
-    _SCRAPE_SLOTS: ClassVar[int] = 20
-    _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
 
     disabled: bool = False
 
@@ -202,13 +207,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
-        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
+        assert self.__dl_config__.server_lock is not None
         self.downloader: Downloader = Downloader(
             manager,
-            use_server_lock=self._USE_DOWNLOAD_SERVERS_LOCKS,
-            _slots=self._DOWNLOAD_SLOTS,
+            use_server_lock=self.__dl_config__.server_lock,
+            _slots=self.__dl_config__.slots,
         )
 
         self.__http_ctx__: HTTPContext = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
