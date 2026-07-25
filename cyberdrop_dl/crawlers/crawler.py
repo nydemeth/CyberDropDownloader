@@ -27,6 +27,7 @@ from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
 from cyberdrop_dl.utils import css, dates, enter_context, is_blob_or_svg, m3u8, parse_url, unique
+from cyberdrop_dl.utils.dataclass import ConfigDataclass, frozen
 from cyberdrop_dl.utils.errors import error_handling_context
 
 if TYPE_CHECKING:
@@ -138,19 +139,27 @@ class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
         return f"[{self._crawler_name}] {msg}", kwargs
 
 
+@final
+@frozen
+class URLConfig(ConfigDataclass):
+    __attr_name__: ClassVar[str] = "__url_config__"
+    trim: bool | None = None
+    allow_empty_path: bool | None = None
+    ignore_fragment: bool | None = None
+
+
 @HTTPConfig(rate_limit=(25, 1))
+@URLConfig(trim=True, allow_empty_path=False, ignore_fragment=True)
 class Crawler(HTTPMixin, HLSMixin, ABC):
+    __url_config__: ClassVar[URLConfig]
+
     DOMAIN: ClassVar[str]
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
-
-    UPDATE_UNSUPPORTED: ClassVar[bool] = False
-    ALLOW_EMPTY_PATH: ClassVar[bool] = False
     NEXT_PAGE_SELECTOR: ClassVar[str] = ""
 
-    DEFAULT_TRIM_URLS: ClassVar[bool] = True
     FOLDER_DOMAIN: ClassVar[str] = ""
     PRIMARY_URL: ClassVar[AbsoluteHttpURL]
     _FORUM: ClassVar[bool] = False
@@ -158,7 +167,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _SCRAPE_SLOTS: ClassVar[int] = 20
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
-    _IGNORE_FRAGMENT: ClassVar[bool] = True
 
     disabled: bool = False
 
@@ -175,10 +183,9 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @staticmethod
     def db_path_builder(key: Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"]):
 
-        def apply[T: Crawler](c: type[T]) -> type[T]:
-            c.__db_path__ = staticmethod(_DB_PATH_BUILDERS[key])
-            c._IGNORE_FRAGMENT = "frag" not in key  # pyright: ignore[reportConstantRedefinition]
-            return c
+        def apply[T: Crawler](cls: type[T]) -> type[T]:
+            cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[key])
+            return URLConfig(ignore_fragment="frag" not in key)(cls)
 
         return apply
 
@@ -362,11 +369,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     @property
-    def deep_scrape(self) -> bool:
-        return self.config.deep_scrape
-
-    @final
-    @property
     def origin(self) -> AbsoluteHttpURL:
         return _ORIGIN.get()
 
@@ -395,14 +397,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             with scrape_item.track_changes:
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
-            lookup = url.path_qs if self._IGNORE_FRAGMENT else _path_qs_frag(url)
+            lookup = url.path_qs if self.__url_config__.ignore_fragment else _path_qs_frag(url)
             if lookup in self._scraped_items:
                 logger.info(f"Skipping {url} as it has already been scraped")
                 return
 
             self._scraped_items.add(lookup)
 
-            if not self.ALLOW_EMPTY_PATH and url.path == "/":
+            if not self.__url_config__.allow_empty_path and url.path == "/":
                 self.raise_exc(scrape_item, ScrapeError.unsupported())
                 return
 
@@ -441,14 +443,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
         return url.host.removeprefix("www.").count(".") > 1
-
-    @classmethod
-    def is_self_subdomain(cls, url: AbsoluteHttpURL) -> bool:
-        primary_domain = cls.PRIMARY_URL.host.removeprefix("www.")
-        other_domain = url.host.removeprefix("www.")
-        if primary_domain == other_domain:
-            return False
-        return primary_domain in other_domain and other_domain.count(".") > primary_domain.count(".")
 
     @final
     async def write_metadata(self, scrape_item: ScrapeItem, name: str, metadata: object) -> None:
@@ -703,17 +697,15 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         base = relative_to or cls.PRIMARY_URL
         assert is_absolute_http_url(base)
         if trim is None:
-            trim = cls.DEFAULT_TRIM_URLS
+            trim = cls.__url_config__.trim
+        if trim is None:
+            trim = True
         return parse_url(url, base, trim=trim)
 
     @final
     @property
     def cookies(self) -> SiteCookies:
-        return self.filter_cookies(self.PRIMARY_URL)
-
-    @final
-    def filter_cookies(self, url: AbsoluteHttpURL) -> SiteCookies:
-        return SiteCookies(self.client.cookies.filter_cookies(url))
+        return SiteCookies(self.client.cookies.filter_cookies(self.PRIMARY_URL))
 
     @final
     def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
