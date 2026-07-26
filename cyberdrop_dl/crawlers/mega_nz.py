@@ -73,7 +73,7 @@ class MegaNzCrawler(Crawler):
         api.user_agent = CDL_USER_AGENT
         self.core = MegaCore(api)
         speed_limiter = self.downloader.client.speed_limiter
-        self.downloader = MegaDownloader(self.manager, self.DOMAIN)  # pyright: ignore[reportIncompatibleVariableOverride]
+        self.downloader = MegaDownloader(self.manager)  # pyright: ignore[reportIncompatibleVariableOverride]
         self.downloader.client.speed_limiter = speed_limiter
 
     async def __async_post_init__(self) -> None:
