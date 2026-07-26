@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Twitter/x.com support
 - `show` command now accepts a `--json` flag to output sites as a JSON array
+- New CLI aliases for `--config-file`: `--config`, `-c`
+- New CLI aliase for `--database-file`: `--db`
+- New CLI aliase for `--proxy`: `--http-proxy`
 
 ### Changed
 
