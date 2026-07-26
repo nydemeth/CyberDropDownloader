@@ -89,7 +89,7 @@ class MegaNzCrawler(Crawler):
                 scrape_item.url = _add_password(scrape_item.url, scrape_item.password)
                 info = self.core.parse_url(scrape_item.url, check_key=False)
 
-        if info.public_key:
+        if not info.public_key:
             self.raise_exc(scrape_item, PasswordProtectedError("Public key missing from URL"))
             return None
 
