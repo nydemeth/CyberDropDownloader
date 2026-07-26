@@ -57,7 +57,7 @@ def _editor_cmd() -> CMD | None:
         import shlex
 
         cmd, *args = shlex.split(editor)
-        if cmd and (bin_path := shutil.which(cmd[0])):
+        if cmd and (bin_path := shutil.which(cmd)):
             return bin_path, *args
 
         msg = f"Editor '{editor}' from env var $EDITOR is not available. Ignoring"
