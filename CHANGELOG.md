@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Some URLs being wrongly skipped as duplicates when using any of the `retry` options if they came from the same collection/folder/album.
   This affected sites where multiple files may share identical URL path and query, with the fragment being what uniquely identifies each file (Mega.nz, Koofr, Transfer.it)
 - Download URL extraction (BuzzHeavier)
+- Download URL extraction (FuckingFast)
 - Download of files with no hash information (Filester)
 - Parsing of `$EDITOR` for paths with spaces
 
