@@ -97,9 +97,9 @@ NOT_NONE = _NOT_NONE()
 
 
 def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, results: list[MediaItem]) -> None:
-    expected_results = sorted(test_case.results, key=lambda x: x["url"])
+    expected_results = dict(sorted(((x["url"], idx), x) for idx, x in enumerate(test_case.results, 1)))
     origin = getattr(crawler, "PRIMARY_URL", AbsoluteHttpURL("https://google.com"))
-    for index, (expected, media_item) in enumerate(zip(expected_results, results, strict=False), 1):
+    for (index, expected), media_item in zip(expected_results.items(), results, strict=False):
         for attr_name, expected_value in expected.items():
             result_value = getattr(media_item, attr_name)
             if isinstance(result_value, Path):
