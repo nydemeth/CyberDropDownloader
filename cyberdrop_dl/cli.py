@@ -70,7 +70,7 @@ def show(
     """Show a list of all supported sites"""
     from cyberdrop_dl.commands import supported_sites
 
-    content = supported_sites.as_json() if json else supported_sites.as_rich_table()
+    content = supported_sites.as_rich_json() if json else supported_sites.as_rich_table()
     app.console.print(content, soft_wrap=json)
 
 

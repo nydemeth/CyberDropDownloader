@@ -18,15 +18,14 @@ def _gen_crawlers_info() -> list[CrawlerInfo]:
     return sorted(crawler.INFO for crawler in Registry.get_crawlers(generic=True))
 
 
-def _as_json() -> dict[str, dict[str, Any]]:
+def as_json() -> dict[str, dict[str, Any]]:
     return {info.site: info.__json__() for info in _gen_crawlers_info()}
 
 
-def as_json() -> JSON:
-
+def as_rich_json() -> JSON:
     from rich.json import JSON
 
-    return JSON.from_data(_as_json())
+    return JSON.from_data(as_json())
 
 
 def as_rich_table() -> Table:

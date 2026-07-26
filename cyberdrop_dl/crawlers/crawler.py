@@ -109,6 +109,14 @@ class CrawlerInfo:
 
     __iter__ = DictDataclass.__iter__
 
+    def __post_init__(self) -> None:
+        try:
+            url = remove_trailing_slash(self.primary_url)
+        except AttributeError:
+            pass
+        else:
+            object.__setattr__(self, "primary_url", url)
+
     @classmethod
     def abstract(cls, name: str, site: str, paths: Mapping[str, tuple[str, ...]]) -> Self:
         return cls(site, f"::{name} CRAWLER::", (), (), paths)  # pyright: ignore[reportArgumentType]
@@ -296,7 +304,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
         if cls.NAME != "RealDebrid":
             Crawler._assert_fields_overrides(cls, "PRIMARY_URL", "DOMAIN", "SUPPORTED_PATHS")
-            cls.PRIMARY_URL = remove_trailing_slash(cls.PRIMARY_URL)  # pyright: ignore[reportConstantRedefinition]
 
         cls.REPLACE_OLD_DOMAINS_REGEX: str | None = "|".join(cls.OLD_DOMAINS) if cls.OLD_DOMAINS else None
         _prepare_supported_domains(cls)
