@@ -29,8 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Twitter/x.com support
 - `show` command now accepts a `--json` flag to output sites as a JSON array
 - New CLI aliases for `--config-file`: `--config`, `-c`
-- New CLI aliase for `--database-file`: `--db`
-- New CLI aliase for `--proxy`: `--http-proxy`
+- New CLI alias for `--database-file`: `--db`
+- New CLI alias for `--proxy`: `--http-proxy`
 
 ### Changed
 
@@ -49,7 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   This affected sites where multiple files may share identical URL path and query, with the fragment being what uniquely identifies each file (Mega.nz, Koofr, Transfer.it)
 - Download URL extraction (BuzzHeavier)
 - Download URL extraction (FuckingFast)
+- Download URL extraction (Odnoklassniki / Ok.ru)
 - Download of files with no hash information (Filester)
+- Date parsing (nsfw.xxx)
 - Parsing of `$EDITOR` for paths with spaces
 
 ## [10.2.1] - 2026-07-21
