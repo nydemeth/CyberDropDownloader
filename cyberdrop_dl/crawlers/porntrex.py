@@ -90,13 +90,11 @@ class PorntrexCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         video = extract_kvs_video(self, soup)
         link = video.url
+        _, ext = self.get_filename_and_ext(video.url.name or video.url.parent.name)
         scrape_item.url = canonical_url
-        custom_filename = self.create_custom_filename(
-            video.title, link.suffix, file_id=video.id, resolution=video.resolution
-        )
-        await self.handle_file(
-            canonical_url, scrape_item, link.name, link.suffix, custom_filename=custom_filename, debrid_link=link
-        )
+        # _,
+        filename = self.create_custom_filename(video.title, ext, file_id=video.id, resolution=video.resolution)
+        await self.handle_file(canonical_url, scrape_item, video.title, ext, custom_filename=filename, debrid_link=link)
 
     @error_handling_wrapper
     async def collection(self, scrape_item: ScrapeItem, collection_type: str) -> None:

@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Download URL extraction (FuckingFast)
 - Download URL extraction (Odnoklassniki / Ok.ru)
 - Download of files with no hash information (Filester)
+- Videos downloaded with no extension (Porntrex)
 - Date parsing (nsfw.xxx)
 - Parsing of `$EDITOR` for paths with spaces
 
