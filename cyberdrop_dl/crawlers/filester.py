@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import dataclasses
 import time
-from typing import TYPE_CHECKING, ClassVar, final
+from typing import TYPE_CHECKING, ClassVar, Literal, final
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
@@ -58,6 +58,10 @@ class FilesterCrawler(Crawler):
 
         soup = await self._request_soup_w_pass(scrape_item.url, scrape_item.password)
         file = _parse_file(soup)
+
+        if file.hash and await self.check_complete_by_hash(scrape_item.url, file.hash.algo, file.hash.cheksum):
+            return
+
         scrape_item.uploaded_at = self.parse_iso_date(file.uploaded_at)
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
 
@@ -136,12 +140,17 @@ class FilesterCrawler(Crawler):
 
 
 @dataclasses.dataclass(slots=True)
+class Hash:
+    algo: Literal["md5", "sha256"]
+    cheksum: str
+
+
+@dataclasses.dataclass(slots=True)
 class File:
     name: str
     uploaded_at: str
     mime_type: str
-    hash_algo: str
-    checksum: str
+    hash: Hash | None = None
 
 
 class FilesterAPI(API):
@@ -181,15 +190,19 @@ def _parse_file(soup: BeautifulSoup) -> File:
     def file_attr(name: str) -> str:
         return css.select_text(file_details, f"span:-soup-contains({name}) + span")
 
+    hash_ = None
+
     try:
-        hash_algo, checksum = "sha256", file_attr("SHA-256")
+        hash_ = Hash("sha256", file_attr("SHA-256"))
     except css.SelectorError:
-        hash_algo, checksum = "md5", file_attr("MD5")
+        try:
+            hash_ = Hash("md5", file_attr("MD5"))
+        except css.SelectorError:
+            pass
 
     return File(
         name=open_graph.title(soup),
-        hash_algo=hash_algo,
-        checksum=checksum,
+        hash=hash_,
         uploaded_at=file_attr("Uploaded"),
         mime_type=file_attr("Type"),
     )
