@@ -7,6 +7,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 _TEXT_EDITORS = "micro", "nano", "vim"  # Ordered by preference
 _SSH = "SSH_CONNECTION" in os.environ
@@ -36,17 +40,22 @@ def open(file_path: Path) -> None:  # noqa: A001
 
 
 @functools.cache
-def _editor_cmd() -> tuple[str, ...] | None:
+def _editor_cmd() -> Sequence[str] | None:
+    import shlex
+
     if _CUSTOM_EDITOR:
-        name, *rest = _CUSTOM_EDITOR.split(" ")
-        path = shutil.which(name)
-        if path:
-            return path, *rest
+        if shutil.which(_CUSTOM_EDITOR):
+            return (_CUSTOM_EDITOR,)
+
+        cmd = shlex.split(_CUSTOM_EDITOR)
+        if cmd and shutil.which(cmd[0]):
+            return cmd
+
         msg = f"Editor '{_CUSTOM_EDITOR}' from env bar $EDITOR is not available. Ignoring"
         logger.warning(msg)
 
     if sys.platform == "darwin":
-        return "open", "-a", "TextEdit"
+        return "open", "-t", "-n", "-W"
 
     if sys.platform == "win32":
         return ("notepad.exe",)
