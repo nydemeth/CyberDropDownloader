@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated primary URL to pixhost.cc (Pixhost)
 - Always include album id in folder name when a gallery's title is `Untitled Gallery` (Pixhost)
 - On Windows, use Notepad++ as default text editor (if available) when `$EDITOR` is not set
+- Use impersonation by default (Rumble)
 
 ### Removed
 
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Videos downloaded with no extension (Porntrex)
 - Date parsing (nsfw.xxx)
 - Parsing of `$EDITOR` for paths with spaces
+- Handle delete files (Upload.ee)
 
 ## [10.2.1] - 2026-07-21
 
