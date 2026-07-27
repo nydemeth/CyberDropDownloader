@@ -133,7 +133,7 @@ def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, r
             assert expected_value == result_value, f"{attr_name} for result#{index} is different"
 
 
-def _re_search(expected: str, result: str) -> re.Match[str] | None:
+def _re_search(expected: str, result: object) -> re.Match[str] | None:
     try:
         return re.search(expected, str(result))
     except re.error:
@@ -141,7 +141,7 @@ def _re_search(expected: str, result: str) -> re.Match[str] | None:
 
 
 def re_search(expected: str, result: str) -> re.Match[str] | None:
-    return _re_search(expected, str(result)) or _re_search(re.escape(expected), str(result))
+    return _re_search(expected, result) or _re_search(re.escape(expected), result)
 
 
 @pytest.mark.parametrize(
