@@ -8,7 +8,7 @@ import time
 import warnings
 from contextvars import ContextVar
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, Self, Unpack, final, override
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, Unpack, final, override
 
 import aiohttp
 from aiohttp import hdrs
@@ -22,11 +22,11 @@ from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError
+from cyberdrop_dl.signature import simple_repr
 from cyberdrop_dl.utils import enter_context, truncated_preview
 from cyberdrop_dl.utils.dataclass import ConfigDataclass, frozen
 
 if TYPE_CHECKING:
-    import ssl
     from collections.abc import AsyncGenerator, Awaitable, Callable
     from pathlib import Path
 
@@ -75,38 +75,23 @@ class RequestDoneCallback(Protocol):
 
 
 @final
-@dataclasses.dataclass(slots=True)
 class HTTPClient:
-    config: Config
     request_done_callback: RequestDoneCallback | None = None
-    impersonate: (
-        Literal[
-            "chrome",
-            "edge",
-            "safari",
-            "safari_ios",
-            "chrome_android",
-            "firefox",
-        ]
-        | None
-    ) = dataclasses.field(init=False)
 
-    rate_limits: dict[str, aio.RateLimiter] = dataclasses.field(init=False, default_factory=dict)
-    global_rate_limiter: aio.RateLimiter = dataclasses.field(init=False)
-    global_download_limiter: asyncio.Semaphore = dataclasses.field(init=False)
+    def __init__(self, config: Config) -> None:
+        self.config = config
+        self.rate_limits: dict[str, aio.RateLimiter] = {}
+        self.global_rate_limiter = aio.RateLimiter.w_no_burst(config.network.rate_limit)
+        self.global_download_limiter = asyncio.Semaphore(config.downloads.concurrency)
 
-    _ssl_context: ssl.SSLContext | Literal[False] = dataclasses.field(init=False)
-    _cookies: aiohttp.CookieJar | None = dataclasses.field(init=False, default=None)
-    _flaresolverr: flaresolverr.Client | None = dataclasses.field(init=False, default=None)
-    _curl_session: AsyncSession[CurlResponse] | None = dataclasses.field(init=False, default=None)
-    _session: aiohttp.ClientSession = dataclasses.field(init=False, repr=False)
-    _download_session: aiohttp.ClientSession = dataclasses.field(init=False, repr=False)
+        self._ssl_context = tcp.create_ssl_context(config.network.ssl_context)
+        self._cookies: aiohttp.CookieJar | None = None
+        self._flaresolverr: flaresolverr.Client | None = None
+        self._curl_session: AsyncSession[CurlResponse] | None = None
+        self._session: aiohttp.ClientSession
+        self._download_session: aiohttp.ClientSession
 
-    def __post_init__(self) -> None:
-        self.impersonate = self.config.network.impersonate
-        self._ssl_context = tcp.create_ssl_context(self.config.network.ssl_context)
-        self.global_rate_limiter = aio.RateLimiter.w_no_burst(self.config.network.rate_limit)
-        self.global_download_limiter = asyncio.Semaphore(self.config.downloads.concurrency)
+    __repr__ = simple_repr("config", "_ssl_context", "_cookies", "_flaresolverr", "request_done_callback")
 
     @property
     def curl_session(self) -> AsyncSession[CurlResponse]:
@@ -214,8 +199,8 @@ class HTTPClient:
         **kwargs: Unpack[RequestParams],
     ) -> RequestContext:
         request = Request.from_params(url, method, kwargs)
-        if self.impersonate:
-            request.impersonate = self.impersonate
+        if self.config.network.impersonate:
+            request.impersonate = self.config.network.impersonate
 
         if request.impersonate:
             request.headers.pop(hdrs.USER_AGENT, None)
