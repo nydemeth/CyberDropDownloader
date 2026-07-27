@@ -18,7 +18,7 @@ def test_initial_state(client: HTTPClient) -> None:
     assert client._cookies is None
     assert client._flaresolverr is None
     assert isinstance(client._ssl_context, ssl.SSLContext)
-    assert client.rate_limits == {}
+    assert client.limiter.per_domain == {}
 
 
 async def test_context_manager(client: HTTPClient) -> None:

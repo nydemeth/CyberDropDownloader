@@ -254,7 +254,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             if self._ready:
                 return
 
-            self.client.rate_limits[self.DOMAIN] = aio.RateLimiter.w_no_burst(*self.__http_ctx__.rate_limit)
+            self.client.limiter[self.DOMAIN] = self.__http_ctx__.rate_limit
             try:
                 await self.__async_post_init__()
             except Exception:

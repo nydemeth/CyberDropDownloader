@@ -37,12 +37,12 @@ if TYPE_CHECKING:
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
+
+type RequestContext = contextlib.AbstractAsyncContextManager[AbstractResponse[Any]]
+type RateLimit = tuple[float, float]
 type JSONCheck = Callable[[Any, AbstractResponse[Any]], None]
 
 JSON_CHECK: ContextVar[JSONCheck | None] = ContextVar("JSON_CHECK", default=None)
-
-
-RequestContext = contextlib._AsyncGeneratorContextManager[AbstractResponse[Any]]  # pyright: ignore[reportPrivateUsage]
 
 logger = logging.getLogger(__name__)
 
@@ -74,15 +74,26 @@ class RequestDoneCallback(Protocol):
     ) -> None: ...
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
+class HTTPLimiter:
+    global_: aio.RateLimiter
+    downloads: asyncio.Semaphore
+    per_domain: dict[str, aio.RateLimiter] = dataclasses.field(default_factory=dict)
+
+    def __setitem__(self, domain: str, rate: RateLimit) -> None:
+        self.per_domain[domain] = aio.RateLimiter.w_no_burst(*rate)
+
+
 @final
 class HTTPClient:
     request_done_callback: RequestDoneCallback | None = None
 
     def __init__(self, config: Config) -> None:
         self.config = config
-        self.rate_limits: dict[str, aio.RateLimiter] = {}
-        self.global_rate_limiter = aio.RateLimiter.w_no_burst(config.network.rate_limit)
-        self.global_download_limiter = asyncio.Semaphore(config.downloads.concurrency)
+        self.limiter = HTTPLimiter(
+            aio.RateLimiter.w_no_burst(config.network.rate_limit),
+            asyncio.Semaphore(config.downloads.concurrency),
+        )
 
         self._ssl_context = tcp.create_ssl_context(config.network.ssl_context)
         self._cookies: aiohttp.CookieJar | None = None
@@ -91,7 +102,7 @@ class HTTPClient:
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
 
-    __repr__ = simple_repr("config", "_ssl_context", "_cookies", "_flaresolverr", "request_done_callback")
+    __repr__ = simple_repr("config", "_ssl_context", "_cookies", "_flaresolverr", "limiter", "request_done_callback")
 
     @property
     def curl_session(self) -> AsyncSession[CurlResponse]:
@@ -282,7 +293,7 @@ class HTTPClient:
     @contextlib.asynccontextmanager
     async def rate_limit_ctx(self, domain: str, json_check: JSONCheck | None = None) -> AsyncGenerator[None]:
         with enter_context(JSON_CHECK, json_check):
-            async with self.rate_limits[domain], self.global_rate_limiter:
+            async with self.limiter.per_domain[domain], self.limiter.global_:
                 yield
 
 
@@ -410,9 +421,6 @@ def _create_curl_session(config: Config) -> AsyncSession[CurlResponse]:
         timeout=config.network.curl_timeout,
         max_redirects=8,
     )
-
-
-type RateLimit = tuple[float, float]
 
 
 @final
