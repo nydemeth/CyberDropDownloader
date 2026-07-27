@@ -66,8 +66,7 @@ class MediaFireCrawler(Crawler):
     def __post_init__(self) -> None:
         self.api: MediaFireAPI = MediaFireAPI.from_crawler(self)
 
-    @classmethod
-    def __json_resp_check__(cls, json_resp: Any, _) -> None:
+    def __json_resp_check__(self, json_resp: Any, _) -> None:
         if type(json_resp) is not dict or "response" not in json_resp:
             return
 

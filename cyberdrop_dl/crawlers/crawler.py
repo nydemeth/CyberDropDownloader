@@ -176,8 +176,9 @@ class DownloadConfig(ConfigDataclass):
 @HTTPConfig(rate_limit=(25, 1))
 @DownloadConfig(slots=None, server_lock=False)
 class Crawler(HTTPMixin, HLSMixin, ABC):
-    __url_config__: ClassVar[URLConfig]
     __dl_config__: ClassVar[DownloadConfig]
+    __url_config__: ClassVar[URLConfig]
+    __http_config__: ClassVar[HTTPConfig]
 
     DOMAIN: ClassVar[str]
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
@@ -234,7 +235,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             _slots=self.__dl_config__.slots,
         )
 
-        self.__http_ctx__: HTTPContext = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
+        self.__http_ctx__ = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
         self._task_mngr: Final = task_mng
         self.tui: Final = tui
 
@@ -944,7 +945,7 @@ class API(HTTPMixin, ABC):
         )
         self.PRIMARY_URL = crawler.PRIMARY_URL  # pyright: ignore[reportConstantRedefinition]
         self.parse_url = crawler.parse_url
-        self.__http_config__ = config
+        self.__http_config__ = config  # pyright: ignore[reportAttributeAccessIssue]
         return self
 
     def __post_init__(self) -> None: ...

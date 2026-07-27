@@ -37,16 +37,16 @@ class ThotHubCrawler(KernelVideoSharingCrawler, ensure_trailing_slash=True):
             case ["videos", _, _]:
                 return await self.video(scrape_item)
             case ["categories" | "tags" as type_, _]:
-                return await self.search(scrape_item, type_)
+                return await self.search(scrape_item, None, type_)
             case ["search" as type_, query]:
-                return await self.search(scrape_item, type_, query)
+                return await self.search(scrape_item, query, type_)
             case ["get_image", _, *_]:
                 return await self.direct_file(scrape_item)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
-    async def search(self, scrape_item: ScrapeItem, type_: str, query: str | None = None) -> None:
+    async def search(self, scrape_item: ScrapeItem, query: str | None, type_: str = "") -> None:
         soup = await self.request_soup(scrape_item.url)
         title = self._clean_title(css.select_text(soup, Selector.TITLE))
         title = self.create_title(f"{title} [{type_}]")

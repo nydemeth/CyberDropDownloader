@@ -133,9 +133,8 @@ class PixelDrainCrawler(Crawler):
         if self.api.logged_in:
             self.downloader.slots = None
 
-    @classmethod
     @override
-    def __json_resp_check__(cls, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
+    def __json_resp_check__(self, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
         if not json_resp["success"]:
             msg = f"{json_resp['message']} ({json_resp['value']})"
             raise ScrapeError(resp.status, msg)

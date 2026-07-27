@@ -8,7 +8,7 @@ import time
 import warnings
 from contextvars import ContextVar
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, Self, Unpack, final
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, Self, Unpack, final, override
 
 import aiohttp
 from aiohttp import hdrs
@@ -317,7 +317,7 @@ async def _check_json(response: AbstractResponse[Any]) -> None:
 
 
 class HTTPController(Protocol):
-    __http_config__: HTTPConfig
+    __http_config__: ClassVar[HTTPConfig]
     __http_ctx__: HTTPContext
     client: HTTPClient
 
@@ -458,7 +458,8 @@ class HTTPConfig(ConfigDataclass):
         } | kwargs
         return HTTPConfig(headers={k: v for k, v in headers.items() if v is not None})
 
-    def __or__(self, other: Self) -> Self:
+    @override
+    def __or__(self, other: Self) -> Self:  # pyright: ignore[reportIncompatibleMethodOverride]
         changes = other._changes()
 
         if self.headers and other.headers:
