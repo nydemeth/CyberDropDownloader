@@ -4,10 +4,10 @@ import asyncio
 import itertools
 import json
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, final
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text
@@ -27,13 +27,10 @@ _EXTENDED_ACCOUNTS = tuple(
 )
 
 
-def _escape(strings: list[str]) -> str:
-    return r"\|".join(strings)
+_ACCOUNT_PATHS = (f"/{'|'.join(sorted(_EXTENDED_ACCOUNTS))}/<name>", "/<channel_name>")
 
 
-_ACCOUNT_PATHS = (f"/{_escape(sorted(_EXTENDED_ACCOUNTS))}/<name>", "/<channel_name>")
-
-
+@final
 class Selectors:
     ACCOUNT_INFO_JS = "script:-soup-contains('\"id_user\":')"
     HLS_VIDEO_JS = "script:-soup-contains('setVideoHLS(')"
@@ -44,7 +41,7 @@ class Selectors:
 
 
 class XVideosCrawler(Crawler):
-    SUPPORTED_DOMAINS = (
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
         "xvideos.com",
         "xvideos.es",
         "xvideos-india.com",
@@ -55,7 +52,7 @@ class XVideosCrawler(Crawler):
         "Video": (
             "/video<id>/<title>",
             "/video.<encoded_id>/<title>",
-            f"/{_escape(sorted(_EXTENDED_ACCOUNTS))}#quickies/({_escape(['a', 'h', 'v'])})/<video_id>",
+            f"/{'|'.join(sorted(_EXTENDED_ACCOUNTS))}#quickies/({'|'.join(['a', 'h', 'v'])})/<video_id>",
         ),
         "Account": _ACCOUNT_PATHS,
         "Account Videos": tuple(f"{path}#_tabVideos" for path in _ACCOUNT_PATHS),
@@ -107,7 +104,7 @@ class XVideosCrawler(Crawler):
     async def video(self, scrape_item: ScrapeItem) -> None:
         video_id = scrape_item.url.parts[1].removeprefix("video").removeprefix(".")
         if video_id.isdecimal() or scrape_item.url.name == "_":
-            scrape_item.url = await self._get_redirect_url(scrape_item.url)
+            scrape_item.url = await self.request_redirect(scrape_item.url)
             encoded_id = scrape_item.url.parts[1].removeprefix("video.")
         else:
             encoded_id = video_id
@@ -133,7 +130,7 @@ class XVideosCrawler(Crawler):
     async def account(self, scrape_item: ScrapeItem) -> None:
         name = scrape_item.url.name
         if len(scrape_item.url.parts) > 2 and scrape_item.url.parts[1] not in _ACCOUNTS:
-            scrape_item.url = await self._get_redirect_url(scrape_item.url)
+            scrape_item.url = await self.request_redirect(scrape_item.url)
 
         soup = await self._get_soup(scrape_item.url)
         script = css.select_text(soup, Selectors.ACCOUNT_INFO_JS)

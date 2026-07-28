@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import dataclasses
 import functools
 import logging
 import re
@@ -13,10 +12,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Self, final
 
-from cyberdrop_dl import aio, env, signature
+from aiohttp import hdrs
+
+from cyberdrop_dl import aio, env
 from cyberdrop_dl.cache import TTLCacheAdapter
-from cyberdrop_dl.clients.http import JSON_CHECK, HTTPClient, HTTPMixin, RequestContext
-from cyberdrop_dl.constants import CDL_USER_AGENT
+from cyberdrop_dl.clients.http import HTTPClient, HTTPConfig, HTTPContext, HTTPMixin
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, SKIP_DOWNLOAD, Registry
 from cyberdrop_dl.crawlers._hls import HLSMixin
 from cyberdrop_dl.downloader.http import Downloader
@@ -26,6 +26,8 @@ from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
 from cyberdrop_dl.utils import css, dates, enter_context, is_blob_or_svg, m3u8, parse_url, unique
+from cyberdrop_dl.utils._url import remove_trailing_slash
+from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, frozen
 from cyberdrop_dl.utils.errors import error_handling_context
 
 if TYPE_CHECKING:
@@ -58,7 +60,6 @@ logger = logging.getLogger(__name__)
 type OneOrTuple[T] = T | tuple[T, ...]
 type SupportedPaths = dict[str, OneOrTuple[str]]
 type SupportedDomains = OneOrTuple[str]
-type RateLimit = tuple[float, float]
 type DebridURL = Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None
 
 _ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
@@ -66,7 +67,7 @@ _CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY", default=
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@frozen
 class _PlaceHolderConfigInclude:
     file_id: bool = True
     video_codec: bool = True
@@ -79,31 +80,54 @@ class _PlaceHolderConfigInclude:
 _include = _PlaceHolderConfigInclude()
 
 
-_DB_PATH_BUILDERS: MappingProxyType[str, Callable[[AbsoluteHttpURL], str]] = MappingProxyType(
+type URLHasher = Callable[[AbsoluteHttpURL], str]
+
+
+def _path_qs_frag(url: AbsoluteHttpURL) -> str:
+    return f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs
+
+
+_DB_PATH_BUILDERS: MappingProxyType[str, URLHasher] = MappingProxyType(
     {
         "url": str,
         "name": lambda url: url.name,
         "path": lambda url: url.path,
         "path_qs": lambda url: url.path_qs,
-        "path_qs_frag": lambda url: f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs,
+        "path_qs_frag": _path_qs_frag,
         "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
     }
 )
 
 
-@dataclasses.dataclass(slots=True, frozen=True, order=True)
+@frozen(order=True, kw_only=False)
 class CrawlerInfo:
     site: str
     primary_url: AbsoluteHttpURL
+    scrape_mapper_keys: tuple[str, ...]
     supported_domains: tuple[str, ...]
-    supported_paths: SupportedPaths
+    supported_paths: dict[str, tuple[str, ...]]
+
+    __iter__ = DictDataclass.__iter__
+
+    def __post_init__(self) -> None:
+        try:
+            url = remove_trailing_slash(self.primary_url)
+        except AttributeError:
+            pass
+        else:
+            object.__setattr__(self, "primary_url", url)
 
     @classmethod
-    def generic(cls, name: str, paths: SupportedPaths) -> Self:
-        return cls(name, "::GENERIC CRAWLER::", (), paths)  # pyright: ignore[reportArgumentType]
+    def abstract(cls, name: str, site: str, paths: Mapping[str, tuple[str, ...]]) -> Self:
+        return cls(site, f"::{name} CRAWLER::", (), (), paths)  # pyright: ignore[reportArgumentType]
+
+    def __json__(self) -> dict[str, Any]:
+        me = dict(self)
+        me["primary_url"] = str(self.primary_url)
+        return me
 
 
-@dataclasses.dataclass(slots=True)
+@frozen(kw_only=False)
 class SiteCookies:
     raw: http.cookies.BaseCookie[str]
 
@@ -131,28 +155,41 @@ class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
         return f"[{self._crawler_name}] {msg}", kwargs
 
 
+@final
+@frozen
+class URLConfig(ConfigDataclass):
+    __attr_name__: ClassVar[str] = "__url_config__"
+    trim: bool | None = None
+    allow_empty_path: bool | None = None
+    ignore_fragment: bool | None = None
+
+
+@final
+@frozen
+class DownloadConfig(ConfigDataclass):
+    __attr_name__: ClassVar[str] = "__dl_config__"
+    slots: int | None = None
+    server_lock: bool | None = None
+
+
+@URLConfig(trim=True, allow_empty_path=False, ignore_fragment=True)
+@HTTPConfig(rate_limit=(25, 1))
+@DownloadConfig(slots=None, server_lock=False)
 class Crawler(HTTPMixin, HLSMixin, ABC):
+    __dl_config__: ClassVar[DownloadConfig]
+    __url_config__: ClassVar[URLConfig]
+    __http_config__: ClassVar[HTTPConfig]
+
     DOMAIN: ClassVar[str]
-    _IMPERSONATE: ClassVar[str | bool | None] = None
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
-
-    UPDATE_UNSUPPORTED: ClassVar[bool] = False
-    ALLOW_EMPTY_PATH: ClassVar[bool] = False
     NEXT_PAGE_SELECTOR: ClassVar[str] = ""
 
-    DEFAULT_TRIM_URLS: ClassVar[bool] = True
     FOLDER_DOMAIN: ClassVar[str] = ""
     PRIMARY_URL: ClassVar[AbsoluteHttpURL]
     _FORUM: ClassVar[bool] = False
-
-    _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
-    _DOWNLOAD_SLOTS: ClassVar[int | None] = None
-    _SCRAPE_SLOTS: ClassVar[int] = 20
-    _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
-    _DEFAULT_UA: ClassVar[str | None] = None
 
     disabled: bool = False
 
@@ -164,6 +201,16 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             f"_ready={self._ready!r}",
         )
         return f"<{type(self).__name__}({', '.join(fields)})>"
+
+    @final
+    @staticmethod
+    def db_path_builder(key: Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"]):
+
+        def apply[T: Crawler](cls: type[T]) -> type[T]:
+            cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[key])
+            return URLConfig(ignore_fragment="frag" not in key)(cls)
+
+        return apply
 
     @staticmethod
     def __db_path__(url: AbsoluteHttpURL, /) -> str:
@@ -178,23 +225,26 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
-        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._SCRAPE_SLOTS)
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
-        self._task_mngr: Final = task_mng
-        self.tui: Final = tui
+        assert self.__dl_config__.server_lock is not None
         self.downloader: Downloader = Downloader(
             manager,
-            use_server_lock=self._USE_DOWNLOAD_SERVERS_LOCKS,
-            _slots=self._DOWNLOAD_SLOTS,
+            use_server_lock=self.__dl_config__.server_lock,
+            _slots=self.__dl_config__.slots,
         )
+
+        self.__http_ctx__ = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
+        self._task_mngr: Final = task_mng
+        self.tui: Final = tui
 
         self.__post_init__()
 
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
 
-        This method gets called immediately on class creation"""
+        This method gets called immediately on class creation. This method MUST NOT raise any exception"""
 
     @final
     async def __async_init__(self) -> None:
@@ -204,7 +254,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             if self._ready:
                 return
 
-            self.client.rate_limits[self.DOMAIN] = aio.RateLimiter.w_no_burst(*self._RATE_LIMIT)
+            self.client.limiter[self.DOMAIN] = self.__http_ctx__.rate_limit
             try:
                 await self.__async_post_init__()
             except Exception:
@@ -222,14 +272,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         This method its called once and only if the crawler is actually going to be scrape something"""
 
     def __init_subclass__(
-        cls,
-        *,
-        is_abc: bool = False,
-        is_generic: bool = False,
-        is_debug: bool = False,
-        db_path: Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"] | None = None,
-        cdl_user_agent: bool = False,
-        **kwargs: Any,
+        cls, *, is_abc: bool = False, is_generic: bool = False, is_debug: bool = False, **kwargs: Any
     ) -> None:
         assert cls.__name__.endswith("Crawler"), f"{cls.__name__} does not end with 'Crawler'"
         assert cls.__name__ not in Registry.names
@@ -242,24 +285,20 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         _check_init_overrides(cls)
         cls.NAME: str = cls.__name__.removesuffix("Crawler")
         cls.IS_GENERIC: bool = is_generic
-        cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)  # pyright: ignore[reportConstantRedefinition]
+        paths = _sort_supported_paths(cls.SUPPORTED_PATHS)
+        cls.SUPPORTED_PATHS = paths  # pyright: ignore[reportConstantRedefinition, reportAttributeAccessIssue]
         cls.IS_ABC: bool = is_abc
 
         add_to_registry = bool(not is_debug or (is_debug and env.ENABLE_DEBUG_CRAWLERS))
 
-        if db_path:
-            cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[db_path])
-        if cdl_user_agent:
-            cls._DEFAULT_UA = CDL_USER_AGENT  # pyright: ignore[reportConstantRedefinition]
-
         if cls.IS_GENERIC:
-            cls.SCRAPE_MAPPER_KEYS = ()
-            cls.INFO: CrawlerInfo = CrawlerInfo.generic(cls.NAME, cls.SUPPORTED_PATHS)
+            cls.INFO: CrawlerInfo = CrawlerInfo.abstract("GENERIC", cls.NAME, paths)
             if add_to_registry:
                 Registry.generic.add(cls)
             return
 
         if is_abc:
+            cls.INFO = CrawlerInfo.abstract("ABC", cls.NAME, paths)  # pyright: ignore[reportConstantRedefinition]
             if add_to_registry:
                 Registry.abc.add(cls)
             return
@@ -270,44 +309,23 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         cls.REPLACE_OLD_DOMAINS_REGEX: str | None = "|".join(cls.OLD_DOMAINS) if cls.OLD_DOMAINS else None
         _prepare_supported_domains(cls)
         _validate_supported_paths(cls)
-        cls.SCRAPE_MAPPER_KEYS: tuple[str, ...] = _make_scrape_mapper_keys(cls)  # pyright: ignore[reportConstantRedefinition]
+
         cls.FOLDER_DOMAIN = cls.FOLDER_DOMAIN or cls.DOMAIN.capitalize()  # pyright: ignore[reportConstantRedefinition]
+
+        scrape_keys = _make_scrape_mapper_keys(cls)
         cls.INFO = CrawlerInfo(  # pyright: ignore[reportConstantRedefinition]
             site=cls.FOLDER_DOMAIN,
             primary_url=cls.PRIMARY_URL,
-            supported_domains=_make_wiki_supported_domains(cls.SCRAPE_MAPPER_KEYS),
-            supported_paths=cls.SUPPORTED_PATHS,
+            supported_domains=_make_wiki_supported_domains(scrape_keys),
+            scrape_mapper_keys=scrape_keys,
+            supported_paths=paths,
         )
         if add_to_registry:
             Registry.concrete.add(cls)
 
-    @signature.copy(HTTPClient.request)
-    @contextlib.asynccontextmanager
-    async def request(
-        self,
-        *args: Any,
-        impersonate: str | bool | None = None,
-        default_ua: str | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[AbstractResponse[Any]]:
-        if impersonate is None:
-            impersonate = self._IMPERSONATE
-
+    async def __throttle(self) -> None:
         if _CHECK_DL_CAPACITY.get():
             await self.downloader.capacity.wait(self.FOLDER_DOMAIN)
-
-        with enter_context(JSON_CHECK, self.__json_resp_check__):
-            async with (
-                self.client.rate_limits[self.DOMAIN],
-                self.client.global_rate_limiter,
-                self.client.request(
-                    *args,
-                    impersonate=impersonate,
-                    default_ua=default_ua or self._DEFAULT_UA,
-                    **kwargs,
-                ) as resp,
-            ):
-                yield resp
 
     def __json_resp_check__(self, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
         """Custom check for JSON responses.
@@ -379,11 +397,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     @property
-    def deep_scrape(self) -> bool:
-        return self.config.deep_scrape
-
-    @final
-    @property
     def origin(self) -> AbsoluteHttpURL:
         return _ORIGIN.get()
 
@@ -412,13 +425,14 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             with scrape_item.track_changes:
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
-            if url.path_qs in self._scraped_items:
+            lookup = url.path_qs if self.__url_config__.ignore_fragment else _path_qs_frag(url)
+            if lookup in self._scraped_items:
                 logger.info(f"Skipping {url} as it has already been scraped")
                 return
 
-            self._scraped_items.add(url.path_qs)
+            self._scraped_items.add(lookup)
 
-            if not self.ALLOW_EMPTY_PATH and url.path == "/":
+            if not self.__url_config__.allow_empty_path and url.path == "/":
                 self.raise_exc(scrape_item, ScrapeError.unsupported())
                 return
 
@@ -457,14 +471,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
         return url.host.removeprefix("www.").count(".") > 1
-
-    @classmethod
-    def is_self_subdomain(cls, url: AbsoluteHttpURL) -> bool:
-        primary_domain = cls.PRIMARY_URL.host.removeprefix("www.")
-        other_domain = url.host.removeprefix("www.")
-        if primary_domain == other_domain:
-            return False
-        return primary_domain in other_domain and other_domain.count(".") > primary_domain.count(".")
 
     @final
     async def write_metadata(self, scrape_item: ScrapeItem, name: str, metadata: object) -> None:
@@ -535,7 +541,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
         return {
-            "User-Agent": self._DEFAULT_UA or self.config.network.user_agent,
+            "User-Agent": self.__http_ctx__.headers.get(hdrs.USER_AGENT) or self.config.network.user_agent,
             "Referer": str(scrape_item.url),
         }
 
@@ -692,7 +698,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self,
         title: str | None = None,
         id: str | None = None,  # noqa: A002
-        date: datetime.datetime | datetime.date | int | None = None,
+        date: datetime.datetime | datetime.date | float | None = None,
         /,
     ) -> str:
         if not self.separate_posts:
@@ -700,7 +706,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         title_format = self.config.subfolders.separate_posts.format
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
-        if isinstance(date, int):
+        if isinstance(date, (float, int)):
             date = dates.from_timestamp(date)
 
         post_title, _ = strings.safe_format(title_format, id=id, number=id, date=date, title=title)
@@ -719,17 +725,15 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         base = relative_to or cls.PRIMARY_URL
         assert is_absolute_http_url(base)
         if trim is None:
-            trim = cls.DEFAULT_TRIM_URLS
+            trim = cls.__url_config__.trim
+        if trim is None:
+            trim = True
         return parse_url(url, base, trim=trim)
 
     @final
     @property
     def cookies(self) -> SiteCookies:
-        return self.filter_cookies(self.PRIMARY_URL)
-
-    @final
-    def filter_cookies(self, url: AbsoluteHttpURL) -> SiteCookies:
-        return SiteCookies(self.client.cookies.filter_cookies(url))
+        return SiteCookies(self.client.cookies.filter_cookies(self.PRIMARY_URL))
 
     @final
     def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
@@ -829,33 +833,16 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     def parse_iso_date(cls, date_or_datetime: str, /) -> float:
         return dates.parse_iso(date_or_datetime).timestamp()
 
-    async def _get_redirect_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-        async with self.request(url) as resp:
-            return resp.url
-
     @final
     async def follow_redirect(self, scrape_item: ScrapeItem) -> None:
         with self.catch_errors(scrape_item):
-            redirect = await self._get_redirect_url(scrape_item.url)
+            redirect = await self.request_redirect(scrape_item.url)
             if scrape_item.url == redirect:
                 raise ScrapeError(422, "Infinite redirect")
+            if (password := scrape_item.url.query.get("password")) and "password" not in redirect.query:
+                redirect = redirect.update_query(password=password)
             scrape_item.url = redirect
             self.create_task(self.run(scrape_item))
-
-    async def request_m3u8_playlist(
-        self,
-        m3u8_playlist_url: AbsoluteHttpURL,
-        /,
-        headers: Mapping[str, str] | None = None,
-        *,
-        only: Iterable[str] = (),
-        exclude: Iterable[str] = ("vp09",),
-    ) -> tuple[m3u8.Rendition, m3u8.RenditionDetails]:
-        """Get m3u8 rendition group from a playlist m3u8 (variant m3u8), selecting the best format"""
-        playlist, info = await self.request_m3u8(m3u8_playlist_url, headers, only=only, exclude=exclude)
-        if info is None:
-            raise ScrapeError(422, "Not a variant m3u8", origin=m3u8_playlist_url)
-        return playlist, info
 
     @final
     def create_custom_filename(  # noqa: PLR0913
@@ -918,33 +905,48 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             )
 
 
+@HTTPConfig(rate_limit=(25, 1))
 class API(HTTPMixin, ABC):
+    PRIMARY_URL: AbsoluteHttpURL = AbsoluteHttpURL()
     # We inherit from ABC to force type checkers to recognize attributes defined in __post_init__ as if they were defined in __init__
+
+    class Endpoint[T: API]:
+        def __init__(self, api: T) -> None:
+            self.api: T = api
+
+        def __repr__(self) -> str:
+            return f"<{type(self).__name__}>"
+
     @final
     def __init__(
         self,
-        PRIMARY_URL: AbsoluteHttpURL,  # noqa: N803
+        domain: str,
         config: Config,
-        request: Callable[..., RequestContext],
         cache: TTLCacheAdapter[Any],
-        parse_url: Callable[[str | yarl.URL], AbsoluteHttpURL] = parse_url,
+        client: HTTPClient,
+        ctx: HTTPContext | None = None,
     ) -> None:
-        self.PRIMARY_URL: Final = PRIMARY_URL
-        self.parse_url: Final = parse_url
-        self.request: Final = request
+        self.parse_url: Callable[[str | yarl.URL], AbsoluteHttpURL] = parse_url
         self.config: Final = config
         self.cache: Final = cache
+        self.client: HTTPClient = client
+        self.__http_ctx__: HTTPContext = ctx or HTTPContext.build(domain, self.__http_config__)
         self.__post_init__()
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> Self:
-        return cls(
-            PRIMARY_URL=crawler.PRIMARY_URL,
-            parse_url=crawler.parse_url,
-            request=crawler.request,
+        config = crawler.__http_config__ | cls.__http_config__
+        self = cls(
+            domain=crawler.DOMAIN,
             cache=crawler.cache,
+            client=crawler.client,
             config=crawler.manager.config,
+            ctx=HTTPContext.build(crawler.DOMAIN, config, crawler.__http_ctx__.throttle),
         )
+        self.PRIMARY_URL = crawler.PRIMARY_URL  # pyright: ignore[reportConstantRedefinition]
+        self.parse_url = crawler.parse_url
+        self.__http_config__ = config  # pyright: ignore[reportAttributeAccessIssue]
+        return self
 
     def __post_init__(self) -> None: ...
 
@@ -1011,11 +1013,11 @@ def _make_wiki_supported_domains(scrape_mapper_keys: tuple[str, ...]) -> tuple[s
     return tuple(sorted(generalize(domain) for domain in scrape_mapper_keys))
 
 
-def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTuple[str]]:
-    def try_sort(value: OneOrTuple[str]) -> OneOrTuple[str]:
+def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, tuple[str, ...]]:
+    def try_sort(value: OneOrTuple[str]) -> tuple[str, ...]:
         if isinstance(value, tuple):
             return tuple(sorted(value))
-        return value
+        return (value,)
 
     path_pairs = ((key, try_sort(value)) for key, value in supported_paths.items())
     return dict(sorted(path_pairs, key=lambda x: x[0].casefold()))

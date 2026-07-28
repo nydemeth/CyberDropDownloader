@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit
+from cyberdrop_dl.clients.http import HTTPConfig
+from cyberdrop_dl.constants import CDL_USER_AGENT
+from cyberdrop_dl.crawlers.crawler import API, Crawler
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -56,14 +58,15 @@ _ERROR_CODES = {
 }
 
 
-class RealDebridCrawler(Crawler, cdl_user_agent=True):
+@HTTPConfig(rate_limit=(250, 60))
+@HTTPConfig.default_headers(user_agent=CDL_USER_AGENT)
+class RealDebridCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "real-debrid"
     FOLDER_DOMAIN: ClassVar[str] = "RealDebrid"
-    _RATE_LIMIT: ClassVar[RateLimit] = 250, 60
 
-    @classmethod
-    def __json_resp_check__(cls, json_resp: dict[str, Any], _) -> None:
+    @override
+    def __json_resp_check__(self, json_resp: dict[str, Any], _) -> None:
         if code := json_resp.get("error_code"):
             code = 7 if code == 16 else code
             msg = _ERROR_CODES.get(code, "Unknown error").capitalize()
@@ -132,7 +135,7 @@ class RealDebridAPI(API):
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://api.real-debrid.com/rest/1.0")
     _folder_regex: re.Pattern[str]
     _file_regex: re.Pattern[str]
-    token: str
+    token: str | None
 
     def is_supported(self, url: AbsoluteHttpURL) -> bool:
         match = self._file_regex.search(str(url))

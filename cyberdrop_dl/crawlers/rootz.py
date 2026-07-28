@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.clients.http import HTTPConfig
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
@@ -16,6 +17,7 @@ class File(NamedTuple):
     size: int
 
 
+@HTTPConfig(rate_limit=(100, 60))
 class RootzCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
@@ -25,7 +27,6 @@ class RootzCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.rootz.so")
     DOMAIN: ClassVar[str] = "rootz.so"
-    _RATE_LIMIT: ClassVar[RateLimit] = 100, 60
     _API_ENTRYPOINT: ClassVar[AbsoluteHttpURL] = PRIMARY_URL / "api/files"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -53,22 +54,3 @@ class RootzCrawler(Crawler):
             url=self.parse_url(data["url"]),
             size=data["size"],
         )
-
-
-class RanozCrawler(RootzCrawler):
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://ranoz.gg")
-    DOMAIN: ClassVar[str] = "ranoz.gg"
-    FOLDER_DOMAIN: ClassVar[str] = "Ranoz.gg"
-    OLD_DOMAINS = ("qiwi.gg",)
-    _FILE_SERVER = AbsoluteHttpURL("https://st7.ranoz.gg")
-    _API_ENTRYPOINT = PRIMARY_URL / "api/v1/files"
-
-    @error_handling_wrapper
-    async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item.url):
-            return
-
-        name, *_ = await self._request_file(self._API_ENTRYPOINT / file_id)
-        url = self._FILE_SERVER / f"{file_id}-{name}"
-        filename, ext = self.get_filename_and_ext(name)
-        await self.handle_file(scrape_item.url, scrape_item, name, ext, debrid_link=url, custom_filename=filename)

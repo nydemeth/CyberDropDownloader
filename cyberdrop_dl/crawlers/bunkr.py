@@ -4,22 +4,25 @@ import asyncio
 import dataclasses
 import json
 import re
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, Any, ClassVar, Unpack, final, override
 
 from aiohttp import ClientConnectorError
 
+from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers import Registry
-from cyberdrop_dl.crawlers.crawler import API, Crawler, RateLimit, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DDOSGuardError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping
+    from collections.abc import Callable, Generator
 
     from bs4 import BeautifulSoup
+    from curl_cffi.requests.session import HttpMethod
 
+    from cyberdrop_dl.clients.request import RequestParams
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
@@ -28,6 +31,7 @@ _find_js_vars = re.compile(r'var\s+(\w+)\s*=\s*(".*?"|\'.*?\'|[^;]+);', re.DOTAL
 known_bad_hosts: set[str] = set()
 
 
+@final
 class Selector:
     ALBUM_FILES = "script:-soup-contains('window.albumFiles = ')"
     DOWNLOAD_BTN = "a.btn.ic-download-01"
@@ -35,6 +39,7 @@ class Selector:
     JS_VARS = "script:-soup-contains-own('var jsCDN')"
 
 
+@HTTPConfig(rate_limit=(5, 1))
 class BunkrCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ("bunkr",)
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
@@ -58,7 +63,7 @@ class BunkrCrawler(Crawler):
         "bunkr.se",
         "bunkrr.su",
     )
-    _RATE_LIMIT: ClassVar[RateLimit] = 5, 1
+
     _known_good_host: ClassVar[str | None] = None
 
     @staticmethod
@@ -96,10 +101,11 @@ class BunkrCrawler(Crawler):
             case _:
                 raise ValueError
 
-    @override
-    async def _get_redirect_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+    async def request_redirect(
+        self, url: AbsoluteHttpURL, method: HttpMethod = "GET", **kwargs: Unpack[RequestParams]
+    ) -> AbsoluteHttpURL:
         try:
-            return await super()._get_redirect_url(url)
+            return await super().request_redirect(url, method, **kwargs)
         except (ClientConnectorError, DDOSGuardError):
             if self.is_subdomain(url):
                 raise
@@ -110,7 +116,7 @@ class BunkrCrawler(Crawler):
                         _ = await self._request_soup_lenient(url)
 
             assert self._known_good_host
-            return await super()._get_redirect_url(url.with_host(self._known_good_host))
+            return await super().request_redirect(url.with_host(self._known_good_host), method, **kwargs)
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
@@ -215,22 +221,24 @@ class BunkrCrawler(Crawler):
         return await self.request_soup(url)
 
 
+@HTTPConfig(
+    headers={
+        "Referer": "https://dl.bunkr.cr/",
+        "Origin": "https://dl.bunkr.cr",
+    }
+)
 class BunkrAPI(API):
     DL_ENDPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://dl.bunkr.cr/api/_001_v2")
     SIGN_ENDPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://glb-apisign.cdn.cr/sign")
-    headers: Mapping[str, str] = {
-        "Referer": str(DL_ENDPOINT.origin()) + "/",
-        "Origin": str(DL_ENDPOINT.origin()),
-    }
 
     async def download(self, file_id: str) -> tuple[AbsoluteHttpURL, str | None]:
-        resp = await self.request_json(self.DL_ENDPOINT, headers=self.headers, json={"id": file_id})
+        resp = await self.request_json(self.DL_ENDPOINT, json={"id": file_id})
         url = self.parse_url(resp["mediafiles"]).with_path(resp["path"])
         return url, resp.get("original")
 
     async def sign(self, src: AbsoluteHttpURL) -> AbsoluteHttpURL:
         api_url = self.SIGN_ENDPOINT.with_query(path=src.path)
-        resp = await self.request_json(api_url, headers=self.headers)
+        resp = await self.request_json(api_url)
         return src.with_query(token=resp["token"], ex=resp["ex"])
 
 

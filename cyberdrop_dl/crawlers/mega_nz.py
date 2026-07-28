@@ -12,8 +12,9 @@ from mega.core import MegaCore
 from mega.crypto import b64_to_a32
 from mega.data_structures import Crypto
 
+from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.constants import CDL_USER_AGENT
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, URLConfig, auto_task_id
 from cyberdrop_dl.downloader.mega_nz import MegaDownloader
 from cyberdrop_dl.exceptions import LoginError, PasswordProtectedError, ScrapeError
 from cyberdrop_dl.progress.scraping import show_msg
@@ -27,7 +28,10 @@ if TYPE_CHECKING:
     from cyberdrop_dl.utils import m3u8
 
 
-class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
+@HTTPConfig.default_headers(user_agent=CDL_USER_AGENT)
+@URLConfig(allow_empty_path=True)
+@Crawler.db_path_builder("path_qs_frag")
+class MegaNzCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "mega.io", "mega.nz"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
@@ -43,11 +47,9 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
         "**NOTE**": "Downloads can not be resumed. Partial downloads will always be deleted and new downloads will start over",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://mega.nz")
-    ALLOW_EMPTY_PATH: ClassVar[bool] = True
     DOMAIN: ClassVar[str] = "mega.nz"
     FOLDER_DOMAIN: ClassVar[str] = "MegaNz"
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("mega.co.nz",)
-    _DEFAULT_UA: ClassVar[str | None] = CDL_USER_AGENT
 
     core: MegaCore
     downloader: MegaDownloader
@@ -71,7 +73,7 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
         api.user_agent = CDL_USER_AGENT
         self.core = MegaCore(api)
         speed_limiter = self.downloader.client.speed_limiter
-        self.downloader = MegaDownloader(self.manager, self.DOMAIN)  # pyright: ignore[reportIncompatibleVariableOverride]
+        self.downloader = MegaDownloader(self.manager)  # pyright: ignore[reportIncompatibleVariableOverride]
         self.downloader.client.speed_limiter = speed_limiter
 
     async def __async_post_init__(self) -> None:
@@ -82,6 +84,11 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
             return None
 
         info = self.core.parse_url(scrape_item.url, check_key=False)
+        if not info.public_key and scrape_item.password:
+            with scrape_item.track_changes:
+                scrape_item.url = _add_password(scrape_item.url, scrape_item.password)
+                info = self.core.parse_url(scrape_item.url, check_key=False)
+
         if not info.public_key:
             self.raise_exc(scrape_item, PasswordProtectedError("Public key missing from URL"))
             return None
@@ -178,3 +185,10 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
                 raise LoginError(f"[MegaNZ] {e}") from e
             else:
                 self._logged_in = True
+
+
+def _add_password(url: AbsoluteHttpURL, password: str) -> AbsoluteHttpURL:
+    frag = url.fragment.lstrip("/")
+    if not frag:
+        return url.with_fragment(password)
+    return url.with_fragment(f"{password}/{frag}")

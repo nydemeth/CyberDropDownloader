@@ -8,7 +8,7 @@ import itertools
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, URLConfig, auto_task_id
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, is_blob_or_svg
@@ -50,7 +50,9 @@ _API_ERRORS_OVERRIDES: dict[int, int] = {
 }
 
 
-class MediaFireCrawler(Crawler, db_path="name"):
+@Crawler.db_path_builder("name")
+@URLConfig(allow_empty_path=True)
+class MediaFireCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
             "/file/<quick_key>",
@@ -60,13 +62,11 @@ class MediaFireCrawler(Crawler, db_path="name"):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.mediafire.com/")
     DOMAIN: ClassVar[str] = "mediafire"
-    ALLOW_EMPTY_PATH: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
         self.api: MediaFireAPI = MediaFireAPI.from_crawler(self)
 
-    @classmethod
-    def __json_resp_check__(cls, json_resp: Any, _) -> None:
+    def __json_resp_check__(self, json_resp: Any, _) -> None:
         if type(json_resp) is not dict or "response" not in json_resp:
             return
 

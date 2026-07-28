@@ -9,7 +9,7 @@ import functools
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from cyberdrop_dl.cache import disk_cached_method
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, URLConfig
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import dates
@@ -85,6 +85,7 @@ class OneDriveFolder(OneDriveItem):
         return cls(**info)
 
 
+@URLConfig(allow_empty_path=True)
 class OneDriveCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Access Link": "https://onedrive.live.com/?authkey=<KEY>&id=<ID>&cid=<CID>",
@@ -97,7 +98,6 @@ class OneDriveCrawler(Crawler):
     }
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = SHARE_LINK_HOST, "onedrive.live.com"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://onedrive.com/")
-    ALLOW_EMPTY_PATH: ClassVar[bool] = True
     DOMAIN: ClassVar[str] = "onedrive"
     FOLDER_DOMAIN: ClassVar[str] = "OneDrive"
 
@@ -122,7 +122,7 @@ class OneDriveCrawler(Crawler):
     @error_handling_wrapper
     async def share_link(self, scrape_item: ScrapeItem) -> None:
         og_share_link = scrape_item.url
-        scrape_item.url = await self._get_redirect_url(scrape_item.url)
+        scrape_item.url = await self.request_redirect(scrape_item.url)
         await self.link_with_credentials(scrape_item, og_share_link)
 
     @error_handling_wrapper

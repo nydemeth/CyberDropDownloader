@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, ClassVar, Final
+from typing import TYPE_CHECKING, Any, ClassVar, Final, override
 
+from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers import Registry
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -40,6 +41,7 @@ class Gif:
         )
 
 
+@HTTPConfig(rate_limit=(2, 3))
 class RedGifsCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "User": "/users/<user>",
@@ -50,10 +52,9 @@ class RedGifsCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.redgifs.com/")
     DOMAIN: ClassVar[str] = "redgifs"
     FOLDER_DOMAIN: ClassVar[str] = "RedGifs"
-    _RATE_LIMIT: ClassVar[RateLimit] = 2, 3
 
-    @classmethod
-    def __json_resp_check__(cls, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
+    @override
+    def __json_resp_check__(self, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
         if error := json_resp.get("error"):
             msg: str = error.get("description") or error.get("message")
             if error.get("code"):
@@ -76,7 +77,7 @@ class RedGifsCrawler(Crawler):
                 return await self.user(scrape_item, user_name.lower())
             case ["i" | "watch" | "ifr", gif_id]:
                 return await self.gif(scrape_item, _id(gif_id))
-            case [_, _] if self.is_self_subdomain(scrape_item.url):
+            case [_, _] if self.is_subdomain(scrape_item.url):
                 scrape_item.url = _canonical_url(scrape_item.url.name)
                 return await self.gif(scrape_item, scrape_item.url.name)
             case _:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, DownloadConfig, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
@@ -11,7 +11,9 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-class VidaraCrawler(Crawler, db_path="path_qs_frag"):
+@Crawler.db_path_builder("path_qs_frag")
+@DownloadConfig(slots=2)
+class VidaraCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
         "xca.cymru",
         "vidara.to",
@@ -23,8 +25,6 @@ class VidaraCrawler(Crawler, db_path="path_qs_frag"):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Video": "/e/<video_id>"}
     DOMAIN: ClassVar[str] = "vidara"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
-
-    _DOWNLOAD_SLOTS: ClassVar[int | None] = 2
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:

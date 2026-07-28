@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, final, override
 
 from cyberdrop_dl import aio
+from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers import Registry
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import TextExtractor, css, dates, parse_url
@@ -30,6 +31,7 @@ class Selector:
 
 
 @Registry.database.fix_referer
+@HTTPConfig(rate_limit=(2, 1))
 class MotherlessCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Group": (
@@ -60,7 +62,6 @@ class MotherlessCrawler(Crawler):
     NEXT_PAGE_SELECTOR: ClassVar[str] = ".pagination_link > a[rel=next]"
     DOMAIN: ClassVar[str] = "motherless"
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("motherless.com",)
-    _RATE_LIMIT: ClassVar[RateLimit] = 2, 1
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -133,7 +134,6 @@ class MotherlessCrawler(Crawler):
     async def user_collection(self, scrape_item: ScrapeItem, username: str, name: str) -> None:
         scrape_item.setup_as_album(self.create_title(f"{username} [user]"))
         scrape_item.append_folders(name)
-
         soup, pages = await aio.peek_first(self.web_pager(scrape_item.url))
         _check_soup(soup)
         await self._iter_media(scrape_item, pages)
@@ -200,10 +200,15 @@ def _extract_media_from_thumbs(soup: BeautifulSoup) -> Generator[Media]:
     for thumb in css.iselect(soup, Selector.THUMB):
         static = css.select(thumb, "img.static")
         media_type = css.attr(thumb, "data-mediatype")
+        name = css.attr(static, "alt")
+        if name.startswith("Shared by"):
+            assert "-" in name
+            name = name.partition("-")[0]
+
         yield Media(
             type=media_type,
             code=css.attr(thumb, "data-codename"),
-            name=css.attr(static, "alt"),
+            name=css.unescape(name),
             href=css.select(thumb, "a.img-container", "href"),
             src=parse_url(css.attr(static, "src").replace("thumb", media_type)),
             upload_date=None,

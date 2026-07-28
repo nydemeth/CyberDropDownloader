@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, final
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.twitter_images import TwimgCrawler
+from cyberdrop_dl.crawlers.twitter.crawler import TwimgCrawler
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -13,14 +13,12 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
+@final
 class Selector:
     NEXT_PAGE = "li > a:-soup-contains('»')"
-
     TITLE = "h1.user-page, h1.tag-page, h1.block__title"
     THUMBS = "div.block-thumbs a.thumb__link"
-    _VIDEO = "video#video_tag_html5_api > source"
-    _PHOTO = "img.thumb__img"
-    MEDIA = f"{_VIDEO}, {_PHOTO}"
+    MEDIA = "video > source, img.thumb__img"
 
 
 class TwPornstarsCrawler(TwimgCrawler):
