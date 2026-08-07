@@ -34,7 +34,8 @@ class FileditchCrawler(Crawler):
             "/beta123/<file_id>/<name>",
             "/temp/<file_id>/<name>",
             "/alpha7/<file_id>/<name>",
-        )
+        ),
+        "Short URL": "https://theditch.st/<short_id>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://fileditchfiles.me/")
     DOMAIN: ClassVar[str] = "fileditch"
@@ -42,9 +43,18 @@ class FileditchCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case [_, _, *_]:
-                return await self.file(scrape_item)
+                await self.file(scrape_item)
+            case [_] if scrape_item.url.host == "theditch.st":
+                await self.short_url(scrape_item)
             case _:
                 raise ValueError
+
+    async def short_url(self, scrape_item: ScrapeItem) -> None:
+        soup = await self.request_soup(scrape_item.url)
+        with scrape_item.track_changes:
+            scrape_item.url = self.parse_url(css.select(soup, "a#fd-go", "href"))
+
+        self.create_eager_task(self.run(scrape_item))
 
     @classmethod
     @override
