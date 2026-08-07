@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 class LiveCamRipsCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": "/video/<video_id>",
+        "Model": "/model/<model_id>",
     }
+    NEXT_PAGE_SELECTOR: ClassVar[str] = "a.tm-btn-next[href^=http]:-soup-contains-own('Next Page')"
     DOMAIN: ClassVar[str] = "livecamrips"
     FOLDER_DOMAIN: ClassVar[str] = "LiveCamRips"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://livecamrips.to")
@@ -25,7 +27,9 @@ class LiveCamRipsCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["video", _]:
-                return await self.video(scrape_item)
+                await self.video(scrape_item)
+            case ["model", _, *_]:
+                await self.model(scrape_item)
             case _:
                 raise ValueError
 
@@ -39,7 +43,7 @@ class LiveCamRipsCrawler(Crawler):
         user_name = css.select_text(title, "a")
         css.decompose(title, "a")
 
-        _, site_name, upload_date = css.text(title).rsplit("- ", 2)
+        _, site_name, upload_date = map(str.strip, css.text(title).rsplit("- ", 2))
         scrape_item.setup_as_profile(self.create_title(f"{user_name} [{site_name}]"))
         scrape_item.uploaded_at = self.parse_iso_date(upload_date)
         scrape_item.append_folders(f"Show on {upload_date}")
@@ -47,3 +51,10 @@ class LiveCamRipsCrawler(Crawler):
         new_item = scrape_item.create_child(embed_url)
         new_item.referer = scrape_item.referer
         self.handle_embed(new_item)
+
+    @error_handling_wrapper
+    async def model(self, scrape_item: ScrapeItem) -> None:
+        scrape_item.setup_as_profile("")
+        async for soup in self.web_pager(scrape_item.url):
+            for new_item in self.iter_children(scrape_item, soup, ".tm-video-item > a"):
+                self.create_task(self.run(new_item))
