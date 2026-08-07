@@ -838,8 +838,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     @contextlib.asynccontextmanager
-    async def new_task_group(self, scrape_item: ScrapeItem) -> AsyncGenerator[asyncio.TaskGroup]:
-        async with asyncio.TaskGroup() as tg:
+    async def new_task_group(self, scrape_item: ScrapeItem) -> AsyncGenerator[aio.EagerTaskGroup]:
+        async with aio.EagerTaskGroup() as tg:
             with self.catch_errors(scrape_item):
                 yield tg
 
