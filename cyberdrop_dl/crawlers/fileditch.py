@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Self, override
 from cyberdrop_dl import multi_process
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers import Registry
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, parse_url
@@ -28,6 +28,7 @@ _HOMEPAGE_CATCH_ALL = "/s21/FHVZKQyAZlIsrneDAsp.jpeg"
 @Registry.database.fix_referer
 @HTTPConfig(rate_limit=(3, 1))
 class FileditchCrawler(Crawler):
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "theditch.st", "fileditchfiles.me"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
             "/file.php?f=<file_id>",
