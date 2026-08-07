@@ -49,6 +49,7 @@ class FileditchCrawler(Crawler):
             case _:
                 raise ValueError
 
+    @error_handling_wrapper
     async def short_url(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
         with scrape_item.track_changes:
