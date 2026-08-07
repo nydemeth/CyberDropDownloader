@@ -28,7 +28,7 @@ _HOMEPAGE_CATCH_ALL = "/s21/FHVZKQyAZlIsrneDAsp.jpeg"
 @Registry.database.fix_referer
 @HTTPConfig(rate_limit=(3, 1))
 class FileditchCrawler(Crawler):
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "theditch.st", "fileditchfiles.me"
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "theditch.st", "fileditch"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
             "/file.php?f=<file_id>",
