@@ -546,12 +546,11 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             thumb_name = f"{Path(media_item.filename).stem}_thumb{ext}"
             filename, _ = self.get_filename_and_ext(thumb_name)
             await self.handle_file(
-                media_item.url,
+                thumbnail,
                 scrape_item,
                 thumb_name,
                 ext,
                 custom_filename=filename,
-                debrid_link=thumbnail,
                 frag="thumbnail",
             )
 
