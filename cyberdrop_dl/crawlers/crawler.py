@@ -47,7 +47,6 @@ if TYPE_CHECKING:
 
     import yarl
     from bs4 import BeautifulSoup, Tag
-    from curl_cffi.requests.impersonate import BrowserTypeLiteral
 
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.config import Config
@@ -798,7 +797,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         url: AbsoluteHttpURL,
         selector: Callable[[BeautifulSoup], yarl.URL | str | None] | str | None = None,
         *,
-        impersonate: BrowserTypeLiteral | bool | None = False,
+        impersonate: str | bool | None = False,
         relative_to: AbsoluteHttpURL | None = None,
         trim: bool | None = None,
     ) -> AsyncIterator[BeautifulSoup]:

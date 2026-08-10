@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Concatenate, Protocol, cast, overload
 import aiohttp.client_exceptions
 import mega.errors
 import yarl
-from curl_cffi.requests import exceptions as curl_exceptions
 from pydantic import ValidationError
 
 from cyberdrop_dl.exceptions import CDLAppError, CDLBaseError, create_error_msg, get_origin
@@ -47,6 +46,11 @@ def _clean_curl_error(e: object) -> str:
 
 @contextlib.contextmanager
 def _curl_context() -> Generator[None]:
+    try:
+        from curl_cffi.requests import exceptions as curl_exceptions
+    except ImportError:
+        yield
+        return
     try:
         yield
     except curl_exceptions.Timeout as e:
@@ -174,7 +178,7 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
     _log_error(self, real_url or url, item, app_error, exc, origin)
 
 
-def _log_error(  # noqa: PLR0913, PLR0917
+def _log_error(  # noqa: PLR0913
     self: _HasManager,
     url: yarl.URL | str,
     item: ScrapeItem | MediaItem | yarl.URL,
