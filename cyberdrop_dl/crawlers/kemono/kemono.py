@@ -18,7 +18,14 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.config.crawlers import KemonoConfig
     from cyberdrop_dl.crawlers.kemono.api import KemonoAPI
-    from cyberdrop_dl.crawlers.kemono.models import Embed, File, PostModel, UserPostModel
+    from cyberdrop_dl.crawlers.kemono.models import (
+        Embed,
+        File,
+        PostModel,
+        PostProtocol,
+        UserPostModel,
+        UserPostProtocol,
+    )
     from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 
 
@@ -58,7 +65,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
 
     async def __async_post_init__(self) -> None:
         with self.catch_errors(self.PRIMARY_URL), self.disable_on_error("Unable to get list of creators from API"):
-            _ = await self.api.creators()
+            self.api.user_names = await self.api.creators()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -131,14 +138,14 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
 
     @error_handling_wrapper
-    async def _user_post(self, scrape_item: ScrapeItem, post: UserPostModel) -> None:
+    async def _user_post(self, scrape_item: ScrapeItem, post: UserPostProtocol[Any]) -> None:
         self.__check_for_ads(post)
-        user_name = (await self.api.creators())[post.user]
+        user_name = post.user_name or await self.api.creator[post.user]
         title = self.create_title(user_name, post.user_id)
         scrape_item.setup_as_album(title, album_id=post.user_id)
         post_title = self.create_separate_post_title(post.title, post.id, post.timestamp)
         scrape_item.append_folders(post_title)
-        self._post(scrape_item, post)
+        self._post(scrape_item, post)  # pyright: ignore[reportArgumentType]
 
     def _post(self, scrape_item: ScrapeItem, post: PostModel) -> None:
         scrape_item.uploaded_at = post.timestamp
@@ -151,7 +158,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         self._extract_urls_from_post_content(scrape_item, post)
 
     def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:
-        for url in unique(map(self.__compose_file_url, post_files)):
+        for url in unique(map(self._compose_file_url, post_files)):
             self.create_eager_task(self._direct_file(scrape_item, url))
             scrape_item.add_children()
 
@@ -160,7 +167,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             self.handle_external_links(scrape_item.create_child(embed_url))
             scrape_item.add_children()
 
-    def _extract_urls_from_post_content(self, scrape_item: ScrapeItem, post: PostModel) -> None:
+    def _extract_urls_from_post_content(self, scrape_item: ScrapeItem, post: PostProtocol[Any]) -> None:
         if not (post.content and self.__kemono_config__.content_urls):
             return
 
@@ -177,11 +184,11 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             self.handle_external_links(scrape_item.create_child(url))
             scrape_item.add_children()
 
-    def __check_for_ads(self, post: PostModel) -> None:
+    def __check_for_ads(self, post: PostProtocol[Any]) -> None:
         if _has_ads(post):
             self.log.warning(f"Post #{post.id} contains advertisements")
 
-    def __compose_file_url(self, file: File) -> AbsoluteHttpURL:
+    def _compose_file_url(self, file: File) -> AbsoluteHttpURL:
         server = self.parse_url(file.server) if file.server else self.__kemono_cdn__
         # path can have query params
         url = self.parse_url(f"/data{file.path}", server)
@@ -205,7 +212,7 @@ def _thumbnail_to_src(og_url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     return url
 
 
-def _has_ads(post: PostModel) -> bool:
+def _has_ads(post: PostProtocol[Any]) -> bool:
     if post.content and "#ad" in post.content:
         return True
 
