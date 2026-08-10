@@ -32,10 +32,7 @@ if TYPE_CHECKING:
 _find_http_urls = re.compile(r"(?:http(?!.*\.\.)[^ ]*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]|</|'))").finditer
 
 
-class KemonoBaseCrawler(Crawler, is_abc=True):
-    __kemono_api__: ClassVar[type[KemonoAPI]]
-    __kemono_cdn__: ClassVar[AbsoluteHttpURL]
-
+class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Creator": "/<service>/user/<user_id>",
         "Favorites": (
@@ -50,18 +47,11 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         ),
     }
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {title}"
+    api: T
 
     @property
     @abstractmethod
     def __kemono_config__(self) -> KemonoConfig: ...
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        assert cls.__kemono_api__
-        assert cls.__kemono_cdn__
-        return super().__init_subclass__(**kwargs)
-
-    def __post_init__(self) -> None:
-        self.api: KemonoAPI = self.__kemono_api__.from_crawler(self)
 
     async def __async_post_init__(self) -> None:
         with self.catch_errors(self.PRIMARY_URL), self.disable_on_error("Unable to get list of creators from API"):
@@ -189,7 +179,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
             self.log.warning(f"Post #{post.id} contains advertisements")
 
     def _compose_file_url(self, file: File) -> AbsoluteHttpURL:
-        server = self.parse_url(file.server) if file.server else self.__kemono_cdn__
+        server = self.parse_url(file.server) if file.server else self.api.CDN
         # path can have query params
         url = self.parse_url(f"/data{file.path}", server)
         return url.update_query(f=file.name or url.name)

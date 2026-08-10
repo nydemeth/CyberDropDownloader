@@ -17,11 +17,12 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
-UserPostT = TypeVar("UserPostT", bound=BaseModel, default=UserPostModel)
+UserPostT = TypeVar("UserPostT", bound=BaseModel)
 
 
-class KemonoAPI(API, Generic[UserPostT]):
+class KemonoAPI(API, Generic[UserPostT]):  # noqa: UP046
     ENTRYPOINT: ClassVar[AbsoluteHttpURL]
+    CDN: ClassVar[AbsoluteHttpURL]
     VALID_QUERY_PARAMS: ClassVar[set[str]] = {"o", "q", "tags", "order", "sort"}
     __post__: type[UserPostT] = UserPostModel  # pyright: ignore[reportAssignmentType]
 
@@ -75,7 +76,7 @@ class KemonoAPI(API, Generic[UserPostT]):
     ) -> AsyncGenerator[list[dict[str, Any]]]:
         for offset in itertools.count(int(url.query.get("o") or 0), step_size):
             data = await self.request_json(url.update_query(o=offset))
-            if key:
+            if key and type(data) is dict:
                 data = data.get(key, data)
             if not data:
                 break

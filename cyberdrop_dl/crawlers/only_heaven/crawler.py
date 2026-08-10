@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 class OnlyHavenAPI(KemonoAPI[UserPostModel]):
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://cum.st/api/v1")
+    CDN: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://e1.cum.st")
     VALID_QUERY_PARAMS: ClassVar[set[str]] = KemonoAPI.VALID_QUERY_PARAMS | {"type"}
     __post__: type[UserPostModel] = UserPostModel
 
@@ -35,15 +36,11 @@ class OnlyHavenAPI(KemonoAPI[UserPostModel]):
         return self.__post__.model_validate(post)
 
 
-class OnlyHavenCrawler(KemonoBaseCrawler):
-    __kemono_api__: ClassVar[type[OnlyHavenAPI]] = OnlyHavenAPI  # pyright: ignore[reportIncompatibleVariableOverride]
-    __kemono_cdn__: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://e1.cum.st")
-
+class OnlyHavenCrawler(KemonoBaseCrawler[OnlyHavenAPI]):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ("cum.st",)
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://cum.st")
     DOMAIN: ClassVar[str] = "onlyhaven"
     FOLDER_DOMAIN: ClassVar[str] = "OnlyHaven"
-
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Post": "/creators/<service>/<user_id>/post/<post_id>",
         "DM": "/creators/<service>/<user_id>/dm/<dm_id>",
@@ -53,7 +50,7 @@ class OnlyHavenCrawler(KemonoBaseCrawler):
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id}"
 
     def __post_init__(self) -> None:
-        self.api: OnlyHavenAPI = self.__kemono_api__.from_crawler(self)  # pyright: ignore[reportIncompatibleVariableOverride]
+        self.api: OnlyHavenAPI = OnlyHavenAPI.from_crawler(self)  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     @override
@@ -114,7 +111,7 @@ class OnlyHavenCrawler(KemonoBaseCrawler):
 
     @override
     def _compose_file_url(self, file: File) -> AbsoluteHttpURL:  # pyright: ignore[reportIncompatibleMethodOverride]
-        url = self.__kemono_cdn__ / "media" / file.storageKey / max(file.variants).name
+        url = self.api.CDN / "media" / file.storageKey / max(file.variants).name
         return url.update_query(f=file.name)
 
 

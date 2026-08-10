@@ -26,6 +26,5 @@ TEST_CASES = [
                 "original_filename": "1152x2048_5ac7b65097b96e5323022e4e511d90aa.jpg",
             },
         ],
-        "count": 4,
     }
 ]

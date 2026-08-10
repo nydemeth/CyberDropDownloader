@@ -71,12 +71,8 @@ class UserPostProtocol[T](PostProtocol[T]):
     user_id: str
     title: str
     user_name: str | None
-
-    @property
-    def user(self) -> User: ...
-
-    @property
-    def web_path_qs(self) -> str: ...
+    user: User
+    web_path_qs: str
 
 
 class PostModel(DeferredModel, extra="ignore"):
