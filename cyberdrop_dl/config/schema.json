@@ -59,6 +59,9 @@
         "pixeldrain": {
           "$ref": "#/$defs/ApiKeyAuth"
         },
+        "nova": {
+          "$ref": "#/$defs/ApiKeyAuth"
+        },
         "real_debrid": {
           "$ref": "#/$defs/ApiKeyAuth"
         }
