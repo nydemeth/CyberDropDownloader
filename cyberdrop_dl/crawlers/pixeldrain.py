@@ -283,8 +283,6 @@ class PixelDrainCrawler(Crawler):
 
 
 class PixelDrainAPI(API):
-    ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://pixeldrain.com")
-
     def __post_init__(self) -> None:
         self.headers: dict[str, str] = {}
         if api_key := self.config.auth.pixeldrain.api_key:
@@ -314,8 +312,8 @@ class PixelDrainAPI(API):
 
     def download(self, file: File | Node) -> AbsoluteHttpURL:
         if type(file) is File:
-            return (self.ENTRYPOINT / "api/file" / file.id).with_query("download")
-        return (self.ENTRYPOINT / "api/filesystem" / file.path.removeprefix("/")).with_query("attach")
+            return (self.origin / "api/file" / file.id).with_query("download")
+        return (self.origin / "api/filesystem" / file.path.removeprefix("/")).with_query("attach")
 
 
 def _filter_files(files: list[File], fragment: str) -> list[File]:
