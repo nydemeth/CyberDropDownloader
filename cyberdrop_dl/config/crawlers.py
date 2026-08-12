@@ -89,6 +89,7 @@ class GenericCrawlers(ConfigModel):
     discourse: tuple[HttpURL, ...] = ()
     chevereto: tuple[HttpURL, ...] = ()
     kvs: tuple[HttpURL, ...] = ()
+    video: tuple[HttpURL, ...] = ()
 
 
 class Crawlers(ConfigGroup, name=None):

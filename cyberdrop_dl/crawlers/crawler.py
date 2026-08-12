@@ -936,6 +936,35 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
                 )
             )
 
+    async def generic_m3u8(self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None) -> None:
+        url = url or scrape_item.url
+        referer = scrape_item.get_referer()
+        with self.catch_errors(url):
+            if referer and await self.check_complete_from_referer(referer):
+                return
+
+            if await self.check_complete(url):
+                return
+
+            headers = {"Referer": str(referer)} if referer else {}
+            m3u8, info = await self.request_m3u8(url, headers=headers)
+            name = url.name or url.parent.name
+            filename = self.create_custom_filename(
+                url.path,
+                ext := ".mp4",
+                resolution=info and info.resolution,
+                video_codec=info and info.codecs.video,
+                audio_codec=info and info.codecs.audio,
+            )
+            await self.handle_file(
+                url,
+                scrape_item,
+                name,
+                ext,
+                m3u8=m3u8,
+                custom_filename=filename,
+            )
+
 
 @HTTPConfig(rate_limit=(25, 1))
 class API(HTTPMixin, ABC):
