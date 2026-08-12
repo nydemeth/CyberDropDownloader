@@ -144,7 +144,7 @@ class DownloadClient:
     async def _append_content(self, media_item: MediaItem, hook: ProgressHook, resp: AbstractResponse[Any]) -> None:
         check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
-        await check_free_space()
+        await check_free_space(media_item.size)
         await self._pre_download_check(media_item)
 
         async with aio.open(media_item.partial_file, mode="ab") as f:
