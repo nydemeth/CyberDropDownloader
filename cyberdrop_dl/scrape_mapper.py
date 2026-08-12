@@ -232,10 +232,11 @@ class ScrapeMapper:
             await self._send_to_crawler(scrape_item)
 
     async def _send_to_crawler(self, scrape_item: ScrapeItem) -> None:
-        scrape_item.url = remove_trailing_slash(scrape_item.url)
         if cls := _best_match(self.crawlers, scrape_item.url.host):
             crawler = self._factory[cls]
             await crawler.__async_init__()
+            if crawler.__url_config__.trim:
+                scrape_item.url = remove_trailing_slash(scrape_item.url)
             self.task_mngr.scrape.create_task(crawler.run(scrape_item))
             return
 

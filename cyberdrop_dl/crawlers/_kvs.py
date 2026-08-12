@@ -351,6 +351,7 @@ def _extract_album_id(soup: BeautifulSoup) -> str | None:
         return None
 
 
+@URLConfig(trim=False)
 class GenericKVSCrawler(KernelVideoSharingCrawler, is_generic=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (
