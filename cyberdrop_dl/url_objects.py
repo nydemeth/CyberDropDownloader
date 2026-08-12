@@ -390,6 +390,12 @@ class ScrapeItem:
         """Returns a deep copy of this scrape_item"""
         return copy.deepcopy(self)
 
+    def get_referer(self) -> AbsoluteHttpURL | None:
+        if self.referer:
+            return self.referer
+        if self.parents:
+            return self.parents[-1]
+
 
 def _has_domain(folder: str) -> bool:
     return folder.endswith(")") and " (" in folder

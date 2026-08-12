@@ -51,7 +51,7 @@ class DirectHttpFileCrawler(Crawler, is_generic=True):
         scrape_item.append_folders("Loose Files")
         scrape_item.part_of_album = True
         url = scrape_item.url
-        headers = {"Referer": str(scrape_item.referer)} if scrape_item.referer else {}
+        headers = {"Referer": str(referer)} if (referer := scrape_item.get_referer()) else {}
         m3u8, info = await self.request_m3u8(url, headers=headers)
         name = url.name or url.parent.name
         filename = self.create_custom_filename(

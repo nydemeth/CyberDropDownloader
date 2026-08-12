@@ -51,7 +51,7 @@ class VidStackCrawler(Crawler):
         if await self.check_complete(scrape_item.url):
             return
 
-        video = await self.api.video(video_id, scrape_item.referer)
+        video = await self.api.video(video_id, scrape_item.get_referer())
         m3u8, info = await self.request_m3u8_playlist(video.src)
         custom_filename = self.create_custom_filename(
             video.title,
