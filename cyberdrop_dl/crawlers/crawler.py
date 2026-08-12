@@ -26,7 +26,7 @@ from cyberdrop_dl.filepath import check_dangerous_filename, check_path_traversal
 from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
-from cyberdrop_dl.utils import css, dates, enter_context, is_blob_or_svg, m3u8, parse_url, unique
+from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, parse_url, unique
 from cyberdrop_dl.utils._url import remove_trailing_slash
 from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, frozen
 from cyberdrop_dl.utils.errors import error_handling_context
@@ -155,6 +155,11 @@ class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
         return f"[{self._crawler_name}] {msg}", kwargs
 
 
+@fast_cache
+def _get_logger(crawler_name: str) -> _CrawlerLogger:
+    return _CrawlerLogger(crawler_name)
+
+
 @final
 @frozen
 class URLConfig(ConfigDataclass):
@@ -225,7 +230,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._ready: bool = False
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
-        self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
@@ -387,7 +391,12 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @final
     @property
     def log(self) -> _CrawlerLogger:
-        return self._logger
+        return self.get_logger()
+
+    @final
+    @classmethod
+    def get_logger(cls, name: str | None = None):
+        return _get_logger(name or cls.FOLDER_DOMAIN)
 
     @final
     @property
