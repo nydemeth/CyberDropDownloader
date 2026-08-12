@@ -24,7 +24,12 @@ class GenericVideoCrawler(Crawler, is_generic=True):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        src = self.parse_url(css.select(soup, "video source", "src"))
+        try:
+            src = self.parse_url(css.select(soup, "video source", "src"))
+        except css.SelectorError:
+            iframe = self.parse_url(css.select(soup, "iframe", "src"))
+            soup = await self.request_soup(iframe, headers={"Referer": str(scrape_item.url)})
+            src = self.parse_url(css.select(soup, "video source", "src"))
 
         _, ext = self.get_filename_and_ext(src.name, assume_ext=".mp4")
         scrape_item.referer = scrape_item.url
