@@ -291,8 +291,9 @@ class HTTPClient:
 
     @contextlib.asynccontextmanager
     async def rate_limit_ctx(self, domain: str, json_check: JSONCheck | None = None) -> AsyncGenerator[None]:
+        limiter = self.limiter.per_domain.get(domain, contextlib.nullcontext())
         with enter_context(JSON_CHECK, json_check):
-            async with self.limiter.per_domain[domain], self.limiter.global_:
+            async with limiter, self.limiter.global_:
                 yield
 
 

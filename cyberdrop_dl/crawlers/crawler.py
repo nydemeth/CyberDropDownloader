@@ -209,7 +209,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
         def apply[T: Crawler](cls: type[T]) -> type[T]:
             cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[key])
-            return URLConfig(ignore_fragment="frag" not in key)(cls)
+            return URLConfig(ignore_fragment=not ("frag" in key or key == "url"))(cls)
 
         return apply
 
@@ -507,6 +507,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         referer: AbsoluteHttpURL | None = None,
         frag: str | None = None,
         thumbnail: AbsoluteHttpURL | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         """Creates a MediaItem and hands it off to the downloader.
 
@@ -533,6 +534,9 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         )
 
         media_item.headers.update(self._prepare_headers(scrape_item))
+        if headers:
+            media_item.headers.update(headers)
+
         if metadata:
             media_item.metadata = metadata
 
