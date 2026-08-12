@@ -45,7 +45,7 @@ class Selector:
     POST_CONTENT: str = "#content .entry-content"
     POST_ID: _Selector = _Selector("[id*='post-']", "id")
     IMG: _Selector = _Selector("img[class*='wp-image']", "srcset")
-    POST_LINK_FROM_PAGE: _Selector = _Selector(".post a[href]", "href")
+    POST_LINK_FROM_PAGE: _Selector = _Selector(".post a[href], article[id*=post] a[href]", "href")
     NEXT_PAGE: _Selector = _Selector("a.page-numbers.next", "href")
 
 
@@ -63,10 +63,6 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
     WP_USE_REGEX: ClassVar[bool] = True
     SUPPORTS_THREAD_RECURSION: ClassVar[bool] = False
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        assert cls.fetch is WordPressBaseCrawler.fetch
 
     @final
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -250,7 +246,11 @@ class WordPressHTMLCrawler(WordPressBaseCrawler, is_generic=True):
 
     def _parse_post(self, scrape_item: ScrapeItem, soup: BeautifulSoup) -> Post:
         title = open_graph.get_title(soup) or css.select_text(soup, Selector.POST_TITLE)
-        date = open_graph.get("published_time", soup) or _match_date_from_path(scrape_item.url.parts[1:4])
+        date = (
+            open_graph.get("published_time", soup)
+            or _match_date_from_path(scrape_item.url.parts[1:4])
+            or css.select(soup, "article time.published", "datetime")
+        )
         data = {
             "id": get_post_id(soup),
             "slug": scrape_item.url.name,
