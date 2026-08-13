@@ -542,6 +542,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             json_check=self.__json_resp_check__,
         )
 
+        media_item.thumbnail = thumbnail
         media_item.headers.update(self._prepare_headers(scrape_item))
         if headers:
             media_item.headers.update(headers)
@@ -553,7 +554,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
 
-        if thumbnail:
+        if thumbnail and self.config.filters.files.thumbnails:
             _, ext = self.get_filename_and_ext(thumbnail.name)
             thumb_name = f"{Path(media_item.filename).stem}_thumb{ext}"
             filename, _ = self.get_filename_and_ext(thumb_name)

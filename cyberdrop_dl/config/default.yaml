@@ -90,6 +90,7 @@ filters:
     audio: true
     images: true
     non_media: true
+    thumbnails: false
     videos: true
   only_hosts: []
   sizes:

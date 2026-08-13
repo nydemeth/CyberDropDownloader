@@ -150,4 +150,5 @@ filters:
     images: true
     non_media: true
     videos: true
+    thumbnails: false
 ```

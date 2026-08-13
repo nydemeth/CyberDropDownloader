@@ -1086,6 +1086,11 @@
           "default": true,
           "title": "Non Media",
           "type": "boolean"
+        },
+        "thumbnails": {
+          "default": false,
+          "title": "Thumbnails",
+          "type": "boolean"
         }
       },
       "title": "_FileFilter",

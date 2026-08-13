@@ -137,6 +137,9 @@ class _FileFilter(ConfigModel):
     non_media: bool = True
     "Download/skip non media files (.txt, zip, .rar, etc...)"
 
+    thumbnails: bool = False
+    "Download/skip thumbnails of media files (if available)"
+
 
 class Filters(ConfigGroup):
     files: _FileFilter = Field(default_factory=_FileFilter)
