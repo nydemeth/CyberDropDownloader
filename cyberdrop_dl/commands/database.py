@@ -2,7 +2,7 @@ from typing import Annotated
 
 from cyclopts import App, Parameter
 
-from cyberdrop_dl.commands import CLIarguments, SQLiteFile
+from cyberdrop_dl.commands import CLIarguments, SQLiteFile, open_folder
 from cyberdrop_dl.config.appdata import AppData
 
 app = App(name="database", help="Commands for managing the database")
@@ -31,4 +31,13 @@ def transfer(
 @app.command()
 def file(*, cli: CLIarguments | None = None) -> None:
     "Show file path to the database"
-    app.console.print(cli.database_file if cli else AppData.default().db_file)
+    file = (cli and cli.database_file) or AppData.default().db_file
+    app.console.print(file)
+
+
+@app.command(name="dir", alias="folder")
+def folder(*, cli: CLIarguments | None = None) -> None:
+    "Open folder with database in default file explorer"
+    file = (cli and cli.database_file) or AppData.default().db_file
+
+    open_folder(file.parent)

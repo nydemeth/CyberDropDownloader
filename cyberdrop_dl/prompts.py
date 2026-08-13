@@ -111,3 +111,8 @@ def ask_path(
 def ask_should_create_config(file: Path) -> bool:
     console.warning("A default config file does not exists")
     return ask_confirmation(f"Do you want to create it at '{file}'?")
+
+
+def ask_should_create_folder(folder: Path) -> bool:
+    console.warning(f"Folder '{folder}' does not exists")
+    return ask_confirmation("Do you want to create it?")
