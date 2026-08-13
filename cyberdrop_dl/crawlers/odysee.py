@@ -13,6 +13,8 @@ from cyberdrop_dl.utils.dataclass import deserialize
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
@@ -42,7 +44,7 @@ class OdyseeCrawler(Crawler):
             return
 
         video = await self.api.resolve(uri)
-        src = await self.api.stream(uri)
+        src = await self.api.stream(uri, scrape_item.url.query)
         filename = self.create_custom_filename(
             video.title,
             ext := ".mp4",
@@ -130,8 +132,14 @@ class LBRYAPI(API):
             raise ScrapeError(422, f"{stream_type = } is not supported")
         return Video.parse(stream)
 
-    async def stream(self, url: str) -> AbsoluteHttpURL:
-        resp = await self.request_json_rpc("get", enviroment=None, uri=url)
+    async def stream(self, url: str, query: Mapping[str, str]) -> AbsoluteHttpURL:
+        signature = {name: value for name in ("signature", "signature_ts") if (value := query.get(name))}
+        resp = await self.request_json_rpc(
+            "get",
+            enviroment=None,
+            uri=url,
+            **signature,
+        )
         stream_url = parse_url(resp["streaming_url"])
         if stream_url.suffix == ".m3u8":
             raise ValueError("Unsupport m3u8 stream")
