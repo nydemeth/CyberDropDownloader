@@ -992,12 +992,27 @@ class API(HTTPMixin, ABC):
         client: HTTPClient,
         ctx: HTTPContext | None = None,
     ) -> None:
-        self.parse_url: Callable[[str | yarl.URL, AbsoluteHttpURL], AbsoluteHttpURL] = parse_url
         self.config: Final = config
         self.cache: Final = cache
         self.client: HTTPClient = client
         self.__http_ctx__: HTTPContext = ctx or HTTPContext.build(domain, self.__http_config__)
         self.__post_init__()
+
+    @classmethod
+    def parse_url(
+        cls,
+        url: yarl.URL | str,
+        /,
+        relative_to: AbsoluteHttpURL | None = None,
+        *,
+        trim: bool | None = None,
+    ) -> AbsoluteHttpURL:
+        """Wrapper around `utils.parse_url` to use `self.PRIMARY_URL` as base"""
+        base = relative_to or cls.PRIMARY_URL
+        assert is_absolute_http_url(base)
+        if trim is None:
+            trim = True
+        return parse_url(url, base, trim=trim)
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> Self:
