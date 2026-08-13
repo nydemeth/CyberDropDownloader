@@ -496,6 +496,14 @@
           },
           "title": "Kvs",
           "type": "array"
+        },
+        "video": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Video",
+          "type": "array"
         }
       },
       "title": "GenericCrawlers",

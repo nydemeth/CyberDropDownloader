@@ -33,6 +33,7 @@ crawlers:
     chevereto: []
     discourse: []
     kvs: []
+    video: []
     wordpress_html: []
     wordpress_media: []
   one_pace:
