@@ -28,7 +28,7 @@ class MegaDownloadClient(DownloadClient):  # pyright: ignore[reportGeneralTypeIs
 
         check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
-        await check_free_space()
+        await check_free_space(media_item.size)
         await self._pre_download_check(media_item)
 
         crypto, file_size = media_item.extra_info[media_item.domain]["key"]

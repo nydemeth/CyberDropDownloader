@@ -12,9 +12,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, Unpack, final, 
 
 import aiohttp
 from aiohttp import hdrs
-from curl_cffi.aio import AsyncCurl
-from curl_cffi.requests import AsyncSession
-from curl_cffi.utils import CurlCffiWarning
 
 from cyberdrop_dl import aio, cookies, ddos_guard
 from cyberdrop_dl.clients import flaresolverr, tcp
@@ -31,11 +28,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from bs4 import BeautifulSoup
+    from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
-    from curl_cffi.requests.session import HttpMethod
 
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
+
+    from . import HttpMethod
 
 
 type RequestContext = contextlib.AbstractAsyncContextManager[AbstractResponse[Any]]
@@ -292,8 +291,9 @@ class HTTPClient:
 
     @contextlib.asynccontextmanager
     async def rate_limit_ctx(self, domain: str, json_check: JSONCheck | None = None) -> AsyncGenerator[None]:
+        limiter = self.limiter.per_domain.get(domain, contextlib.nullcontext())
         with enter_context(JSON_CHECK, json_check):
-            async with self.limiter.per_domain[domain], self.limiter.global_:
+            async with limiter, self.limiter.global_:
                 yield
 
 
@@ -406,6 +406,10 @@ class HTTPControllerProxy[T: HTTPMixin]:
 
 
 def _create_curl_session(config: Config) -> AsyncSession[CurlResponse]:
+    from curl_cffi.aio import AsyncCurl
+    from curl_cffi.requests import AsyncSession
+    from curl_cffi.utils import CurlCffiWarning
+
     loop = asyncio.get_running_loop()
 
     with warnings.catch_warnings():

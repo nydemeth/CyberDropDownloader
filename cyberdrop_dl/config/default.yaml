@@ -8,6 +8,8 @@ auth:
   mega_nz:
     email: null
     password: null
+  nova:
+    api_key: null
   pixeldrain:
     api_key: null
   real_debrid:
@@ -31,10 +33,16 @@ crawlers:
     chevereto: []
     discourse: []
     kvs: []
+    video: []
     wordpress_html: []
     wordpress_media: []
   one_pace:
     prefer_dub: false
+  only_haven:
+    attachments: true
+    content_urls: true
+    embed: true
+    file: true
   pawchive:
     attachments: true
     content_urls: true
@@ -82,6 +90,7 @@ filters:
     audio: true
     images: true
     non_media: true
+    thumbnails: false
     videos: true
   only_hosts: []
   sizes:
@@ -107,6 +116,7 @@ hashing:
     enabled: true
     use_trash_bin: true
   mode: in_place
+ignore_hashes: false
 ignore_history: false
 jdownloader:
   autostart: false

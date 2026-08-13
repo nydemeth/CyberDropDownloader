@@ -38,3 +38,17 @@ class CLIarguments:
 
     def __json__(self) -> dict[str, Any]:
         return {k: None if v is None else str(v) for k, v in self}
+
+
+def open_folder(folder: Path) -> None:
+    if not folder.exists():
+        from cyberdrop_dl.prompts import ask_should_create_folder
+
+        if not ask_should_create_folder(folder):
+            return
+
+        folder.mkdir(parents=True)
+
+    import webbrowser
+
+    webbrowser.open_new(str(folder))

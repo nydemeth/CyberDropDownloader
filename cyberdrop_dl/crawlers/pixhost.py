@@ -50,9 +50,7 @@ class PixHostCrawler(Crawler):
     async def gallery(self, scrape_item: ScrapeItem, album_id: str) -> None:
         soup = await self.request_soup(scrape_item.url)
         title = css.select_text(soup, Selector.GALLERY_TITLE)
-        if title.casefold() == "untitled gallery" and not self.config.subfolders.include.album_id:
-            title = f"{title} {album_id}"
-        title = self.create_title(title, album_id)
+        title = self.create_title(title, album_id, force_album_id=title.casefold() == "untitled gallery")
         scrape_item.setup_as_album(title, album_id=album_id)
         should_download = await self.make_album_checker(album_id)
         urls = map(_thumbnail_to_src, self.iter_urls(soup, Selector.GALLERY_IMAGES, "src"))

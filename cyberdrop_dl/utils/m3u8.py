@@ -4,18 +4,19 @@ import dataclasses
 import datetime
 import logging
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, Self
 
 import m3u8.model
 from m3u8 import M3U8 as _M3U8
 from m3u8 import Media, Playlist
 
+from cyberdrop_dl.exceptions import DownloadError
 from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.signature import simple_repr
 from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Iterator
+    from collections.abc import Generator, Iterable, Iterator, Mapping
     from pathlib import Path
 
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -69,6 +70,13 @@ class MediaURLs(NamedTuple):
     audio: AbsoluteHttpURL | None
     subtitle: AbsoluteHttpURL | None
 
+    def with_query(self, query: Mapping[str, Any]) -> MediaURLs:
+        return MediaURLs(
+            video=self.video.with_query(query),
+            audio=self.audio and self.audio.with_query(query),
+            subtitle=self.subtitle and self.subtitle.with_query(query),
+        )
+
 
 @dataclasses.dataclass(slots=True)
 class Rendition:
@@ -77,7 +85,7 @@ class Rendition:
     subtitle: M3U8 | None
 
     def __iter__(self) -> Iterator[M3U8 | None]:
-        return iter(dataclasses.astuple(self))
+        yield from (self.video, self.audio, self.subtitle)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, order=True)
@@ -153,6 +161,59 @@ def _parse_stream_resolution(stream_info: StreamInfo, video_url: AbsoluteHttpURL
         return Resolution.unknown()
 
 
+class Encryption(StrEnum):
+    AES_128 = "AES-128"
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class HLSKey:
+    __attr__: ClassVar[str] = "HLS_DECRYPT_INFO"
+    method: Encryption
+    uri: AbsoluteHttpURL
+    iv: bytes
+
+    @classmethod
+    def get(cls, data: Mapping[str, Any]) -> Self | None:
+        key = data.get(cls.__attr__)
+        if type(key) is cls:
+            return key
+
+    def __call__(self, data: dict[str, Any]) -> Self | None:
+        key = data.setdefault(self.__attr__, self)
+        if key is not self:
+            raise RuntimeError("Another key is already set")
+
+    @classmethod
+    def parse(cls, seg: m3u8.model.Segment | m3u8.model.InitializationSection) -> Self | None:
+        if isinstance(seg, m3u8.model.Segment) and seg.key and seg.key.method and seg.key.method != "NONE":
+            assert seg.key.iv
+            assert seg.key.uri
+            return cls(
+                method=Encryption(seg.key.method),
+                iv=bytes.fromhex(seg.key.iv.removeprefix("0x")),
+                uri=parse_url(seg.key.uri, trim=False),
+            )
+
+
+def _validate_keys(stream: M3U8) -> None:
+    if not stream.keys:
+        return
+    for key in stream.keys:
+        if (
+            key is None or key.method == "NONE"
+        ):  # First one could be None # pyright: ignore[reportUnnecessaryComparison]
+            continue
+        if key.method != Encryption.AES_128:
+            raise DownloadError(
+                "Encrypted", f"M3U8 playlist {stream.source} has an unsupported encryption algorithm: \n{key!s}"
+            )
+        if not key.iv or not key.uri:
+            raise DownloadError(
+                "Encrypted",
+                f"M3U8 playlist {stream.source} is encrypted but we have to IV to decrypted it: \n{key!s}",
+            )
+
+
 class M3U8(_M3U8):
     def __init__(
         self,
@@ -166,6 +227,7 @@ class M3U8(_M3U8):
         self.media_type: Literal["video", "audio", "subtitle"] | None = media_type
         self.source: AbsoluteHttpURL | Path | None = source
         super().__init__(content, base_uri=str(base_uri) if base_uri else None)
+        _validate_keys(self)
 
     @property
     def total_segments(self) -> int:

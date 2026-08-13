@@ -4,11 +4,13 @@ import asyncio
 import dataclasses
 import json
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack, final, override
 
 from aiohttp import ClientConnectorError
 
 from cyberdrop_dl.clients.http import HTTPConfig
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DDOSGuardError, ScrapeError
@@ -20,8 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     from bs4 import BeautifulSoup
-    from curl_cffi.requests.session import HttpMethod
 
+    from cyberdrop_dl.clients import HttpMethod
     from cyberdrop_dl.clients.request import RequestParams
     from cyberdrop_dl.url_objects import ScrapeItem
 
@@ -69,6 +71,8 @@ class BunkrCrawler(Crawler):
     @staticmethod
     @override
     def __db_path__(url: AbsoluteHttpURL, /) -> str:
+        if "thumbs" in url.parts:
+            return url.path
         return "/" + url.name
 
     @classmethod
@@ -143,8 +147,12 @@ class BunkrCrawler(Crawler):
         if soup.select_one(Selector.SERVER_UNDER_MAINTENANCE):
             raise ScrapeError("Bunkr Maintenance", "Server under maintenance")
 
+        thumb = open_graph.get_image(soup)
+
         try:
-            cdn = _extract_js_vars(soup)["jsCDN"]
+            js_vars = _extract_js_vars(soup)
+            cdn = js_vars["jsCDN"]
+            thumb = js_vars.get("videoCoverUrl") or thumb
         except css.SelectorError:
             dl_url = css.select(soup, Selector.DOWNLOAD_BTN, "href")
             file_id = self.parse_url(dl_url).name
@@ -153,7 +161,7 @@ class BunkrCrawler(Crawler):
             filename = open_graph.title(soup)
             src = self.parse_url(cdn)
 
-        await self._file(scrape_item, src, filename)
+        await self._file(scrape_item, src, filename, self.parse_url(thumb) if thumb else None)
 
     @error_handling_wrapper
     async def file_download(self, scrape_item: ScrapeItem, file_id: str) -> None:
@@ -162,7 +170,13 @@ class BunkrCrawler(Crawler):
         source, name = await self.api.download(file_id)
         await self._file(scrape_item, source, name)
 
-    async def _file(self, scrape_item: ScrapeItem, src: AbsoluteHttpURL, filename: str | None = None) -> None:
+    async def _file(
+        self,
+        scrape_item: ScrapeItem,
+        src: AbsoluteHttpURL,
+        filename: str | None = None,
+        thumbnail: AbsoluteHttpURL | None = None,
+    ) -> None:
         referer = scrape_item.url
         if not self.is_subdomain(referer):
             referer = referer.with_host(self.PRIMARY_URL.host)
@@ -181,6 +195,7 @@ class BunkrCrawler(Crawler):
             custom_filename=filename,
             referer=referer,
             debrid_link=lambda: self.api.sign(src),
+            thumbnail=thumbnail and _fix_thumb(thumbnail),
         )
 
     async def _try_request_soup(self, url: AbsoluteHttpURL) -> BeautifulSoup | None:
@@ -273,6 +288,18 @@ def _make_album_parser() -> Callable[[str], Generator[File]]:
         return decode(content.rstrip(",") + "]")
 
     return parse
+
+
+def _fix_thumb(thumb: AbsoluteHttpURL) -> AbsoluteHttpURL | None:
+    name = Path(thumb.name)
+    if len(name.suffixes) < 2:
+        return thumb
+    *_, file_ext, thumb_ext = name.suffixes
+    if "grid" in file_ext:
+        return thumb
+    if file_ext.casefold() not in FileExt.MEDIA:
+        return None
+    return thumb.with_name(name.stem).with_suffix(thumb_ext)
 
 
 def _is_stream_redirect(host: str) -> bool:

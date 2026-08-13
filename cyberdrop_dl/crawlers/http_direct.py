@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
+@Crawler.db_path_builder("url")
 class DirectHttpFileCrawler(Crawler, is_generic=True):
     DOMAIN: ClassVar[str] = "no_crawler"
 
@@ -24,6 +25,11 @@ class DirectHttpFileCrawler(Crawler, is_generic=True):
             filename, ext = get_filename_and_ext(scrape_item.url.name)
         except NoExtensionError:
             filename, ext = get_filename_and_ext(scrape_item.url.name, xenforo=True)
+
+        if ext == ".m3u8":
+            scrape_item.append_folders("Loose Files")
+            scrape_item.part_of_album = True
+            return await self.generic_m3u8(scrape_item)
 
         if ext not in FileExt.MEDIA:
             raise ValueError

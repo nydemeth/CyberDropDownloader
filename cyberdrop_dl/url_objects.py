@@ -140,6 +140,7 @@ class MediaItem:
     album_id: str | None = None
     uploaded_at: int | None = None
     xxhash: str | None = None
+    thumbnail: AbsoluteHttpURL | None = None
 
     parents: tuple[AbsoluteHttpURL, ...] = dataclasses.field(default_factory=tuple)
     attempts: int = dataclasses.field(init=False, default=0)
@@ -389,6 +390,12 @@ class ScrapeItem:
     def copy(self) -> Self:
         """Returns a deep copy of this scrape_item"""
         return copy.deepcopy(self)
+
+    def get_referer(self) -> AbsoluteHttpURL | None:
+        if self.referer:
+            return self.referer
+        if self.parents:
+            return self.parents[-1]
 
 
 def _has_domain(folder: str) -> bool:

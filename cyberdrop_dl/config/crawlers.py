@@ -89,6 +89,7 @@ class GenericCrawlers(ConfigModel):
     discourse: tuple[HttpURL, ...] = ()
     chevereto: tuple[HttpURL, ...] = ()
     kvs: tuple[HttpURL, ...] = ()
+    video: tuple[HttpURL, ...] = ()
 
 
 class Crawlers(ConfigGroup, name=None):
@@ -102,3 +103,4 @@ class Crawlers(ConfigGroup, name=None):
     tiktok: TikTokConfig = Field(default_factory=TikTokConfig)
     twitter: TwitterConfig = Field(default_factory=TwitterConfig)
     pawchive: KemonoConfig = Field(default_factory=KemonoConfig)
+    only_haven: KemonoConfig = Field(default_factory=KemonoConfig)

@@ -59,6 +59,9 @@
         "pixeldrain": {
           "$ref": "#/$defs/ApiKeyAuth"
         },
+        "nova": {
+          "$ref": "#/$defs/ApiKeyAuth"
+        },
         "real_debrid": {
           "$ref": "#/$defs/ApiKeyAuth"
         }
@@ -158,6 +161,9 @@
           "$ref": "#/$defs/TwitterConfig"
         },
         "pawchive": {
+          "$ref": "#/$defs/KemonoConfig"
+        },
+        "only_haven": {
           "$ref": "#/$defs/KemonoConfig"
         }
       },
@@ -489,6 +495,14 @@
             "$ref": "#/$defs/HttpURL"
           },
           "title": "Kvs",
+          "type": "array"
+        },
+        "video": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HttpURL"
+          },
+          "title": "Video",
           "type": "array"
         }
       },
@@ -1072,6 +1086,11 @@
           "default": true,
           "title": "Non Media",
           "type": "boolean"
+        },
+        "thumbnails": {
+          "default": false,
+          "title": "Thumbnails",
+          "type": "boolean"
         }
       },
       "title": "_FileFilter",
@@ -1223,6 +1242,11 @@
     "ignore_history": {
       "default": false,
       "title": "Ignore History",
+      "type": "boolean"
+    },
+    "ignore_hashes": {
+      "default": false,
+      "title": "Ignore Hashes",
       "type": "boolean"
     },
     "jdownloader": {

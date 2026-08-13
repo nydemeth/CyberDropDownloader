@@ -7,6 +7,8 @@ import itertools
 import re
 from typing import TYPE_CHECKING, Any, ClassVar, final
 
+import yarl
+
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
@@ -244,6 +246,13 @@ def extract_kvs_video(cls: Crawler, soup: BeautifulSoup) -> KVSVideo:
     if soup.select_one(Selector.UNAUTHORIZED):
         raise ScrapeError(401, "Private video")
 
+    try:
+        kt_player_url = yarl.URL(css.select(soup, "script[src*='/kt_player.js?v=']", "src"))
+    except (ValueError, css.SelectorError):
+        pass
+    else:
+        cls.get_logger().debug(f"Found KVS player version {kt_player_url.query['v']}")
+
     script = css.select_text(soup, Selector.FLASHVARS)
     video = _parse_video_vars(script)
     if not video.title:
@@ -293,7 +302,7 @@ def _parse_formats(flashvars: dict[str, str]) -> Generator[tuple[Resolution, Abs
     parse_resolution = Resolution.make_parser()
     for key in url_keys:
         url_str = flashvars[key]
-        if "/get_file/" not in url_str:
+        if not ("/get_file/" in url_str or "/get_stream/" in url_str):
             continue
         quality = flashvars.get(f"{key}_text")
         resolution = Resolution.highest() if quality in {"HQ", "Best Quality"} else parse_resolution(quality)
@@ -351,6 +360,7 @@ def _extract_album_id(soup: BeautifulSoup) -> str | None:
         return None
 
 
+@URLConfig(trim=False)
 class GenericKVSCrawler(KernelVideoSharingCrawler, is_generic=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (

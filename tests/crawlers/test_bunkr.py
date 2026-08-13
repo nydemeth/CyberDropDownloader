@@ -107,3 +107,26 @@ def test_is_not_stream_redirect(host: str) -> None:
 def test_db_path(url: str, expected: str) -> None:
     result = bunkr.BunkrCrawler.__db_path__(AbsoluteHttpURL(url))
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://static.scdn.st/c7a9b5d3-1e4f-a6d8-3b7e9f0c2a1d/thumbs/sylph_red_5000-jX9bl.jpg.png",
+            "https://static.scdn.st/c7a9b5d3-1e4f-a6d8-3b7e9f0c2a1d/thumbs/sylph_red_5000-jX9bl.png",
+        ),
+        (
+            "https://static.scdn.st/027e12ae-683b-4e42-950f-2b3f12448931/thumbs/bebc5872-a051-476c-8eef-a75739d6e082.zip.png",
+            None,
+        ),
+        (
+            "https://static.scdn.st/027e12ae-683b-4e42-950f-2b3f148931/thumbs/bad0a9-2aa4-4ae3-8739-bd5e31418a60.mp4_grid.png",
+            "https://static.scdn.st/027e12ae-683b-4e42-950f-2b3f148931/thumbs/bad0a9-2aa4-4ae3-8739-bd5e31418a60.mp4_grid.png",
+        ),
+    ],
+)
+def test_fix_tumb(url: str, expected: str | None) -> None:
+    result = bunkr._fix_thumb(AbsoluteHttpURL(url))
+    thumb = AbsoluteHttpURL(expected) if expected else None
+    assert result == thumb
