@@ -22,12 +22,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v10.0.0
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: false
@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install ffmpeg -y
-          uv sync --all-extras
+          uv sync --locked --all-extras
 
       - name: Run pytest
         timeout-minutes: 10
