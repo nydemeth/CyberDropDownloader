@@ -96,7 +96,7 @@ class _NOT_NONE:  # noqa: N801, PLW1641
 NOT_NONE = _NOT_NONE()
 
 
-def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, results: list[MediaItem]) -> None:
+def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, results: list[MediaItem]) -> None:  # noqa: C901
     expected_results = dict(sorted(((x["url"], idx), x) for idx, x in enumerate(test_case.results, 1)))
     origin = getattr(crawler, "PRIMARY_URL", AbsoluteHttpURL("https://google.com"))
     for (index, expected), media_item in zip(expected_results.items(), results, strict=False):
@@ -121,6 +121,9 @@ def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, r
                         case _:
                             if expected_value.startswith("http"):
                                 expected_value = crawler.parse_url(expected_value, origin)
+
+                            elif attr_name == "url":
+                                expected_value = AbsoluteHttpURL(expected_value)
 
                             elif expected_value.startswith("re:"):
                                 expected_value = expected_value.removeprefix("re:")

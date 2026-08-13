@@ -21,11 +21,18 @@ if TYPE_CHECKING:
 @Crawler.db_path_builder("url")
 class OdyseeCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Video": ("@channel:uri",),
+        "Video": ("/@channel:uri",),
+        "Embed": ("/$/embed/@channel:uri",),
     }
 
     DOMAIN: ClassVar[str] = "odysee"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://odysee.com")
+
+    @classmethod
+    @override
+    def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        url = super().transform_url(url)
+        return url.with_path(url.path.removeprefix("/$/embed"), keep_query=True)
 
     def __post_init__(self) -> None:
         self.api: LBRYAPI = LBRYAPI.from_crawler(self)
