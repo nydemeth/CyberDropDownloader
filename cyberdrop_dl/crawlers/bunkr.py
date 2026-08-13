@@ -71,6 +71,8 @@ class BunkrCrawler(Crawler):
     @staticmethod
     @override
     def __db_path__(url: AbsoluteHttpURL, /) -> str:
+        if "thumbs" in url.parts:
+            return url.path
         return "/" + url.name
 
     @classmethod
