@@ -724,9 +724,18 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         return False
 
     @final
-    def create_title(self, title: str, album_id: str | None = None, thread_id: int | None = None) -> str:
+    def create_title(
+        self, title: str, album_id: str | None = None, thread_id: int | None = None, *, force_album_id: bool = False
+    ) -> str:
         """Creates the title for the scrape item."""
-        return compose_title(self.config, self.FOLDER_DOMAIN, title, album_id, thread_id)
+        return compose_title(
+            self.config,
+            self.FOLDER_DOMAIN,
+            title,
+            album_id,
+            thread_id,
+            force_album_id=force_album_id,
+        )
 
     @final
     def create_separate_post_title(
@@ -1148,16 +1157,18 @@ def _prepare_download_path(item: ScrapeItem, domain: str) -> Path:
     return path
 
 
-def compose_title(
+def compose_title(  # noqa: PLR0913
     config: Config,
     domain: str,
     title: str,
     album_id: str | None = None,
     thread_id: int | None = None,
+    *,
+    force_album_id: bool = False,
 ) -> str:
     title = (title or "Untitled").strip()
 
-    if album_id and config.subfolders.include.album_id:
+    if album_id and (force_album_id or config.subfolders.include.album_id):
         title = f"{title} {album_id}"
 
     if thread_id and config.subfolders.include.thread_id:
