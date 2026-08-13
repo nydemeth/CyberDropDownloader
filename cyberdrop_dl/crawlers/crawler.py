@@ -555,17 +555,26 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         await self.handle_media_item(media_item, m3u8)
 
         if thumbnail and self.config.filters.files.thumbnails:
+            with self.catch_errors(thumbnail):
+                ext = await self._thumb_ext(thumbnail)
+                thumb_name = f"{Path(media_item.filename).stem}_thumb{ext}"
+                filename, _ = self.get_filename_and_ext(thumb_name)
+                await self.handle_file(
+                    thumbnail,
+                    scrape_item,
+                    thumb_name,
+                    ext,
+                    custom_filename=filename,
+                    frag="thumbnail",
+                )
+
+    async def _thumb_ext(self, thumbnail: AbsoluteHttpURL) -> str:
+        try:
             _, ext = self.get_filename_and_ext(thumbnail.name)
-            thumb_name = f"{Path(media_item.filename).stem}_thumb{ext}"
-            filename, _ = self.get_filename_and_ext(thumb_name)
-            await self.handle_file(
-                thumbnail,
-                scrape_item,
-                thumb_name,
-                ext,
-                custom_filename=filename,
-                frag="thumbnail",
-            )
+        except NoExtensionError:
+            async with self.request(thumbnail, "HEAD") as resp:
+                _, ext = self.get_filename_and_ext(thumbnail.name, mime_type=resp.content_type)
+        return ext
 
     def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
         return {
