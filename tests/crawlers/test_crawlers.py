@@ -122,9 +122,6 @@ def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, r
                             if expected_value.startswith("http"):
                                 expected_value = crawler.parse_url(expected_value, origin)
 
-                            elif attr_name == "url":
-                                expected_value = AbsoluteHttpURL(expected_value)
-
                             elif expected_value.startswith("re:"):
                                 expected_value = expected_value.removeprefix("re:")
                                 assert re_search(expected_value, result_value), (
@@ -132,6 +129,9 @@ def _validate_results(crawler: Crawler, test_case: test_cases.CrawlerTestCase, r
                                     f"{result_value = } does not match {expected_value!r}"
                                 )
                                 continue
+
+                            elif attr_name == "url":
+                                expected_value = AbsoluteHttpURL(expected_value)
 
             assert expected_value == result_value, f"{attr_name} for result#{index} is different"
 
