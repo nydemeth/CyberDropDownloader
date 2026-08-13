@@ -204,18 +204,31 @@ class PatreonCrawler(Crawler):
             api_url = api_url.update_query({"page[cursor]": cursor})
 
     async def _get_campaign_id(self, creator: str) -> str:
-        soup = await self.request_soup(self.PRIMARY_URL / creator, impersonate=True)
+        async with self.request(self.PRIMARY_URL / creator, impersonate=True) as resp:
+            soup = await resp.soup()
+            try:
+                bootstrap = _extract_bootstrap(soup)
+                return bootstrap["campaign"]["data"]["id"]
+            except css.SelectorError:
+                # TODO: fix next_js chunk parsing
+                try:
+                    url = self.parse_url(css.select(soup, "head link[href*='/campaign/']", "href"))
+                except css.SelectorError:
+                    return _extract_campaign_id(await resp.text())
+                else:
+                    return url.parts[url.parts.index("campaign") + 1]
+
+
+def _extract_campaign_id(content: str) -> str:
+    for start, end in [
+        (r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\""),
+        (r"\"id\":\"NavigationBar_", '\\"'),
+    ]:
         try:
-            bootstrap = _extract_bootstrap(soup)
-        except css.SelectorError:
-            # TODO: fix next_js chunk parsing
-            return _extract_campaign_id(soup)
-        else:
-            return bootstrap["campaign"]["data"]["id"]
-
-
-def _extract_campaign_id(soup: BeautifulSoup) -> str:
-    return extr_text(str(soup), r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\"")
+            return extr_text(content, start, end)
+        except ValueError:
+            pass
+    raise ScrapeError(422, "Unable to extract campaign id")
 
 
 def _extract_campaign_id_next_js(soup: BeautifulSoup) -> str:
