@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import uuid
-from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, ClassVar, TypedDict
 
 import yarl
@@ -15,8 +14,6 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import css, extr_text, next_js
 from cyberdrop_dl.utils.dataclass import Deserializer
 from cyberdrop_dl.utils.errors import error_handling_wrapper
-
-session_token: ContextVar[str] = ContextVar("session_token")
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -57,8 +54,6 @@ class PlutoCrawler(Crawler):
 
     @error_handling_wrapper
     async def show(self, scrape_item: ScrapeItem, show_slug: str, season: int | None = None) -> None:
-        scrape_item.setup_as_album("")
-
         async with self.request(scrape_item.url) as resp:
             text = await resp.text()
             scrape_item.url = resp.url

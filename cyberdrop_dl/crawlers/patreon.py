@@ -241,7 +241,7 @@ def _flatten_included(included: list[Included]) -> dict[str, Included]:
 
 
 def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
-    data = json.loads(css.select_text(soup, "#__NEXT_DATA__"))
+    data = next_js.data(soup)
     envelope = data["props"]["pageProps"]["bootstrapEnvelope"]
     return envelope.get("pageBootstrap") or envelope["bootstrap"]
 
