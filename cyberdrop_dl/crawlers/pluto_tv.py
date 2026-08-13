@@ -34,7 +34,7 @@ class PlutoCrawler(Crawler):
             "<region>/shows/<show_slug>",
             "<region>/shows/<show_slug>/season/<season>",
         ),
-        "Movie": "/<region>/movies/<movie_slug>",
+        "Movie": "/<region>/movies/<movie_id>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://pluto.tv")
     DOMAIN: ClassVar[str] = "pluto.tv"
@@ -140,7 +140,7 @@ class PlutoCrawler(Crawler):
 
 @HTTPConfig.default_headers(user_agent=FIREFOX)
 class PlutoAPI(API):
-    GRAPHQL_ENDPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://pluto.tv/api/tn/app-shell/graphql/")
+    GRAPHQL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://pluto.tv/api/tn/app-shell/graphql/")
     SERIES: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://service-vod.clusters.pluto.tv/v4/vod/series/")
     M3U8: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL(
         "https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv/v2/stitch/hls/episode"
@@ -179,7 +179,7 @@ class PlutoAPI(API):
 
     async def request_gql(self, operation: str, variables: dict[str, Any]) -> dict[str, Any]:
         resp = await self.request_json(
-            self.GRAPHQL_ENDPOINT,
+            self.GRAPHQL,
             method="POST",
             json={
                 "query": globals()[operation],
@@ -220,16 +220,24 @@ class PlutoAPI(API):
         return _deserialize(Series, resp)
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class Session:
-    id: str
-    jwt: str
-
-
 _deserialize = Deserializer(
     {"season": "seasonNum", "number": "episodeNum", "title": "name", "id": "_id"},
     {"season": int, "number": int},
 )
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class Movie:
+    id: str
+    title: str
+    description: str
+    airDateISO: str  # noqa: N815
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class Session:
+    id: str
+    jwt: str
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -275,7 +283,7 @@ def _is_ad(uri: str) -> bool:
 
 
 def _parse_movie(props: dict[str, Any]) -> Movie:
-    for query in props["dehydratedState"]["queries"]:
+    for query in props.get("dehydratedState", {}).get("queries", ()):
         data = query.get("state", {}).get("data")
         if not data or type(data) is not dict:
             continue
@@ -283,14 +291,6 @@ def _parse_movie(props: dict[str, Any]) -> Movie:
             return _deserialize(Movie, movie, airDateISO=movie["premiereDate"])
 
     raise ScrapeError(422, "Unable to extract movie information")
-
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class Movie:
-    id: str
-    title: str
-    description: str
-    airDateISO: str  # noqa: N815
 
 
 PtvStart = """
