@@ -75,6 +75,9 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
     ignore_history: bool = False
     "Download files even if the already are marked as downloaded on the database"
 
+    ignore_hashes: bool = False
+    "Download files even if their hash matches a file downloaded on the database"
+
     jdownloader: Jdownloader = Field(default_factory=Jdownloader)
     logs: Logs = Field(default_factory=Logs)
     max_children: MaxChildren = Field(default_factory=MaxChildren)

@@ -151,6 +151,22 @@ Set `true` will delete any `.part` and `.cdl_hls` files in the download folder a
 delete_partial_files: false
 ```
 
+# `ignore_hashes`
+
+| Type   | Default |
+| ------ | ------- |
+| `bool` | `false` |
+
+Download files even if their hash matches a file downloaded on the database.
+
+{% hint style="info" %}
+Not all file hosts provide hash information before download
+{% endhint %}
+
+```yaml
+ignore_hashes: false
+```
+
 # `ignore_history`
 
 | Type   | Default |

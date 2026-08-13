@@ -653,6 +653,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self: Crawler, url: AbsoluteHttpURL, hash_algo: Literal["md5", "sha256"], checksum: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
+        if self.config.ignore_hashes:
+            return False
 
         expected_len = 32 if hash_algo == "md5" else 64
         if len(checksum) != expected_len:
