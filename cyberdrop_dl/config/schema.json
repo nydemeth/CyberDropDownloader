@@ -1239,6 +1239,11 @@
       "title": "Ignore History",
       "type": "boolean"
     },
+    "ignore_hashes": {
+      "default": false,
+      "title": "Ignore Hashes",
+      "type": "boolean"
+    },
     "jdownloader": {
       "$ref": "#/$defs/Jdownloader"
     },

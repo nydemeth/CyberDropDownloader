@@ -115,6 +115,7 @@ hashing:
     enabled: true
     use_trash_bin: true
   mode: in_place
+ignore_hashes: false
 ignore_history: false
 jdownloader:
   autostart: false
