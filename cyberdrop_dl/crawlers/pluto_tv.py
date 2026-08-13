@@ -10,6 +10,7 @@ import yarl
 from cyberdrop_dl.cache import cached_method
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id, compose_ep_name
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import css, extr_text, next_js
 from cyberdrop_dl.utils.dataclass import Deserializer
@@ -33,6 +34,7 @@ class PlutoCrawler(Crawler):
             "<region>/shows/<show_slug>",
             "<region>/shows/<show_slug>/season/<season>",
         ),
+        "Movie": "/<region>/movies/<movie_slug>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://pluto.tv")
     DOMAIN: ClassVar[str] = "pluto.tv"
@@ -48,6 +50,8 @@ class PlutoCrawler(Crawler):
                 await self.show(scrape_item, show_id)
             case [*_, "shows", show_id, "season", season]:
                 await self.show(scrape_item, show_id, int(season))
+            case [*_, "movies", movie_id]:
+                await self.movie(scrape_item, movie_id)
             case _:
                 raise ValueError
 
@@ -90,17 +94,18 @@ class PlutoCrawler(Crawler):
         ep = props["episodeMetadata"]
         episode = _deserialize(Episode, ep, id=episode_id)
         scrape_item.setup_as_album(self.create_title(ep["seriesTitle"], series_id), album_id=series_id)
-        await self._episode(scrape_item, episode)
+        await self._media(scrape_item, episode)
 
-    async def _episode(self, scrape_item: ScrapeItem, ep: Episode) -> None:
-        scrape_item.uploaded_at = self.parse_iso_date(ep.airDateISO)
-        m3u8_url = await self.api.stream(ep.id)
+    async def _media(self, scrape_item: ScrapeItem, media: Episode | Movie) -> None:
+        scrape_item.uploaded_at = self.parse_iso_date(media.airDateISO)
+        m3u8_url = await self.api.stream(media.id)
         m3u8, info = await self.request_m3u8_playlist(m3u8_url, keep_query=True)
         _remove_ads_segments(m3u8)
+        name = compose_ep_name(media.season, media.number, media.title) if isinstance(media, Episode) else media.title
         filename = self.create_custom_filename(
-            compose_ep_name(ep.season, ep.number, ep.title),
+            name,
             ext := ".mp4",
-            file_id=ep.id,
+            file_id=media.id,
             resolution=info.resolution,
             video_codec=info.codecs.video or "avc1",
             audio_codec=info.codecs.audio,
@@ -109,14 +114,28 @@ class PlutoCrawler(Crawler):
         await self.handle_file(
             scrape_item.url,
             scrape_item,
-            ep.title,
+            media.title,
             ext,
             m3u8=m3u8,
             custom_filename=filename,
-            metadata=ep,
+            metadata=media,
         )
 
-    _episode_task = auto_task_id(error_handling_wrapper(_episode))
+    _episode_task = auto_task_id(error_handling_wrapper(_media))
+
+    @error_handling_wrapper
+    async def movie(self, scrape_item: ScrapeItem, movie_id: str) -> None:
+        if await self.check_complete(scrape_item.url):
+            return
+
+        async with self.request(scrape_item.url) as resp:
+            soup = await resp.soup()
+            scrape_item.url = resp.url
+
+        props = next_js.data(soup)["props"]["pageProps"]
+        movie = _parse_movie(props)
+        scrape_item.setup_as_album(self.create_title(movie.title, movie_id))
+        await self._media(scrape_item, movie)
 
 
 @HTTPConfig.default_headers(user_agent=FIREFOX)
@@ -170,9 +189,9 @@ class PlutoAPI(API):
         )
         return resp["data"]
 
-    async def stream(self, episode_id: str) -> AbsoluteHttpURL:
+    async def stream(self, media_id: str) -> AbsoluteHttpURL:
         session = await self.start()
-        url = self.M3U8 / episode_id / "master.m3u8"
+        url = self.M3U8 / media_id / "master.m3u8"
         return url.with_query(
             {
                 "advertisingId": "",
@@ -253,6 +272,25 @@ def _remove_ads_segments(rendition: Rendition) -> None:
 def _is_ad(uri: str) -> bool:
     path = yarl.URL(uri).path.casefold()
     return any(ad_name in path for ad_name in ("_ad%2f", "_ad/", "_ad_bumper", "plutotv_filler"))
+
+
+def _parse_movie(props: dict[str, Any]) -> Movie:
+    for query in props["dehydratedState"]["queries"]:
+        data = query.get("state", {}).get("data")
+        if not data or type(data) is not dict:
+            continue
+        if movie := data.get("movieDetail", {}).get("movie"):
+            return _deserialize(Movie, movie, airDateISO=movie["premiereDate"])
+
+    raise ScrapeError(422, "Unable to extract movie information")
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class Movie:
+    id: str
+    title: str
+    description: str
+    airDateISO: str  # noqa: N815
 
 
 PtvStart = """
