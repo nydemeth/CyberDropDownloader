@@ -176,6 +176,7 @@ class DownloadConfig(ConfigDataclass):
     slots: int | None = None
     server_lock: bool | None = None
     ignore_content_type: bool | None = None
+    impersonate: str | bool | None = None
 
 
 @URLConfig(trim=True, allow_empty_path=False, ignore_fragment=True)
@@ -517,6 +518,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         frag: str | None = None,
         thumbnail: AbsoluteHttpURL | None = None,
         headers: Mapping[str, str] | None = None,
+        uploaded_at: int | None = None,
     ) -> None:
         """Creates a MediaItem and hands it off to the downloader.
 
@@ -537,7 +539,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             ext=ext or Path(filename).suffix,
             original_filename=filename,
             parents=tuple(scrape_item.parents),
-            uploaded_at=scrape_item.uploaded_at,
+            uploaded_at=uploaded_at or scrape_item.uploaded_at,
             debrid_url=_prepare_debrid_url(debrid_link),
             json_check=self.__json_resp_check__,
         )
@@ -584,6 +586,9 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     async def _download(self, media_item: MediaItem, m3u8: m3u8.Rendition | None, *, skip: bool = False) -> None:
+        if self.__dl_config__.impersonate is not None:
+            media_item.extra_info["impersonate"] = self.__dl_config__.impersonate
+
         try:
             if skip or SKIP_DOWNLOAD.get():
                 return
@@ -991,6 +996,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 class API(HTTPMixin, ABC):
     PRIMARY_URL: AbsoluteHttpURL = AbsoluteHttpURL()
     # We inherit from ABC to force type checkers to recognize attributes defined in __post_init__ as if they were defined in __init__
+    #
+    log: _CrawlerLogger
 
     class Endpoint[T: API](ABC):  # noqa: B024
         def __init__(self, api: T) -> None:
@@ -1045,6 +1052,7 @@ class API(HTTPMixin, ABC):
         )
         self.PRIMARY_URL = crawler.PRIMARY_URL  # pyright: ignore[reportConstantRedefinition]
         self.parse_url = crawler.parse_url
+        self.log = crawler.log
         self.__http_config__ = config  # pyright: ignore[reportAttributeAccessIssue]
         return self
 
