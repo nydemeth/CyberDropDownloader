@@ -991,6 +991,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 class API(HTTPMixin, ABC):
     PRIMARY_URL: AbsoluteHttpURL = AbsoluteHttpURL()
     # We inherit from ABC to force type checkers to recognize attributes defined in __post_init__ as if they were defined in __init__
+    #
+    log: _CrawlerLogger
 
     class Endpoint[T: API](ABC):  # noqa: B024
         def __init__(self, api: T) -> None:
@@ -1045,6 +1047,7 @@ class API(HTTPMixin, ABC):
         )
         self.PRIMARY_URL = crawler.PRIMARY_URL  # pyright: ignore[reportConstantRedefinition]
         self.parse_url = crawler.parse_url
+        self.log = crawler.log
         self.__http_config__ = config  # pyright: ignore[reportAttributeAccessIssue]
         return self
 
