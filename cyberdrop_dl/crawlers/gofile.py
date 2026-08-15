@@ -177,7 +177,7 @@ class Folder(Node):
 class GoFileAPI(API):
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://api.gofile.io")
     BROWSER_LANG: ClassVar[str] = "en-US"
-    SALT: ClassVar[str] = env.GOFILE_SALT or "9844d94d963d30"
+    SALT: ClassVar[str] = env.GOFILE_SALT or "12af056dacea0b"
     key: str = ""
 
     @property
