@@ -516,7 +516,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         metadata: object = None,
         referer: AbsoluteHttpURL | None = None,
         frag: str | None = None,
-        thumbnail: AbsoluteHttpURL | None = None,
+        thumbnail: AbsoluteHttpURL | str | None = None,
         headers: Mapping[str, str] | None = None,
         uploaded_at: int | None = None,
     ) -> None:
@@ -527,6 +527,9 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         referer = referer or scrape_item.url
         if frag:
             referer = referer.with_fragment(f"{referer.fragment} - {frag}" if referer.fragment else frag)
+
+        if thumbnail is not None and type(thumbnail) is not AbsoluteHttpURL:
+            thumbnail = self.parse_url(thumbnail)
 
         media_item = MediaItem(
             url=url,
