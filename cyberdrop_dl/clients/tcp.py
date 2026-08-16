@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import logging
 import platform
 import ssl
@@ -8,7 +9,6 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 import wassima
-import wassima.utils
 
 from cyberdrop_dl.utils import TextExtractor
 
@@ -90,7 +90,7 @@ def resolve_tls_version(name: str) -> ssl.TLSVersion:
 def _list_pem_files(paths: Iterable[Path]) -> Generator[Path]:
     for path in paths:
         if path.is_dir():
-            yield from path.glob("*.pem")
+            yield from _list_pem_files(path.glob("*.pem"))
         elif path.suffix != ".pem":
             logger.warning("'%s' is not a valid PEM file, ignoring..", path)
             continue
@@ -98,19 +98,40 @@ def _list_pem_files(paths: Iterable[Path]) -> Generator[Path]:
             yield path
 
 
-def _register_pem_file(file: Path) -> Path:
+@functools.cache
+def root_der_certificates() -> set[bytes]:
+    return set(wassima.root_der_certificates())
+
+
+def _register_pem_file(file: Path) -> None:
     logger.debug("Loading CA certificates from '%s'", file)
+
+    try:
+        n_certs = _load_cert_chain(file)
+    except UntrustedCAError as e:
+        msg, n_certs = e.args
+        logger.warning(msg)
+
+    logger.debug("Loaded %s CA certificates from '%s'", n_certs, file)
+
+
+class UntrustedCAError(ValueError): ...
+
+
+def _load_cert_chain(file: Path) -> int:
     certs = tuple(_read_cert_chain(file))
     if not certs:
         raise ValueError(f"No valid certificates found in '{file}'")
 
-    for cert in certs:
+    trusted_cas = root_der_certificates()
+    for idx, cert in enumerate(certs):
+        if cert in trusted_cas:
+            return idx
         wassima.register_ca(cert)
 
-    logger.debug("Loaded %s CA certificates from '%s'", len(certs), file)
-    return file
+    raise UntrustedCAError(f"None of the certificates in the chain from '{file}' are trusted by the OS", len(certs))
 
 
 def _read_cert_chain(path: Path) -> Generator[bytes]:
-    for cert in TextExtractor(path.read_text().strip()).repeat(wassima.utils.PEM_HEADER, wassima.utils.PEM_FOOTER):
+    for cert in TextExtractor(path.read_text()).repeat(ssl.PEM_HEADER, ssl.PEM_FOOTER):
         yield base64.decodebytes(cert.encode("ascii", "strict"))
