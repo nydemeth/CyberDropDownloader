@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import hashlib
 import json
-from typing import TYPE_CHECKING, ClassVar, Self, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from cyberdrop_dl import multi_process
 from cyberdrop_dl.clients.http import HTTPConfig
@@ -12,11 +11,12 @@ from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, extr_text, parse_url
-from cyberdrop_dl.utils.dataclass import DictDataclass
+from cyberdrop_dl.utils import css, extr_text, open_graph, parse_url
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     import bs4
 
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -79,56 +79,41 @@ class FileditchCrawler(Crawler):
             raise ScrapeError(422)
 
         filename, ext = self.get_filename_and_ext(src.name)
-        await self.handle_file(src, scrape_item, filename, ext)
+        await self.handle_file(src, scrape_item, filename, ext, thumbnail=open_graph.get_image(soup))
 
-    async def _solve_pow(self, url: AbsoluteHttpURL, pow: ProofOfWork) -> int:  # noqa: A002
+    async def _solve_pow(self, url: AbsoluteHttpURL, pow: dict[str, str]) -> int:  # noqa: A002
+        challenge, diff = pow["pow_challenge"], int(pow["pow_diff"])
         try:
             async with self._startup_lock:
-                self.log.warning("Solving proof of work challenge for %s\n%s", url, dict(pow))
-                solution = await asyncio.to_thread(multi_process.race, _pow_worker, pow.pow_challenge, pow.pow_diff)
+                self.log.warning("Solving proof of work challenge for %s\n%s", url, pow)
+                solution = await asyncio.to_thread(multi_process.race, _pow_worker, challenge, diff)
 
         except TimeoutError:
-            msg = f"Unable to solve challenge {pow.pow_challenge} after {multi_process.TIMEOUT.get()} seconds"
+            msg = f"Unable to solve challenge {challenge} after {multi_process.TIMEOUT.get()} seconds"
             raise TimeoutError(msg) from None
 
-        self.log.debug("Solved pow %s after %s seconds", pow.pow_challenge, solution.elapsed)
+        self.log.debug("Solved pow %s after %s seconds", challenge, solution.elapsed)
         return solution.value
 
     async def request_pow_soup(self, url: AbsoluteHttpURL) -> bs4.BeautifulSoup:
         soup = await self.request_soup(url)
         if form := soup.select_one("form#pow-form"):
-            pow = ProofOfWork.parse(form)  # noqa: A001
+            pow = dict(_inputs(form))  # noqa: A001
             nonce = await self._solve_pow(url, pow)
             soup = await self.request_soup(
                 url,
                 "POST",
                 headers={"Referer": str(url), "Origin": "https://fileditchfiles.me"},
-                data=dict(pow) | {"pow_nonce": nonce},
+                data=pow | {"pow_nonce": nonce},
             )
             if soup.select_one("form#pow-form"):
                 raise ScrapeError(422, "Proof of work verification failed")
         return soup
 
 
-@dataclasses.dataclass(slots=True)
-class ProofOfWork(DictDataclass):
-    orig_ref: str
-    pow_challenge: str
-    pow_ts: int
-    pow_diff: int
-    pow_sig: str
-
-    def __post_init__(self) -> None:
-        self.pow_ts = int(self.pow_ts)
-        self.pow_diff = int(self.pow_diff)
-
-    @classmethod
-    def parse(cls, form: bs4.Tag) -> Self:
-        def inputs():
-            for field in css.iselect(form, "input[name]"):
-                yield css.attr(field, "name"), css.attr(field, "value")
-
-        return cls.from_dict(dict(inputs()))
+def _inputs(form: bs4.Tag) -> Generator[tuple[str, str]]:
+    for field in css.iselect(form, "input[name][value]"):
+        yield css.attr(field, "name"), css.attr(field, "value")
 
 
 def _pow_worker(worker_idx: int, _: int, challenge: str, difficulty: int) -> int:
