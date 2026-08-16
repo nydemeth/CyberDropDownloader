@@ -18,6 +18,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+class UntrustedCAError(ValueError): ...
+
+
 logger = logging.getLogger(__name__)
 
 _DNS_CLS: type[aiohttp.AsyncResolver | aiohttp.ThreadedResolver] | None = None
@@ -104,21 +107,24 @@ def root_der_certificates() -> set[bytes]:
 
 
 def _register_pem_file(file: Path) -> None:
-    logger.debug("Loading CA certificates from '%s'", file)
+    logger.debug("Loading certificates from '%s'", file)
 
-    try:
-        n_certs = _load_cert_chain(file)
-    except UntrustedCAError as e:
-        msg, n_certs = e.args
-        logger.warning(msg)
+    loaded, total = _load_cert_chain(file)
+    if loaded == total:
+        logger.warning("None of the certificates (%s) in the chain from '%s' are trusted by the OS", total, file)
+    else:
+        skipped = total - loaded
+        logger.debug(
+            "Loaded %s certificates from '%s'%s",
+            loaded,
+            file,
+            f" ({total - loaded} skipped as {'they were' if skipped > 1 else 'it was'} already trusted by the OS)"
+            if skipped
+            else "",
+        )
 
-    logger.debug("Loaded %s CA certificates from '%s'", n_certs, file)
 
-
-class UntrustedCAError(ValueError): ...
-
-
-def _load_cert_chain(file: Path) -> int:
+def _load_cert_chain(file: Path) -> tuple[int, int]:
     certs = tuple(_read_cert_chain(file))
     if not certs:
         raise ValueError(f"No valid certificates found in '{file}'")
@@ -126,10 +132,10 @@ def _load_cert_chain(file: Path) -> int:
     trusted_cas = root_der_certificates()
     for idx, cert in enumerate(certs):
         if cert in trusted_cas:
-            return idx
+            return idx, len(certs)
         wassima.register_ca(cert)
 
-    raise UntrustedCAError(f"None of the certificates in the chain from '{file}' are trusted by the OS", len(certs))
+    return len(certs), len(certs)
 
 
 def _read_cert_chain(path: Path) -> Generator[bytes]:
