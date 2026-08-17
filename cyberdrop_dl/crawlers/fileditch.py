@@ -11,7 +11,7 @@ from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, extr_text, open_graph, parse_url
+from cyberdrop_dl.utils import css, extr_text, parse_url
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ class FileditchCrawler(Crawler):
             raise ScrapeError(422)
 
         filename, ext = self.get_filename_and_ext(src.name)
-        await self.handle_file(src, scrape_item, filename, ext, thumbnail=open_graph.get_image(soup))
+        await self.handle_file(src, scrape_item, filename, ext, thumbnail=_extr_thumb(soup))
 
     async def _solve_pow(self, url: AbsoluteHttpURL, pow: dict[str, str]) -> int:  # noqa: A002
         challenge, diff = pow["pow_challenge"], int(pow["pow_diff"])
@@ -109,6 +109,13 @@ class FileditchCrawler(Crawler):
             if soup.select_one("form#pow-form"):
                 raise ScrapeError(422, "Proof of work verification failed")
         return soup
+
+
+def _extr_thumb(soup: bs4.Tag) -> str | None:
+    try:
+        return extr_text(css.select(soup, ".vposter[style]", "style"), "background-image:url(", ")").strip("'")
+    except (css.SelectorError, ValueError):
+        pass
 
 
 def _inputs(form: bs4.Tag) -> Generator[tuple[str, str]]:
