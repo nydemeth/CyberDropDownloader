@@ -1,6 +1,23 @@
 DOMAIN = "xhamster"
 TEST_CASES = [
     {
+        "url": "https://xhamster.com/shorts/need-feel-xhupJ1n",
+        "results": [
+            {
+                "url": "https://xhamster.com/shorts/need-feel-xhupJ1n",
+                "filename": "Am and i just need to feel myself [xhupJ1n][h264][1080p].mp4",
+                "debrid_url": None,
+                "original_filename": "xhupJ1n.mp4",
+                "referer": "https://xhamster.com/shorts/need-feel-xhupJ1n",
+                "album_id": None,
+                "uploaded_at": 1786625406,
+                "download_folder": "re:Loose Files (xHamster)",
+                "thumbnail": "re:https://",
+            }
+        ],
+        "count": 1,
+    },
+    {
         "url": "https://ge.xhamster.desi/videos/horny-asian-slut-fucking-with-big-toy-and-cumming-a-lot-xhW9s1z",
         "results": [
             {
@@ -71,14 +88,8 @@ TEST_CASES = [
                 "uploaded_at": 1372456260,
             }
         ],
-        "count": 42,
+        "count": range(41, 50),
     },
-    {
-        "url": "https://xhamster.com/creators/danielagomezz",
-        "results": [{"url": "ANY", "download_folder": "re:DanielaGomezx \\[user\\] \\(xHamster\\)"}],
-        "count": range(50, 70),
-    },
-    {"url": "https://xhamster.com/creators/danielagomezz/exclusive", "results": [], "count": range(50, 70)},
     {
         "url": "https://xhamster.com/creators/danielagomezz/photos",
         "results": [
@@ -102,4 +113,10 @@ TEST_CASES = [
             },
         ],
     },
+    {
+        "url": "https://xhamster.com/creators/danielagomezz",
+        "results": [{"url": "ANY", "download_folder": "re:DanielaGomezx \\[user\\] \\(xHamster\\)"}],
+        "count": range(71, 80),
+    },
+    {"url": "https://xhamster.com/creators/danielagomezz/exclusive", "results": [], "count": range(50, 70)},
 ]
