@@ -123,6 +123,7 @@ ignore_hashes: false
 ignore_history: false
 jdownloader:
   autostart: false
+  deprecated_api: null
   download_folder: null
   enabled: false
   whitelist: []

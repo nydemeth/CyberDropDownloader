@@ -611,6 +611,17 @@
           "title": "Enabled",
           "type": "boolean"
         },
+        "deprecated_api": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HttpURL"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "autostart": {
           "default": false,
           "title": "Autostart",
