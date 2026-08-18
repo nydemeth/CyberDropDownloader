@@ -2,10 +2,9 @@ auth:
   gofile:
     api_key: null
   jdownloader:
-    device: null
     device_name: null
+    email: null
     password: null
-    username: null
   mega_nz:
     email: null
     password: null
