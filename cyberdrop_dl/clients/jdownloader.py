@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class JDDeprecatedAPI:
+    host: str = ""
+    port: int = 3128
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class JDConfig:
     enabled: bool
     username: str | None
@@ -28,6 +34,7 @@ class JDConfig:
     download_dir: Path
     autostart: bool
     whitelist: tuple[str, ...]
+    deprecated_api: JDDeprecatedAPI | None = None
 
 
 @dataclasses.dataclass(slots=True)
@@ -41,6 +48,15 @@ class JDownloader:
     @classmethod
     def from_config(cls, config: Config, /) -> Self:
         download_dir = config.jdownloader.download_folder or config.download_folder
+        d_conf = (
+            JDDeprecatedAPI(
+                host=d_url.host,
+                port=d_url.explicit_port or 3128,
+            )
+            if (d_url := config.jdownloader.deprecated_api)
+            else None
+        )
+
         return cls(
             JDConfig(
                 enabled=config.jdownloader.enabled,
@@ -50,6 +66,7 @@ class JDownloader:
                 download_dir=download_dir.resolve(),
                 autostart=config.jdownloader.autostart,
                 whitelist=tuple(config.jdownloader.whitelist),
+                deprecated_api=d_conf,
             )
         )
 
@@ -81,14 +98,10 @@ class JDownloader:
         if not self._enabled or self._device is not None:
             return
 
-        if not all((self.config.username, self.config.password, self.config.device)):
-            raise JDownloaderError("JDownloader credentials were not provided")
-
         with self._wrap_errors():
             api = myjdapi.Myjdapi()
             api.set_app_key("CYBERDROP-DL")
-            _ = await asyncio.to_thread(api.connect, self.config.username, self.config.password)
-            self._device = api.get_device(self.config.device)
+            self._device = await _get_device(api, self.config)
 
     async def connect(self) -> None:
         try:
@@ -119,3 +132,15 @@ class JDownloader:
                     },
                 ],
             )
+
+
+async def _get_device(api: myjdapi.Myjdapi, config: JDConfig):
+    if config.deprecated_api:
+        await asyncio.to_thread(api.direct_connect, config.deprecated_api.host, config.deprecated_api.port)
+        return api.get_device()
+
+    if config.username and config.password and config.device:
+        await asyncio.to_thread(api.connect, config.username, config.password)
+        return api.get_device(config.device)
+
+    raise JDownloaderError("JDownloader credentials were not provided")

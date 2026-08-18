@@ -163,6 +163,9 @@ class Jdownloader(ConfigGroup, name=None):
     enabled: Annotated[bool, _alias("jdownloader")] = False
     "Send unsupported URLs to Jdownloader"
 
+    deprecated_api: HttpURL | None = None
+    "HTTP URL of a local JDownloader instance to connect to via their deprecated API (insecure, default port=3128)"
+
     autostart: bool = False
     "Immediately start downloads as soon as they are sent"
 
@@ -171,6 +174,12 @@ class Jdownloader(ConfigGroup, name=None):
 
     whitelist: set[NonEmptyStr] = Field(default_factory=set)
     "Only send unsupported URLs from these domains to Jdownloader. An empty list means 'send all URLs'"
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        super().model_post_init(context)
+        if self.deprecated_api and self.deprecated_api.scheme != "http":
+            raise ValueError("Deprecated API URL must have an 'http' scheme")
 
 
 class SortFormats(ConfigModel):
