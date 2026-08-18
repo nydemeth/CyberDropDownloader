@@ -46,8 +46,9 @@ class DirectConnection:
             headers={"User-Agent": CDL_USER_AGENT},
         ) as resp:
             data = await resp.json()
-            check_resp(data)
-            return data["data"]
+
+        check_resp(data)
+        return data["data"]
 
     async def jd_version(self) -> int:
         return await self.action("/jd/version")

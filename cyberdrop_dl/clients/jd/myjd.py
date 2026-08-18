@@ -8,13 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import __repo_url__
 from cyberdrop_dl.clients.jd import Params, check_resp, prepare_api_json
-from cyberdrop_dl.clients.jd.crypto import (
-    create_token,
-    decrypt,
-    encrypt,
-    sign_hmac_sha256,
-    update_token,
-)
+from cyberdrop_dl.clients.jd.crypto import compose_token, create_token, decrypt, encrypt, sign_hmac_sha256
 from cyberdrop_dl.clients.jd.types import AddLinksQuery, JDDevice, MyJDSession
 from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.signature import simple_repr
@@ -62,8 +56,8 @@ class MyJDAPI:
             device_secret=device_secret,
             token=s_token,
             regain_token=r_token,
-            server_encrypt_token=update_token(login_secret, s_token),
-            device_encrypt_token=update_token(device_secret, s_token),
+            server_encrypt_token=compose_token(login_secret, s_token),
+            device_encrypt_token=compose_token(device_secret, s_token),
         )
 
     async def list_devices(self) -> list[JDDevice]:
@@ -96,12 +90,13 @@ class MyJDAPI:
         async with self.client.raw_request(url, headers={"User-Agent": CDL_USER_AGENT}) as resp:
             resp.content_type = _AES_JSON
             content = await resp.text()
-            try:
-                return _decode_aes_json(content, token or self.session.server_encrypt_token)
-            except Exception:
-                if resp.status != 200:
-                    raise RuntimeError(content) from None
-                raise
+
+        try:
+            return _decode_aes_json(content, token or self.session.server_encrypt_token)
+        except Exception:
+            if resp.status != 200:
+                raise RuntimeError(content) from None
+            raise
 
     async def post(
         self,
@@ -119,16 +114,17 @@ class MyJDAPI:
             url,
             method="POST",
             headers={"Content-Type": _AES_JSON, "User-Agent": CDL_USER_AGENT},
-            data=encrypt(self.session.device_encrypt_token, _dump_aes_json(data)),
+            data=encrypt(_dump_aes_json(data), self.session.device_encrypt_token),
         ) as resp:
             resp.content_type = _AES_JSON
             content = await resp.text()
-            try:
-                return _decode_aes_json(content, self.session.device_encrypt_token)
-            except Exception:
-                if resp.status != 200:
-                    raise RuntimeError(content) from None
-                raise
+
+        try:
+            return _decode_aes_json(content, self.session.device_encrypt_token)
+        except Exception:
+            if resp.status != 200:
+                raise RuntimeError(content) from None
+            raise
 
 
 def _dump_aes_json(data: Any) -> bytes:
@@ -149,7 +145,7 @@ def _dump_params(params: Params) -> Generator[Any]:
 
 
 def _decode_aes_json(content: str, token: bytes) -> Any:
-    resp = decrypt(token, content)
+    resp = decrypt(content, token)
     data = json.loads(resp)
     check_resp(data)
     return data.get("data", data)
@@ -183,4 +179,4 @@ class MyJDConnection:
 
 def _sign_url(url: AbsoluteHttpURL, token: bytes, rid: int | None = None) -> AbsoluteHttpURL:
     url = url.update_query(rid=rid or time.time_ns())
-    return url.update_query(signature=sign_hmac_sha256(token, url.raw_path_qs))
+    return url.update_query(signature=sign_hmac_sha256(url.raw_path_qs, token))
