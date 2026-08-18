@@ -31,7 +31,7 @@ class CssAttributeSelector(NamedTuple):
 
 @dataclasses.dataclass(slots=True)
 class HTMLForm:
-    method: str
+    method: Literal["GET", "POST"]
     action: str
     inputs: dict[str, str | None]
 

@@ -83,8 +83,16 @@ class MusicInfo(DictDataclass):
 class TikTokCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "User": "/@<user>",
-        "Video": "/@<user>/video/<video_id>",
-        "Photo": "/@<user>/photo/<photo_id>",
+        "Video": (
+            "/@<user>/video/<video_id>",
+            "/@/video/<video_id>",
+            "/share/video/<video_id>",
+        ),
+        "Photo": (
+            "/@<user>/photo/<photo_id>",
+            "/@/photo/<photo_id>",
+            "/share/photo/<photo_id>",
+        ),
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "tiktok"
