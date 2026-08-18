@@ -598,6 +598,18 @@
           ],
           "default": null,
           "title": "Device"
+        },
+        "device_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Name"
         }
       },
       "title": "JDownloaderAuth",
