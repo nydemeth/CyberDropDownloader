@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import dataclasses
-import itertools
 import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any, ClassVar
-
-from yarl._query import get_str_query_from_sequence_iterable
 
 from cyberdrop_dl import __repo_url__
 from cyberdrop_dl.clients.jd import Params, check_resp, prepare_api_json
@@ -19,6 +16,8 @@ from cyberdrop_dl.clients.jd.crypto import (
     update_token,
 )
 from cyberdrop_dl.clients.jd.types import AddLinksQuery, JDDevice, MyJDSession
+from cyberdrop_dl.constants import CDL_USER_AGENT
+from cyberdrop_dl.signature import simple_repr
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 if TYPE_CHECKING:
@@ -33,9 +32,11 @@ _AES_JSON = "application/aesjson; charset=utf-8"
 
 @dataclasses.dataclass(slots=True)
 class MyJDAPI:
-    ENTRYPOINT: ClassVar[str] = "https://api.jdownloader.org"
+    ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://api.jdownloader.org")
     client: HTTPClient = dataclasses.field(repr=False)
-    _session: MyJDSession | None = dataclasses.field(init=False, default=None)
+    _session: MyJDSession | None = dataclasses.field(init=False, default=None, repr=False)
+
+    __repr__ = simple_repr("connected")
 
     @property
     def session(self) -> MyJDSession:
@@ -51,14 +52,10 @@ class MyJDAPI:
         login_secret = create_token(email, password, "server")
         device_secret = create_token(email, password, "device")
 
-        path = _sign_path_qs(
-            "/my/connect",
-            ("email", email),
-            ("appkey", __repo_url__),
-            token=login_secret,
-        )
+        url = (self.ENTRYPOINT / "my/connect").with_query(email=email, appkey=__repo_url__)
+        url = _sign_url(url, token=login_secret)
 
-        resp = await self.request(self._build_url(path), token=login_secret)
+        resp = await self.get(url, token=login_secret)
         s_token, r_token = resp["sessiontoken"], resp["regaintoken"]
         self._session = MyJDSession(
             login_secret=login_secret,
@@ -70,12 +67,9 @@ class MyJDAPI:
         )
 
     async def list_devices(self) -> list[JDDevice]:
-        path = _sign_path_qs(
-            "/my/listdevices",
-            ("sessiontoken", self.session.token),
-            token=self.session.server_encrypt_token,
-        )
-        resp = await self.request(self._build_url(path))
+        url = (self.ENTRYPOINT / "my/listdevices").with_query(sessiontoken=self.session.token)
+        url = _sign_url(url, token=self.session.server_encrypt_token)
+        resp = await self.get(url)
         return [JDDevice.from_dict(d) for d in resp["list"]]
 
     @staticmethod
@@ -98,20 +92,8 @@ class MyJDAPI:
 
         raise LookupError("Device not found")
 
-    async def get_device(
-        self,
-        *,
-        name: str | None = None,
-        id: str | None = None,  # noqa: A002
-    ) -> JDDevice:
-        if not (id or name):
-            raise ValueError("Either device id or device name are required")
-
-        devices = await self.list_devices()
-        return self.find_device(devices, id=id, name=name)
-
-    async def request(self, url: AbsoluteHttpURL, token: bytes | None = None) -> Any:
-        async with self.client.request(url) as resp:
+    async def get(self, url: AbsoluteHttpURL, token: bytes | None = None) -> Any:
+        async with self.client.raw_request(url, headers={"User-Agent": CDL_USER_AGENT}) as resp:
             resp.content_type = _AES_JSON
             content = await resp.text()
             try:
@@ -121,7 +103,7 @@ class MyJDAPI:
                     raise RuntimeError(content) from None
                 raise
 
-    async def request_json(
+    async def post(
         self,
         url: AbsoluteHttpURL,
         path: str,
@@ -133,9 +115,10 @@ class MyJDAPI:
             rid=time.time_ns(),
         )
 
-        async with self.client.request(
+        async with self.client.raw_request(
             url,
-            headers={"Content-Type": _AES_JSON},
+            method="POST",
+            headers={"Content-Type": _AES_JSON, "User-Agent": CDL_USER_AGENT},
             data=encrypt(self.session.device_encrypt_token, _dump_aes_json(data)),
         ) as resp:
             resp.content_type = _AES_JSON
@@ -146,9 +129,6 @@ class MyJDAPI:
                 if resp.status != 200:
                     raise RuntimeError(content) from None
                 raise
-
-    def _build_url(self, path: str, action: str | None = None) -> AbsoluteHttpURL:
-        return AbsoluteHttpURL(self.ENTRYPOINT + (action or "") + path)
 
 
 def _dump_aes_json(data: Any) -> bytes:
@@ -181,26 +161,26 @@ class MyJDConnection:
     device: JDDevice
 
     @property
-    def _action_path(self) -> str:
-        return "/t_" + self.api.session.token + "_" + self.device.id
+    def _device_path(self) -> str:
+        return "t_" + self.api.session.token + "_" + self.device.id
+
+    def _build_url(self, path: str) -> AbsoluteHttpURL:
+        return self.api.ENTRYPOINT / self._device_path / path.removeprefix("/")
 
     async def jd_version(self) -> int:
-        path = "/jd/version"
-        full_path = self.api._build_url(self._action_path + path)
-        return await self.api.request(full_path, self.api.session.device_encrypt_token)
+        return await self.api.get(
+            self._build_url("/jd/version"),
+            token=self.api.session.device_encrypt_token,
+        )
 
     async def action(self, path: str, params: Params | None = None) -> dict[str, Any]:
-        full_path = self.api._build_url(self._action_path + path)
-        return await self.api.request_json(full_path, path=path, params=params)
+        return await self.api.post(self._build_url(path), path=path, params=params)
 
     async def add_links(self, query: AddLinksQuery) -> int:
         resp = await self.action("/linkgrabberv2/addLinks", params=[dict(query)])
         return resp["id"]
 
 
-def _sign_path_qs(path: str, *params: tuple[str, str | int], token: bytes) -> str:
-    items = itertools.chain(params, [("rid", time.time_ns())])
-    query = get_str_query_from_sequence_iterable(items)
-    url = f"{path}?{query}"
-    signature = sign_hmac_sha256(token, url)
-    return f"{url}&signature={signature}"
+def _sign_url(url: AbsoluteHttpURL, token: bytes, rid: int | None = None) -> AbsoluteHttpURL:
+    url = url.update_query(rid=rid or time.time_ns())
+    return url.update_query(signature=sign_hmac_sha256(token, url.raw_path_qs))

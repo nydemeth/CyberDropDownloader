@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl.clients.jd import Params, check_resp, prepare_api_json
 from cyberdrop_dl.clients.jd.types import AddLinksQuery, JDDevice
+from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 if TYPE_CHECKING:
@@ -28,23 +29,25 @@ class DirectConnection:
         ),
     )
 
-    async def action(self, path: str, params: Params | None = None) -> dict[str, Any]:
-        url = self.entrypoint / path.removeprefix("/")
-        return await self.request_json(url, json=params)
+    def _build_url(self, path: str) -> AbsoluteHttpURL:
+        return self.entrypoint / path.removeprefix("/")
+
+    async def action(self, path: str, params: Params | None = None) -> Any:
+        return await self.request_json(self._build_url(path), params=params)
 
     async def add_links(self, query: AddLinksQuery) -> int:
         resp = await self.action("/linkgrabberv2/addLinks", params=[dict(query)])
         return resp["id"]
 
-    async def request_json(self, url: AbsoluteHttpURL, json: Params | None = None) -> Any:
-        async with self.client.request(
+    async def request_json(self, url: AbsoluteHttpURL, params: Params | None = None) -> Any:
+        async with self.client.raw_request(
             url,
-            json=prepare_api_json(url.path, json, rid=time.time_ns()) if json is not None else None,
+            json=prepare_api_json(url.path, params, rid=time.time_ns()) if params is not None else None,
+            headers={"User-Agent": CDL_USER_AGENT},
         ) as resp:
             data = await resp.json()
             check_resp(data)
             return data["data"]
 
     async def jd_version(self) -> int:
-        url = self.entrypoint / "jd/version"
-        return await self.request_json(url)
+        return await self.action("/jd/version")

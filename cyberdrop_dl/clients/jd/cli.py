@@ -62,7 +62,7 @@ async def add_links(
 
 @myjd.command(name="connect")
 async def myjd_connect(auth: MyJDAuth) -> None:
-    jd = JDownloader(JDConfig(username=auth.username, password=auth.password, device_name=auth.device_name))
+    jd = JDownloader(JDConfig(email=auth.username, password=auth.password, device_name=auth.device_name))
 
     app.console.print(jd.config)
     async with _http_client() as http:
@@ -75,7 +75,7 @@ async def myjd_add_links(link: str, auth: MyJDAuth) -> None:
     "Add a new link to JD"
     jd = JDownloader(
         JDConfig(
-            username=auth.username,
+            email=auth.username,
             password=auth.password,
             device_name=auth.device_name,
         )

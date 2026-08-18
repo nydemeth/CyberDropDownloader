@@ -49,10 +49,9 @@ class EmailAuth(CensoredModel):
 
 
 class JDownloaderAuth(CensoredModel):
-    username: str | None = None
+    email: str | None = Field(validation_alias="username", default=None)
     password: str | None = None
-    device: str | None = None
-    device_name: str | None = None
+    device_name: str | None = Field(validation_alias="device", default=None)
 
 
 class Notifications(CensoredModel):
