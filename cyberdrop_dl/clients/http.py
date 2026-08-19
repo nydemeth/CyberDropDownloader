@@ -6,7 +6,6 @@ import dataclasses
 import http.cookies
 import logging
 import time
-import warnings
 from contextvars import ContextVar
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, Unpack, final, override
@@ -15,7 +14,7 @@ import aiohttp
 from aiohttp import hdrs
 
 from cyberdrop_dl import aio, cookies, ddos_guard
-from cyberdrop_dl.clients import flaresolverr, tcp, wreq
+from cyberdrop_dl.clients import curl_cffi, flaresolverr, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
@@ -32,7 +31,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
-    from cyberdrop_dl.clients.wreq import WreqClient
+    from cyberdrop_dl.clients.wreq import WreqClient  # pyright: ignore[reportPrivateLocalImportUsage]
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -191,7 +190,7 @@ class HTTPClient:
             await self._session.close()
 
     def _create_curl_session(self) -> AsyncSession[CurlResponse]:
-        session = _create_curl_session(self.config)
+        session = curl_cffi.create_session(self.config)
         session.cookies = {cookie.key: cookie.value for cookie in self.cookies}
         return session
 
@@ -307,7 +306,7 @@ class HTTPClient:
                     headers=request.headers,
                     json=request.json,
                     data=request.data,
-                    impersonate=request.impersonate,
+                    impersonate=curl_cffi.cast_impersonation(request.impersonate),
                     **request.params,
                 )
             ) as curl_resp:
@@ -455,28 +454,6 @@ class HTTPControllerProxy[T: HTTPMixin]:
         self.text = http.request_text
         self.redirect = http.request_redirect
         self.location = http.request_location
-
-
-def _create_curl_session(config: Config) -> AsyncSession[CurlResponse]:
-    from curl_cffi.aio import AsyncCurl
-    from curl_cffi.requests import AsyncSession
-    from curl_cffi.utils import CurlCffiWarning
-
-    loop = asyncio.get_running_loop()
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=CurlCffiWarning)
-        acurl = AsyncCurl(loop=loop)
-
-    return AsyncSession(
-        loop=loop,
-        async_curl=acurl,
-        impersonate="chrome",
-        verify=config.network.tls.verify,
-        proxy=str(proxy) if (proxy := config.network.proxy) else None,
-        timeout=config.network.curl_timeout,
-        max_redirects=8,
-    )
 
 
 @final

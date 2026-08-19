@@ -360,12 +360,6 @@ class Network(ConfigGroup):
     impersonate: FalsyAsNone[ImpersonateTarget] = None
     "Use this target as impersonation for all scrape requests"
 
-    @property
-    def curl_timeout(self) -> float | tuple[float, float]:
-        if self.read_timeout is None:
-            return self.connection_timeout
-        return self.connection_timeout, self.read_timeout
-
 
 class UIMode(CIStrEnum):
     DISABLED = auto()
