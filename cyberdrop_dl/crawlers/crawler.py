@@ -241,7 +241,12 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             _slots=self.__dl_config__.slots,
         )
 
-        self.__http_ctx__ = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
+        self.__http_ctx__: HTTPContext = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
+        try:
+            self.__http_ctx__.headers.setdefault("Referer", str(self.PRIMARY_URL))
+        except AttributeError:
+            pass
+
         self._task_mngr: Final = task_mng
         self.tui: Final = tui
 
