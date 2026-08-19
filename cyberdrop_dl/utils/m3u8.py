@@ -14,6 +14,7 @@ from cyberdrop_dl.exceptions import DownloadError
 from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.signature import simple_repr
 from cyberdrop_dl.utils import parse_url
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
@@ -109,6 +110,7 @@ class StreamInfo:
     req_video_layout: str | None
 
     __str__ = m3u8.model.StreamInfo.__str__
+    __iter__ = DictDataclass.__iter__
 
 
 @dataclasses.dataclass(frozen=True, slots=True, order=True)
@@ -120,7 +122,7 @@ class RenditionDetails:
     urls: MediaURLs
 
     def __json__(self) -> dict[str, Any]:
-        return {"stream": dataclasses.asdict(self.stream_info), "urls": self.urls._asdict()}
+        return {"stream": dict(self.stream_info), "urls": self.urls._asdict()}
 
     @staticmethod
     def new(playlist: Playlist) -> RenditionDetails:

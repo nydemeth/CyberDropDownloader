@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Final
 import psutil
 
 from cyberdrop_dl.models.validators import bytesize_to_str
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -34,8 +35,10 @@ class DiskPartition:
     fstype: str = dataclasses.field(compare=False)
     opts: str = dataclasses.field(compare=False)
 
+    __iter__ = DictDataclass.__iter__
+
     def __json__(self) -> dict[str, str]:
-        return {k: str(v) for k, v in dataclasses.asdict(self).items()}
+        return {k: str(v) for k, v in self}
 
 
 class _Stats:

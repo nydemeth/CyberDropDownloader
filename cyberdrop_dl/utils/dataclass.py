@@ -67,7 +67,7 @@ deserialize = Deserializer()
 
 
 class DictDataclass(_DataClass, Protocol):
-    def __iter__[T](self) -> Iterator[tuple[str, T]]:
+    def __iter__(self) -> Iterator[tuple[str, Any]]:
         for field_name in fields_names(type(self)):
             yield field_name, getattr(self, field_name)
 
