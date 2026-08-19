@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import http.cookies
 import logging
 import time
 import warnings
@@ -14,7 +15,7 @@ import aiohttp
 from aiohttp import hdrs
 
 from cyberdrop_dl import aio, cookies, ddos_guard
-from cyberdrop_dl.clients import flaresolverr, tcp
+from cyberdrop_dl.clients import flaresolverr, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
+    from cyberdrop_dl.clients.wreq import WreqClient
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -98,6 +100,7 @@ class HTTPClient:
         self._cookies: aiohttp.CookieJar | None = None
         self._flaresolverr: flaresolverr.Client | None = None
         self._curl_session: AsyncSession[CurlResponse] | None = None
+        self._wreq_session: WreqClient | None = None
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
 
@@ -117,6 +120,16 @@ class HTTPClient:
         if self._curl_session is None:
             self._curl_session = self._create_curl_session()
         return self._curl_session
+
+    @property
+    def wreq_session(self) -> WreqClient:
+        if self._wreq_session is None:
+            self._wreq_session = wreq.create_client(self.config)
+            jar = self._wreq_session.cookie_jar
+            assert jar is not None
+            for (domain, path), cookie in self.cookies.cookies.items():
+                jar.add(cookie.output(), f"https://{domain}{path}")
+        return self._wreq_session
 
     @property
     def cookies(self) -> aiohttp.CookieJar:
@@ -146,6 +159,17 @@ class HTTPClient:
             simple_cookie = make_simple_cookie(cookie, now)
             self.cookies.update_cookies(simple_cookie, url)
 
+    def __sync_wreq_cookies(self, url: AbsoluteHttpURL) -> None:
+        now = time.time()
+        jar = self.wreq_session.cookie_jar
+        assert jar is not None
+        for cookie in jar.get_all():
+            try:
+                simple_cookie = wreq.make_simple_cookie(cookie, now)
+            except (http.cookies.CookieError, ValueError):
+                continue
+            self.cookies.update_cookies(simple_cookie, url)
+
     async def __aenter__(self) -> Self:
         await tcp.choose_dns_resolver()
         self._session = self.create_aiohttp_session()
@@ -157,6 +181,9 @@ class HTTPClient:
             tg.create_task(self._download_session.close())
             if self._curl_session is not None:
                 tg.create_task(self._curl_session.close())
+
+            if self._wreq_session is not None:
+                self._wreq_session.close()
 
             if self._flaresolverr is not None:
                 # close before closing aiohttp session
@@ -256,6 +283,22 @@ class HTTPClient:
     @contextlib.asynccontextmanager
     async def __request(self, request: Request) -> AsyncGenerator[AbstractResponse[Any]]:
         if request.impersonate:
+            if wreq.IS_INSTALLED:
+                resp = await self.wreq_session.request(
+                    wreq.cast_method(request.method),
+                    str(request.url),
+                    headers=dict(request.headers),
+                    json=request.json,
+                    body=request.data,
+                    emulation=wreq.cast_impersonate(request.impersonate),  # pyright: ignore[reportArgumentType]
+                    **request.params,
+                )
+                async with resp:
+                    resp = AbstractResponse.create(resp)
+                    self.__sync_wreq_cookies(resp.url)
+                    yield resp
+                    return
+
             async with contextlib.aclosing(
                 await self.curl_session.request(
                     request.method,
@@ -268,8 +311,8 @@ class HTTPClient:
                     **request.params,
                 )
             ) as curl_resp:
-                yield AbstractResponse.create(curl_resp)
                 self.__sync_session_cookies(request.url)
+                yield AbstractResponse.create(curl_resp)
 
             return
 
