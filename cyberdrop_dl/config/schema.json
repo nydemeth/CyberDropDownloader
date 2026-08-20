@@ -424,6 +424,10 @@
           "$ref": "#/$defs/FalsyAsNone_Pattern_str__",
           "default": null
         },
+        "filename_regex_exclude": {
+          "$ref": "#/$defs/FalsyAsNone_Pattern_str__",
+          "default": null
+        },
         "only_hosts": {
           "items": {
             "$ref": "#/$defs/NonEmptyStr"

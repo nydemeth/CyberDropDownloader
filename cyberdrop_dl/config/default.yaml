@@ -89,6 +89,7 @@ filters:
       max: null
       min: null
   filename_regex: null
+  filename_regex_exclude: null
   files:
     audio: true
     images: true

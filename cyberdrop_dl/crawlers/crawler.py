@@ -1166,7 +1166,15 @@ def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
 
     if (regex := filters.filename_regex) and not regex.search(media_item.filename):
         logger.info(
-            "Download skipped %s due to filename regex filter. Filename '%s' does not match config regex",
+            "Download skipped %s due to filename regex filter. Filename '%s' does not match regex",
+            media_item.url,
+            media_item.filename,
+        )
+        return True
+
+    if (regex := filters.filename_regex_exclude) and regex.search(media_item.filename):
+        logger.info(
+            "Download skipped %s due to filename regex exclude filter. Filename '%s' matched config regex",
             media_item.url,
             media_item.filename,
         )
