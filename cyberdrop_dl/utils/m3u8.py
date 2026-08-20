@@ -212,7 +212,7 @@ def _validate_keys(stream: M3U8) -> None:
         if not key.iv or not key.uri:
             raise DownloadError(
                 "Encrypted",
-                f"M3U8 playlist {stream.source} is encrypted but we have to IV to decrypted it: \n{key!s}",
+                f"M3U8 playlist {stream.source} is encrypted but we have no IV to decrypted it: \n{key!s}",
             )
 
 

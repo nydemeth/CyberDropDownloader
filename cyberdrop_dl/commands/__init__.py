@@ -1,9 +1,12 @@
 import dataclasses
+import logging
 from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import Annotated, Any
 
 from cyclopts import Parameter, Token, validators
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_path(type_: type[Path], tokens: Sequence[Token]) -> Path:
@@ -51,4 +54,5 @@ def open_folder(folder: Path) -> None:
 
     import webbrowser
 
-    webbrowser.open_new(str(folder))
+    if not webbrowser.open_new(str(folder)):
+        logger.error("Unable to open '%s' with any file browser", folder)
