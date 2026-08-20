@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Log HTTP requests made to JDownloader
+- If scraping has already started, sending `SIGINT` (`Ctrl + C`) to the process will stop all scraping but will continue with post-runtime actions
+  (sorting, hashing, send notifications, etc..). Press `Ctrl + C` again to force quit
 
 ## [10.5.0] - 2026-08-15
 

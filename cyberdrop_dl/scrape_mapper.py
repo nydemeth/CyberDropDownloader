@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import logging
@@ -174,7 +175,7 @@ class ScrapeMapper:
         await self.manager.http_client.load_cookie_files(await self.manager.get_cookie_files())
         self.tui.mode = self.manager.config.ui.mode
         ## IMPORTANT: Order of each context matters!
-        with self.tui():
+        with self.__cancel_context():
             async with (
                 self.manager.http_client,
                 storage.monitor(config.min_free_space),
@@ -184,6 +185,21 @@ class ScrapeMapper:
             ):
                 self.manager.scrape_mapper = self
                 yield self
+
+    @contextlib.contextmanager
+    def __cancel_context(self) -> Generator[None]:
+        try:
+            with self.tui():
+                yield
+        except asyncio.CancelledError as e:
+            # This is a KeyboardInterrupt cause we never cancel tasks
+            try:
+                _ = self.manager.scrape_mapper
+            except AttributeError:
+                # self.__call__ did not get a change to finish setup
+                raise e from None
+            else:
+                logger.warning("Scraping aborted (KeyboardInterrupt)")
 
     async def __async_init__(self) -> None:
         if self._ready:
