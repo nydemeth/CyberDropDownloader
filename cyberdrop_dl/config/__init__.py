@@ -128,6 +128,10 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
         file.write_text(self.dump_yaml(), encoding="utf8")
 
     @staticmethod
+    def load(data: dict[str, Any]) -> Config:
+        return Config.model_validate(data, by_alias=True, by_name=True)
+
+    @staticmethod
     def from_file(file: Path) -> Config:
         return Config.from_files(file, file.with_suffix(f".override{file.suffix}"))
 
@@ -147,7 +151,8 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
                     sources.append(override)
                     data = merge_dicts(data, _load_yaml(override))
 
-        config = Config.model_validate(data)
+        logger.info(data)
+        config = Config.load(data)
         config._sources = tuple(sources)
         return config
 
