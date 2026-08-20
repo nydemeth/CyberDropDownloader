@@ -48,6 +48,7 @@ async def _scrape(manager: Manager, source: URLsSource | RetryScrapeSource) -> N
         logger.info("Starting CDL...")
         async with ScrapeMapper(manager)() as scrape_mapper:
             stats = await scrape_mapper.run(source)
+            scrape_mapper.shutdown()
 
         await _post_runtime(manager)
         stats_summary = manager.print_stats(stats)

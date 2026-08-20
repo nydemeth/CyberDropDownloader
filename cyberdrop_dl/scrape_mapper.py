@@ -110,6 +110,11 @@ class ScrapeMapper:
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set, repr=False)
     _factory: CrawlerFactory = dataclasses.field(init=False)
     _ready: bool = dataclasses.field(init=False, default=False)
+    _shutting_down: bool = dataclasses.field(init=False, default=False)
+
+    def shutdown(self) -> None:
+        "Shutdown the scrape queue and setup handling of KeyboardInterrupt"
+        self._shutting_down = True
 
     def __repr__(self) -> str:
         fields = (
@@ -191,15 +196,12 @@ class ScrapeMapper:
         try:
             with self.tui():
                 yield
-        except asyncio.CancelledError as e:
+        except asyncio.CancelledError:
             # This is a KeyboardInterrupt cause we never cancel tasks
-            try:
-                _ = self.manager.scrape_mapper
-            except AttributeError:
-                # self.__call__ did not get a change to finish setup
-                raise e from None
-            else:
-                logger.warning("Scraping aborted (KeyboardInterrupt)")
+            if not self._shutting_down:
+                raise
+
+            logger.warning("Scraping aborted ('Ctrl + C' pressed)")
 
     async def __async_init__(self) -> None:
         if self._ready:
@@ -222,6 +224,9 @@ class ScrapeMapper:
         )
 
     async def run(self, src: URLsSource | RetryScrapeSource | None = None) -> ScrapeStats:
+        if self._shutting_down:
+            raise RuntimeError("Scraper is already shutting down")
+
         await self.__async_init__()
         if src is None:
             return ScrapeStats("")
