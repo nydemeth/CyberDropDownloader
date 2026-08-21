@@ -45,13 +45,13 @@ logs:
 
 | Type   | Default |
 | ------ | ------- |
-| `bool` | `false` |
+| `bool` | `true`  |
 
 Log HTTP requests and responses (at INFO level)
 
 ```yaml
 logs:
-  http_traffic: false
+  http_traffic: true
 ```
 
 # `expire_after`

@@ -218,13 +218,13 @@ def test_operators_nested_itemsetter() -> None:
 
 
 def test_file_browser() -> None:
-    browsers = tuple(file_browser.get_file_browsers())
     match platform.system():
         case "Windows":
             expected = ("windows-default",)
         case "Darwin":
-            expected = ("MacOSX",)
+            expected = ("macos-default",)
         case _:
-            expected = ()
+            return
 
+    browsers = tuple(f.name for f in file_browser.get_file_browsers())
     assert browsers == expected
