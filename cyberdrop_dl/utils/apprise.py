@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.constants import MAIN_LOG_FILE
-from cyberdrop_dl.logs import borrow_logger, export_logs, log_spacer
+from cyberdrop_dl.logs import MAX_ATTACHMENT_SIZE, borrow_logger, export_logs, log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence
@@ -82,7 +82,7 @@ async def _temp_copy_of_main_log() -> AsyncGenerator[Path | None]:
     async with aio.temp_dir() as temp_dir:
         temp_file = temp_dir / MAIN_LOG_FILE.get().name
         try:
-            logs = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
+            logs = await asyncio.to_thread(export_logs, size_limit=MAX_ATTACHMENT_SIZE)
         except Exception:
             logger.exception("Unable to attach main log for apprise notifications")
             yield

@@ -44,6 +44,7 @@ _DEFAULT_CONSOLE_WIDTH = 240
 _MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOG_LISTENER")
 _CONSOLE_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_CONSOLE_LOG_LISTENER")
 _LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
+MAX_ATTACHMENT_SIZE = 20 * 1e6
 
 
 class HandlerName(StrEnum):
