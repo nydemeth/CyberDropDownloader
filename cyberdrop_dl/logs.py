@@ -44,6 +44,7 @@ _DEFAULT_CONSOLE_WIDTH = 240
 _MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOG_LISTENER")
 _CONSOLE_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_CONSOLE_LOG_LISTENER")
 _LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
+LOG_HTTP_TRAFFIC: ContextVar[bool] = ContextVar("LOG_HTTP_TRAFFIC", default=True)
 MAX_ATTACHMENT_SIZE = 20 * 1e6
 
 
@@ -335,10 +336,17 @@ def setup_console_logging() -> Generator[None]:
 
 
 @contextlib.contextmanager
-def setup_file_logging(file: Path, /, *, level: int = logging.DEBUG) -> Generator[None]:
+def setup_file_logging(
+    file: Path,
+    /,
+    *,
+    level: int = logging.DEBUG,
+    log_http_traffic: bool = True,
+) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
     import mega
 
+    LOG_HTTP_TRAFFIC.set(log_http_traffic)
     if "pytest" not in sys.modules:
         logging.captureWarnings(capture=True)
 
@@ -346,7 +354,7 @@ def setup_file_logging(file: Path, /, *, level: int = logging.DEBUG) -> Generato
         _setup_debug_logger() as debug_log_file,
         file.open("w", encoding="utf8") as fp,
         enter_context(MAIN_LOG_FILE, file),
-        enter_context(mega.LOG_HTTP_TRAFFIC, True),
+        enter_context(mega.LOG_HTTP_TRAFFIC, log_http_traffic),
         enter_context(mega.LOG_FILE_PROGRESS, False),
         _threaded_logger(
             log_handler=LogHandler(

@@ -30,7 +30,11 @@ if TYPE_CHECKING:
 def scrape(manager: Manager, source: URLsSource | RetryScrapeSource) -> None:
     from cyberdrop_dl import aio
 
-    with setup_file_logging(manager.config.logs.files.main, level=manager.config.logs.effective_level):
+    with setup_file_logging(
+        manager.config.logs.files.main,
+        level=manager.config.logs.effective_level,
+        log_http_traffic=manager.config.logs.http_traffic,
+    ):
         aio.run(_scrape(manager, source))
 
 

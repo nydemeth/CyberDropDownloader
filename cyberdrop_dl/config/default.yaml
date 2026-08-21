@@ -138,6 +138,7 @@ logs:
     scrape_errors: scrape_errors.csv
     unsupported: unsupported.csv
   folder: null
+  http_traffic: true
   level: DEBUG
   rotate: false
 max_children:

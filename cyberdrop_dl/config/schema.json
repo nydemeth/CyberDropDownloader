@@ -729,6 +729,11 @@
           "$ref": "#/$defs/FalsyAsNone_LogLevel_",
           "default": null
         },
+        "http_traffic": {
+          "default": true,
+          "title": "Http Traffic",
+          "type": "boolean"
+        },
         "files": {
           "$ref": "#/$defs/LogFiles"
         },

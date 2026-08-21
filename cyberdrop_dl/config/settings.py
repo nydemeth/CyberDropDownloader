@@ -90,6 +90,9 @@ class Logs(ConfigGroup, name=None):  # noqa: PLW1641
     console_level: FalsyAsNone[LogLevel] = None
     "Only log messages of this level or higher to the console. An empty or `None` value will use the same level as `log_level`"
 
+    http_traffic: Annotated[bool, Parameter(alias="--print-traffic")] = True
+    "Log HTTP requests and responses (at INFO level)"
+
     files: LogFiles = Field(default_factory=LogFiles)
     folder: FalsyAsNone[Path] = None
     "Base folder to prepend to log files paths (if they are not absolute)"

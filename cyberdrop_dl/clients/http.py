@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import dataclasses
 import http.cookies
-import logging
 import time
 from contextvars import ContextVar
 from http import HTTPStatus
@@ -14,7 +13,7 @@ import aiohttp
 from aiohttp import hdrs
 
 from cyberdrop_dl import aio, cookies, ddos_guard
-from cyberdrop_dl.clients import curl_cffi, flaresolverr, tcp, wreq
+from cyberdrop_dl.clients import curl_cffi, flaresolverr, get_logger, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
@@ -44,7 +43,7 @@ type JSONCheck = Callable[[Any, AbstractResponse[Any]], None]
 
 JSON_CHECK: ContextVar[JSONCheck | None] = ContextVar("JSON_CHECK", default=None)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _LazyResponseLog:
@@ -256,11 +255,11 @@ class HTTPClient:
 
     @contextlib.asynccontextmanager
     async def _request(self, request: Request) -> AsyncGenerator[AbstractResponse[Any]]:
-        logger.debug("Starting %s request [id=%s]\n%s", request.method, request.id, request)
+        logger.traffic("Starting %s request [id=%s]\n%s", request.method, request.id, request)
         exc = None
         async with self.__request(request) as resp:
             resp.id = request.id
-            logger.debug("Finished %s request [id=%s]\n%s", request.method, request.id, _LazyResponseLog(resp))
+            logger.traffic("Finished %s request [id=%s]\n%s", request.method, request.id, _LazyResponseLog(resp))
             try:
                 yield resp
             except Exception as e:
@@ -268,7 +267,7 @@ class HTTPClient:
                 raise
             finally:
                 if resp.has_content_not_logged:
-                    logger.debug(
+                    logger.traffic(
                         "Content from %s request [id=%s]\n%s",
                         request.method,
                         request.id,
