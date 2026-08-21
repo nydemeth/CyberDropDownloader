@@ -10,7 +10,7 @@ import pytest
 from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
 from cyberdrop_dl.filepath import get_filename_and_ext
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import operators, text_editor
+from cyberdrop_dl.utils import file_browser, operators, text_editor
 from cyberdrop_dl.utils._url import fix_multi_slashes, parse_http_url
 
 
@@ -215,3 +215,16 @@ def test_operators_nested_itemsetter() -> None:
     update(data, 2)
 
     assert data == {"a": {"b": 2}}
+
+
+def test_file_browser() -> None:
+    browsers = tuple(file_browser.get_file_browsers())
+    match platform.system():
+        case "Windows":
+            expected = ("windows-default",)
+        case "Darwin":
+            expected = ("MacOSX",)
+        case _:
+            expected = ()
+
+    assert browsers == expected
