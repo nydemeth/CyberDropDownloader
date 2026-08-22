@@ -18,6 +18,7 @@ from cyberdrop_dl import aio, env
 from cyberdrop_dl.cache import TTLCacheAdapter
 from cyberdrop_dl.clients.downloads import IGNORE_CONTENT_TYPE
 from cyberdrop_dl.clients.http import HTTPClient, HTTPConfig, HTTPContext, HTTPMixin
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, SKIP_DOWNLOAD, Registry
 from cyberdrop_dl.crawlers._hls import HLSMixin
 from cyberdrop_dl.downloader.http import Downloader
@@ -533,9 +534,6 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if frag:
             referer = referer.with_fragment(f"{referer.fragment} - {frag}" if referer.fragment else frag)
 
-        if thumbnail is not None and type(thumbnail) is not AbsoluteHttpURL:
-            thumbnail = self.parse_url(thumbnail)
-
         media_item = MediaItem(
             url=url,
             domain=self.DOMAIN,
@@ -551,6 +549,12 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             debrid_url=_prepare_debrid_url(debrid_link),
             json_check=self.__json_resp_check__,
         )
+
+        if media_item.ext not in FileExt.MEDIA:
+            thumbnail = None
+
+        elif thumbnail is not None and type(thumbnail) is not AbsoluteHttpURL:
+            thumbnail = self.parse_url(thumbnail)
 
         media_item.thumbnail = thumbnail
         media_item.headers.update(self._prepare_headers(scrape_item))
