@@ -1,9 +1,12 @@
 import dataclasses
+import logging
 from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import Annotated, Any
 
 from cyclopts import Parameter, Token, validators
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_path(type_: type[Path], tokens: Sequence[Token]) -> Path:
@@ -49,6 +52,6 @@ def open_folder(folder: Path) -> None:
 
         folder.mkdir(parents=True)
 
-    import webbrowser
+    from cyberdrop_dl.utils import file_browser
 
-    webbrowser.open_new(str(folder))
+    file_browser.open_folder(folder)

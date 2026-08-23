@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import dataclasses
 import itertools
-import logging
 import time
 from enum import StrEnum
 from http.cookies import SimpleCookie
@@ -14,6 +13,7 @@ import aiohttp
 from multidict import CIMultiDict, CIMultiDictProxy
 
 from cyberdrop_dl import ddos_guard
+from cyberdrop_dl.clients import get_logger
 from cyberdrop_dl.exceptions import DDOSGuardError, FlaresolverrError
 from cyberdrop_dl.progress.scraping import show_msg
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Command(StrEnum):
@@ -197,14 +197,14 @@ class Client:
                 else f"Waiting for Flaresolverr [{request_id}]"
             )
             with show_msg(msg):
-                logger.debug("Making FlareSolverr request [id=%s]\n%s", request_id, params)
+                logger.traffic("Making FlareSolverr request [id=%s]\n%s", request_id, params)
                 async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
                     resp_json = await response.json()
                     try:
                         resp = Response.from_dict(resp_json)
                         resp.id = str(request_id)
                     finally:
-                        logger.debug(
+                        logger.traffic(
                             "Finished FlareSolverr request [id=%s]\n%s", request_id, _LazyResponseLog(resp_json)
                         )
                     return resp

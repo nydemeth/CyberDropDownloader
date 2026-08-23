@@ -337,18 +337,10 @@
         }
       ]
     },
-    "FalsyAsNone_Literal__chrome____edge____safari____safari_ios____chrome_android____firefox___": {
+    "FalsyAsNone_ImpersonateTarget_": {
       "anyOf": [
         {
-          "enum": [
-            "chrome",
-            "edge",
-            "safari",
-            "safari_ios",
-            "chrome_android",
-            "firefox"
-          ],
-          "type": "string"
+          "$ref": "#/$defs/ImpersonateTarget"
         },
         {
           "type": "null"
@@ -429,6 +421,10 @@
           "default": null
         },
         "filename_regex": {
+          "$ref": "#/$defs/FalsyAsNone_Pattern_str__",
+          "default": null
+        },
+        "filename_regex_exclude": {
           "$ref": "#/$defs/FalsyAsNone_Pattern_str__",
           "default": null
         },
@@ -560,6 +556,17 @@
       "format": "uri",
       "type": "string"
     },
+    "ImpersonateTarget": {
+      "enum": [
+        "chrome",
+        "edge",
+        "safari",
+        "safari_ios",
+        "chrome_android",
+        "firefox"
+      ],
+      "type": "string"
+    },
     "JDownloaderAuth": {
       "additionalProperties": false,
       "properties": {
@@ -610,6 +617,17 @@
           "default": false,
           "title": "Enabled",
           "type": "boolean"
+        },
+        "deprecated_api": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HttpURL"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "autostart": {
           "default": false,
@@ -711,6 +729,11 @@
           "$ref": "#/$defs/FalsyAsNone_LogLevel_",
           "default": null
         },
+        "http_traffic": {
+          "default": true,
+          "title": "Http Traffic",
+          "type": "boolean"
+        },
         "files": {
           "$ref": "#/$defs/LogFiles"
         },
@@ -807,7 +830,7 @@
           "default": "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0"
         },
         "impersonate": {
-          "$ref": "#/$defs/FalsyAsNone_Literal__chrome____edge____safari____safari_ios____chrome_android____firefox___",
+          "$ref": "#/$defs/FalsyAsNone_ImpersonateTarget_",
           "default": null
         }
       },

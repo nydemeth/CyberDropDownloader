@@ -7,7 +7,6 @@ from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import parse_url
 from cyberdrop_dl.utils.dataclass import deserialize
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
@@ -20,9 +19,9 @@ if TYPE_CHECKING:
 @HTTPConfig(rate_limit=(5, 1))
 class WhypItCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Audio": "/tracks/<id>/...",
-        "User": "/users/<id>/<name>",
-        "Collection": "/collections/<collection_id>/<name>",
+        "Audio": "/tracks/<slug>-<id>",
+        "User": "/users/<slug>-<id>",
+        "Collection": "/collections/<slug>-<id>",
     }
 
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://whyp.it")
@@ -30,11 +29,11 @@ class WhypItCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["tracks", track_id, *_]:
+            case ["tracks", slug] if track_id := slug.rpartition("-")[-1]:
                 return await self.track(scrape_item, track_id)
-            case ["users", user_id, _]:
+            case ["users", slug] if user_id := slug.rpartition("-")[-1]:
                 return await self.user(scrape_item, user_id)
-            case ["collections", collection_id, _]:
+            case ["collections", slug] if collection_id := slug.rpartition("-")[-1]:
                 return await self.collection(scrape_item, collection_id)
             case _:
                 raise ValueError
@@ -81,7 +80,7 @@ class WhypItCrawler(Crawler):
     async def _track(self, scrape_item: ScrapeItem, track: Track) -> None:
         scrape_item.uploaded_at = self.parse_iso_date(track.created_at)
         _, ext = self.get_filename_and_ext(track.src.name)
-        filename = self.create_custom_filename(track.title, ext, file_id=str(track.id))
+        filename = self.create_custom_filename(track.title, ext, file_id=track.public_id)
         await self.handle_file(
             track.src,
             scrape_item,
@@ -89,31 +88,29 @@ class WhypItCrawler(Crawler):
             ext,
             custom_filename=filename,
             metadata=track.metadata,
+            thumbnail=track.artwork_url,
         )
 
 
 @dataclasses.dataclass(slots=True)
 class Track:
     id: int
+    public_id: str
     title: str
     src: AbsoluteHttpURL
     user: str
     public: bool
-    token: str
+
     metadata: dict[str, Any]
     created_at: str
-
-    @property
-    def url(self) -> AbsoluteHttpURL:
-        url = WhypItCrawler.PRIMARY_URL / f"tracks/{self.id}"
-        if not self.public:
-            url = url.with_query(token=self.token)
-        return url
+    url: AbsoluteHttpURL
+    artwork_url: str | None = None
 
 
 @dataclasses.dataclass(slots=True)
 class Collection:
     id: int
+    public_id: str
     title: str
     token: str
     user: str
@@ -162,7 +159,8 @@ def _parse_track(track: dict[str, Any]) -> Track:
         user=track["user"]["username"],
         metadata=track,
         created_at=track.get("created_at") or track["pivot_created_at"],
-        src=parse_url(track.get("lossless_url") or track["lossy_url"]),
+        src=WhypItCrawler.parse_url(track.get("lossless_url") or track["lossy_url"]),
+        url=WhypItCrawler.parse_url(track["url"]),
     )
 
 

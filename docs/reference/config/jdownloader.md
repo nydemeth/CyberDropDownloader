@@ -11,6 +11,21 @@ jdownloader:
   enabled: false
 ```
 
+# `deprecated_api`
+
+| Type                | Default |
+| ------------------- | ------- |
+| `HttpURL` or `None` | `null`  |
+
+HTTP URL of a local JDownloader instance to connect to via their deprecated API (insecure, default port=3128)
+
+The 'Deprecated API' options need to be enabled on JDownloader instance (`Settings` -> `Advanced Options`)
+
+```yaml
+jdownloader:
+  deprecated_api: null
+```
+
 # `autostart`
 
 | Type   | Default |

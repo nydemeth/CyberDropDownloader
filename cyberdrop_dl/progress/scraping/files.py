@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TaskID, TextColumn
 
 from cyberdrop_dl.progress import create_test_live
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -22,9 +23,11 @@ class FileStats:
     failed: int = 0
     queued: int = 0
 
+    __iter__ = DictDataclass.__iter__
+
     @property
     def total(self) -> int:
-        return sum(dataclasses.astuple(self))
+        return sum(v for _, v in self)
 
 
 @final
@@ -88,7 +91,7 @@ class FileStatsPanel:
         self._panel.subtitle = f"Total: [white]{current_total:,}"
 
     def __json__(self) -> dict[str, Any]:
-        return dataclasses.asdict(self._stats)
+        return dict(self._stats)
 
     @property
     def stats(self) -> FileStats:

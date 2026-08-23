@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import logging
@@ -28,7 +29,7 @@ from cyberdrop_dl.utils import remove_trailing_slash
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable, Iterator
 
-    from cyberdrop_dl.clients.jdownloader import JDownloader
+    from cyberdrop_dl.clients.jd.client import JDownloader
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.config.crawlers import GenericCrawlers
     from cyberdrop_dl.crawlers.crawler import Crawler
@@ -109,6 +110,11 @@ class ScrapeMapper:
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set, repr=False)
     _factory: CrawlerFactory = dataclasses.field(init=False)
     _ready: bool = dataclasses.field(init=False, default=False)
+    _shutting_down: bool = dataclasses.field(init=False, default=False)
+
+    def shutdown(self) -> None:
+        "Shutdown the scrape queue and setup handling of KeyboardInterrupt"
+        self._shutting_down = True
 
     def __repr__(self) -> str:
         fields = (
@@ -128,7 +134,7 @@ class ScrapeMapper:
         return total
 
     def __post_init__(self) -> None:
-        from cyberdrop_dl.clients.jdownloader import JDownloader
+        from cyberdrop_dl.clients.jd.client import JDownloader
         from cyberdrop_dl.crawlers.http_direct import DirectHttpFileCrawler
         from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 
@@ -174,7 +180,7 @@ class ScrapeMapper:
         await self.manager.http_client.load_cookie_files(await self.manager.get_cookie_files())
         self.tui.mode = self.manager.config.ui.mode
         ## IMPORTANT: Order of each context matters!
-        with self.tui():
+        with self.__cancel_context():
             async with (
                 self.manager.http_client,
                 storage.monitor(config.min_free_space),
@@ -185,13 +191,25 @@ class ScrapeMapper:
                 self.manager.scrape_mapper = self
                 yield self
 
+    @contextlib.contextmanager
+    def __cancel_context(self) -> Generator[None]:
+        try:
+            with self.tui():
+                yield
+        except asyncio.CancelledError:
+            # This is a KeyboardInterrupt cause we never cancel tasks
+            if not self._shutting_down:
+                raise
+
+            logger.warning("Scraping aborted ('Ctrl + C' pressed)")
+
     async def __async_init__(self) -> None:
         if self._ready:
             return
         self._init_crawlers()
         try:
-            await self._jdownloader.connect()
-        except JDownloaderError:
+            await self._jdownloader.connect(self.manager.http_client)
+        except Exception:
             logger.exception("Failed to connect to jDownloader")
 
         await self._real_debrid.__async_init__()
@@ -206,6 +224,9 @@ class ScrapeMapper:
         )
 
     async def run(self, src: URLsSource | RetryScrapeSource | None = None) -> ScrapeStats:
+        if self._shutting_down:
+            raise RuntimeError("Scraper is already shutting down")
+
         await self.__async_init__()
         if src is None:
             return ScrapeStats("")

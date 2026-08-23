@@ -30,11 +30,24 @@ filters:
 | ----------------------- | ------- |
 | `NonEmptyStr` or `null` | `null`  |
 
-Only download files if their filename match this regex expression
+Only download files if their filename matches this regular expression
 
 ```yaml
 filters:
   filename_regex: null
+```
+
+# `filename_regex_exclude`
+
+| Type                    | Default |
+| ----------------------- | ------- |
+| `NonEmptyStr` or `null` | `null`  |
+
+Do NOT download files if their filename matches this regular expression
+
+```yaml
+filters:
+  filename_regex_exclude: null
 ```
 
 # `only_hosts`

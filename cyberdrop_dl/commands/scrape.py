@@ -30,7 +30,11 @@ if TYPE_CHECKING:
 def scrape(manager: Manager, source: URLsSource | RetryScrapeSource) -> None:
     from cyberdrop_dl import aio
 
-    with setup_file_logging(manager.config.logs.files.main, level=manager.config.logs.effective_level):
+    with setup_file_logging(
+        manager.config.logs.files.main,
+        level=manager.config.logs.effective_level,
+        log_http_traffic=manager.config.logs.http_traffic,
+    ):
         aio.run(_scrape(manager, source))
 
 
@@ -48,6 +52,7 @@ async def _scrape(manager: Manager, source: URLsSource | RetryScrapeSource) -> N
         logger.info("Starting CDL...")
         async with ScrapeMapper(manager)() as scrape_mapper:
             stats = await scrape_mapper.run(source)
+            scrape_mapper.shutdown()
 
         await _post_runtime(manager)
         stats_summary = manager.print_stats(stats)

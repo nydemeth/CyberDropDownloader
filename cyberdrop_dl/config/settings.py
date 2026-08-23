@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, NonNegativeInt, PrivateAttr
 from pydantic.functional_validators import BeforeValidator
 from pydantic.types import ByteSize, NonNegativeFloat, PositiveFloat, PositiveInt
 
-from cyberdrop_dl.constants import LOGS_DATE_FORMAT, LOGS_DATETIME_FORMAT, CIStrEnum, HashMode
+from cyberdrop_dl.constants import LOGS_DATE_FORMAT, LOGS_DATETIME_FORMAT, CIStrEnum, HashMode, ImpersonateTarget
 from cyberdrop_dl.models import ConfigGroup, ConfigModel
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
@@ -90,6 +90,9 @@ class Logs(ConfigGroup, name=None):  # noqa: PLW1641
     console_level: FalsyAsNone[LogLevel] = None
     "Only log messages of this level or higher to the console. An empty or `None` value will use the same level as `log_level`"
 
+    http_traffic: Annotated[bool, Parameter(alias="--print-traffic")] = True
+    "Log HTTP requests and responses (at INFO level)"
+
     files: LogFiles = Field(default_factory=LogFiles)
     folder: FalsyAsNone[Path] = None
     "Base folder to prepend to log files paths (if they are not absolute)"
@@ -163,6 +166,9 @@ class Jdownloader(ConfigGroup, name=None):
     enabled: Annotated[bool, _alias("jdownloader")] = False
     "Send unsupported URLs to Jdownloader"
 
+    deprecated_api: HttpURL | None = None
+    "HTTP URL of a local JDownloader instance to connect to via their deprecated API (insecure, default port=3128)"
+
     autostart: bool = False
     "Immediately start downloads as soon as they are sent"
 
@@ -171,6 +177,12 @@ class Jdownloader(ConfigGroup, name=None):
 
     whitelist: set[NonEmptyStr] = Field(default_factory=set)
     "Only send unsupported URLs from these domains to Jdownloader. An empty list means 'send all URLs'"
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        super().model_post_init(context)
+        if self.deprecated_api and self.deprecated_api.scheme != "http":
+            raise ValueError("Deprecated API URL must have an 'http' scheme")
 
 
 class SortFormats(ConfigModel):
@@ -348,14 +360,8 @@ class Network(ConfigGroup):
     tls: TLS = Field(default_factory=TLS)
 
     user_agent: NonEmptyStr = "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0"
-    impersonate: FalsyAsNone[Literal["chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"]] = None
+    impersonate: FalsyAsNone[ImpersonateTarget] = None
     "Use this target as impersonation for all scrape requests"
-
-    @property
-    def curl_timeout(self) -> float | tuple[float, float]:
-        if self.read_timeout is None:
-            return self.connection_timeout
-        return self.connection_timeout, self.read_timeout
 
 
 class UIMode(CIStrEnum):

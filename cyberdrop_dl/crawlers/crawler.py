@@ -241,7 +241,12 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             _slots=self.__dl_config__.slots,
         )
 
-        self.__http_ctx__ = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
+        self.__http_ctx__: HTTPContext = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
+        try:
+            self.__http_ctx__.headers.setdefault("Referer", str(self.PRIMARY_URL))
+        except AttributeError:
+            pass
+
         self._task_mngr: Final = task_mng
         self.tui: Final = tui
 
@@ -1161,7 +1166,15 @@ def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
 
     if (regex := filters.filename_regex) and not regex.search(media_item.filename):
         logger.info(
-            "Download skipped %s due to filename regex filter. Filename '%s' does not match config regex",
+            "Download skipped %s due to filename regex filter. Filename '%s' does not match regex",
+            media_item.url,
+            media_item.filename,
+        )
+        return True
+
+    if (regex := filters.filename_regex_exclude) and regex.search(media_item.filename):
+        logger.info(
+            "Download skipped %s due to filename regex exclude filter. Filename '%s' matched config regex",
             media_item.url,
             media_item.filename,
         )

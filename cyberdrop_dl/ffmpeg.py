@@ -399,7 +399,7 @@ _EMPTY_FFPROBE_RESULT: FFprobeResult = FFprobeResult.from_output({"streams": []}
 # ~~~~~~~~~~~~~~~~~~~~~~ Subprocess ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class SubProcessResult:
     return_code: int | None
     stdout: str
@@ -409,8 +409,10 @@ class SubProcessResult:
     def success(self) -> bool:
         return self.return_code == 0
 
+    __iter__ = DictDataclass.__iter__
+
     def __json__(self) -> dict[str, Any]:
-        me = dataclasses.asdict(self)
+        me = dict(self)
         try:
             stdout = json.loads(self.stdout)
         except json.JSONDecodeError:

@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Any, Self
 from cyberdrop_dl import constants
 from cyberdrop_dl.filepath import sanitize_filename
 from cyberdrop_dl.utils import json
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable
 
     import yarl
 
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 _CSV_DELIMITER = ","
 
 
-@dataclasses.dataclass(slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
 class CSVFiles:
     unsupported_urls: Path
     download_errors: Path
@@ -36,8 +37,7 @@ class CSVFiles:
     last_forum_post: Path
     jsonl_file: Path
 
-    def __iter__(self) -> Iterator[Path]:
-        return iter(dataclasses.astuple(self))
+    __iter__ = DictDataclass.__iter__
 
 
 @dataclasses.dataclass(slots=True)
@@ -70,13 +70,15 @@ class CSVLogsManager:
     def delete_old_logs(self) -> None:
         if self._ready:
             return
-        for path in self.files:
+
+        path: Path
+        for name, path in self.files:
             try:
                 path.unlink()
             except FileNotFoundError:
                 pass
             else:
-                logger.warning(f"Deleted conflicting old log file: '{path}'")
+                logger.warning("Deleted conflicting old %s log file: '%s'", name, path)
 
         self._ready = True
 

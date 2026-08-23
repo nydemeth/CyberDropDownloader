@@ -154,6 +154,9 @@ class Filters(ConfigGroup):
     filename_regex: FalsyAsNone[re.Pattern[str]] = None
     "Only download files that match this regex"
 
+    filename_regex_exclude: FalsyAsNone[re.Pattern[str]] = None
+    "Do NOT download files that match this regex"
+
     only_hosts: set[NonEmptyStr] = Field(default_factory=set)
     "Only scrape/download from these domains"
 

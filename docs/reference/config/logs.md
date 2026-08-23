@@ -41,6 +41,19 @@ logs:
   level: null
 ```
 
+# `http_traffic`
+
+| Type   | Default |
+| ------ | ------- |
+| `bool` | `true`  |
+
+Log HTTP requests and responses (at INFO level)
+
+```yaml
+logs:
+  http_traffic: true
+```
+
 # `expire_after`
 
 | Type                  | Default |

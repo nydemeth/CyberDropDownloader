@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import hashlib
 import os
+import sys
 
 ALL_VARS: dict[str, str | None] = {}
 os.environ["PYDANTIC_ERRORS_INCLUDE_URL"] = "0"
@@ -14,9 +17,7 @@ def _env(name: str, *, censor: bool = False) -> str | None:
     return value
 
 
-RUNNING_IN_TERMUX = bool(
-    os.getenv("TERMUX_VERSION") or os.getenv("TERMUX_MAIN_PACKAGE_FORMAT") or "com.termux" in os.getenv("$PREFIX", "")
-)
+RUNNING_IN_TERMUX = bool(os.getenv("TERMUX_VERSION") or "com.termux" in os.getenv("PREFIX", sys.prefix))
 FORCE_PORTRAIT_MODE = bool(_env("PORTRAIT_MODE") or RUNNING_IN_TERMUX)
 
 
@@ -28,6 +29,7 @@ DEBUG_MODE = bool(
     or DEBUG_LOG_FOLDER
     or os.getenv("PYCHARM_HOSTED")
     or os.getenv("TERM_PROGRAM") in {"vscode", "zed"}
+    or "pytest" in sys.modules
 )
 ENABLE_DEBUG_CRAWLERS = True
 
@@ -39,6 +41,11 @@ EDITOR = os.getenv("EDITOR")
 
 ENABLE_TWITTER = bool(_env("ENABLE_TWITTER"))
 GOFILE_SALT = _env("GOFILE_SALT")
+TERMUX = {
+    k.removeprefix("TERMUX_APP_").removeprefix("TERMUX_").lstrip("_"): v
+    for k, v in os.environ.items()
+    if k.startswith("TERMUX_")
+}
 
 ALL_VARS = dict(sorted(ALL_VARS.items()))  # pyright: ignore[reportConstantRedefinition]
 ALL_VARS_RESOLVED = dict(

@@ -12,6 +12,7 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from cyberdrop_dl.progress import LiveUI, hyperlink
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -25,9 +26,11 @@ class SortStats:
     others: int = 0
     errors: int = 0
 
+    __iter__ = DictDataclass.__iter__
+
     @property
     def total(self) -> int:
-        return sum(dataclasses.astuple(self))
+        return sum(v for _, v in self)
 
 
 @final

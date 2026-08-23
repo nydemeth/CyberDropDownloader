@@ -14,6 +14,7 @@ from rich.progress import BarColumn, TaskID, TextColumn
 
 from cyberdrop_dl.progress import DictProgress, create_test_live
 from cyberdrop_dl.progress.overflow import OverFlow
+from cyberdrop_dl.utils.dataclass import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -39,11 +40,13 @@ def _capitalize_words(text: str) -> str:
     return " ".join([cap(word) for word in text.split()])
 
 
-@dataclasses.dataclass(slots=True, order=True)
+@dataclasses.dataclass(slots=True, order=True, frozen=True)
 class UIError:
     msg: str
     count: int
     code: int | None = None
+
+    __iter__ = DictDataclass.__iter__
 
     @classmethod
     def parse(cls, msg: str, count: int) -> Self:
@@ -132,7 +135,7 @@ class _ErrorsPanel:
             await asyncio.sleep(random.random())
 
     def __json__(self) -> dict[str, Any]:
-        return {"errors": tuple(dataclasses.asdict(error) for error in self)}
+        return {"errors": tuple(dict(error) for error in self)}
 
 
 class DownloadErrorsPanel(_ErrorsPanel):

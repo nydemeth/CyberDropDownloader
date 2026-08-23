@@ -2,9 +2,9 @@ auth:
   gofile:
     api_key: null
   jdownloader:
-    device: null
+    device_name: null
+    email: null
     password: null
-    username: null
   mega_nz:
     email: null
     password: null
@@ -89,6 +89,7 @@ filters:
       max: null
       min: null
   filename_regex: null
+  filename_regex_exclude: null
   files:
     audio: true
     images: true
@@ -123,6 +124,7 @@ ignore_hashes: false
 ignore_history: false
 jdownloader:
   autostart: false
+  deprecated_api: null
   download_folder: null
   enabled: false
   whitelist: []
@@ -136,6 +138,7 @@ logs:
     scrape_errors: scrape_errors.csv
     unsupported: unsupported.csv
   folder: null
+  http_traffic: true
   level: DEBUG
   rotate: false
 max_children:

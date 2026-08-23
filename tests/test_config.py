@@ -12,12 +12,12 @@ from cyclopts.exceptions import UnknownOptionError
 from pydantic import BaseModel
 
 import cyberdrop_dl.commands.scrape
-from cyberdrop_dl.config import Config, Files, _resolve_paths, merge_additive_args, settings
+from cyberdrop_dl.config import Config, Files, _resolve_paths, settings
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.config.auth import Authentication, Notifications
 from cyberdrop_dl.config.filters import Filters, _FileFilter
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
-from cyberdrop_dl.models import AppriseURL, merge_dicts
+from cyberdrop_dl.models import AppriseURL, merge_additive_args, merge_dicts
 
 
 def test_config_equality() -> None:
@@ -130,6 +130,24 @@ class TestMergeDicts:
         dict2 = {"a": 1}
         expected = {"a": {"x": 1}}
         assert merge_dicts(dict1, dict2) == expected
+
+    def test_additive_args_add(self) -> None:
+        dict1 = {"a": {"b": [1, 2]}}
+        dict2 = {"a": {"b": ["+", 3, 4]}}
+        additive_keys = (("a", "b"),)
+        assert merge_dicts(dict1, dict2, additive_keys) == {"a": {"b": [1, 2, 3, 4]}}
+
+    def test_additive_args_remove(self) -> None:
+        dict1 = {"a": {"b": [1, 2]}}
+        dict2 = {"a": {"b": ["-", 1]}}
+        additive_keys = (("a", "b"),)
+        assert merge_dicts(dict1, dict2, additive_keys) == {"a": {"b": [2]}}
+
+    def test_additive_args_override(self) -> None:
+        dict1 = {"a": {"b": [1, 2]}}
+        dict2 = {"a": {"b": [3, 1]}}
+        additive_keys = (("a", "b"),)
+        assert merge_dicts(dict1, dict2, additive_keys) == {"a": {"b": [3, 1]}}
 
 
 class TestRuntimeLogsConfig:
@@ -247,7 +265,7 @@ def test_additive_args(
     cli_args: list[str] | tuple[str, ...],
     expected: list[str] | tuple[str, ...],
 ) -> None:
-    result = merge_additive_args(cli_args, config_args)
+    result = merge_additive_args(config_args, cli_args)
     assert type(result) is type(expected)
     assert result == expected
 
@@ -259,7 +277,8 @@ def test_config_from_file(tmp_cwd: Path) -> None:
     config_file.touch()
     config_2 = Config.from_file(config_file)
     assert config_2.source == config_file
-    config_2._source = None
+    assert config_2._sources == (config_file,)
+    config_2._sources = ()
     assert config_1 == config_2
 
 
@@ -344,7 +363,7 @@ def test_log_folder_after_resolution(tmp_cwd: Path) -> None:
 
 def test_config_union_preserves_source() -> None:
     config_1 = Config()
-    config_1._source = Path("config.yaml")
+    config_1._sources = (Path("config.yaml"),)
     config_2 = config_1 | Config()
     assert config_1 is not config_2
     assert config_1.source == config_2.source
@@ -352,9 +371,9 @@ def test_config_union_preserves_source() -> None:
 
 def test_configs_with_same_values_but_diferrent_sources_are_not_equal() -> None:
     config_1 = Config()
-    config_1._source = Path("config.yaml")
+    config_1._sources = (Path("config.yaml"),)
     config_2 = Config()
-    config_2._source = Path("config2.yaml")
+    config_2._sources = (Path("config2.yaml"),)
     assert config_1 != config_2
 
 
@@ -369,3 +388,15 @@ def test_config_union() -> None:
     assert config.filters.files.audio is True
     assert config_2.filters.files.audio is False
     assert config | config_2 == Config(ignore_history=True, dump_json=True, filters=filters)
+
+
+def test_additive_args_list() -> None:
+    args = Config()._additive_args()
+    assert args == (
+        ("crawlers", "bandcamp", "formats"),
+        ("crawlers", "disabled"),
+        ("filters", "only_hosts"),
+        ("filters", "skip_hosts"),
+        ("hashing", "algorithms"),
+        ("jdownloader", "whitelist"),
+    )

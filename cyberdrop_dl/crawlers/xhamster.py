@@ -63,7 +63,10 @@ def _parse_url(b64_url: str) -> AbsoluteHttpURL:
 @HTTPConfig(rate_limit=(4, 1))
 class XhamsterCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Video": "/videos/<title>",
+        "Video": (
+            "/videos/<slug>-<video_id>",
+            "/shorts/<slug>-<video_id>",
+        ),
         "User": (
             "/users/<user_name>",
             "/users/profiles/<user_name>",
@@ -92,8 +95,9 @@ class XhamsterCrawler(Crawler):
         match scrape_item.url.parts[1:]:
             case ["photos", "gallery", _]:
                 return await self.gallery(scrape_item)
-            case ["videos", _]:
-                return await self.video(scrape_item)
+            case ["videos" | "shorts", slug]:
+                video_id = slug.rpartition("-")[-1]
+                return await self.video(scrape_item, video_id)
             case ["users" | "creators" as type_, _, *rest]:
                 match rest:
                     case []:
@@ -206,12 +210,12 @@ class XhamsterCrawler(Crawler):
         scrape_item.add_children()
 
     @error_handling_wrapper
-    async def video(self, scrape_item: ScrapeItem) -> None:
+    async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
             return
 
         initials = await self._get_window_initials(scrape_item.url)
-        video = _parse_video(initials)
+        video = _parse_video(initials, video_id)
         scrape_item.uploaded_at = video.created
         m3u8 = debrid_link = None
 
@@ -221,7 +225,7 @@ class XhamsterCrawler(Crawler):
             best_format = video.best_hls
             m3u8, _ = await self.request_m3u8_playlist(video.best_hls.url)
 
-        custom_filename = self.create_custom_filename(
+        filename = self.create_custom_filename(
             video.title,
             ext := ".mp4",
             file_id=video.id,
@@ -233,9 +237,10 @@ class XhamsterCrawler(Crawler):
             scrape_item.url,
             scrape_item,
             video.id + ext,
-            custom_filename=custom_filename,
+            custom_filename=filename,
             m3u8=m3u8,
             debrid_link=debrid_link,
+            thumbnail=video.thumb,
         )
 
     async def _get_window_initials(self, url: AbsoluteHttpURL) -> dict[str, Any]:
@@ -265,10 +270,15 @@ class Video:
     created: int
     best_hls: Format
     best_mp4: Format | None
+    thumb: str | None
 
 
-def _parse_video(initials: dict[str, Any]) -> Video:
-    video: dict[str, Any] = initials.get("videoModel") or initials["videoPageComponent"]["videoInfo"]["videoInfo"]
+def _parse_video(initials: dict[str, Any], video_id: str | None = None) -> Video:
+    try:
+        video: dict[str, Any] = initials.get("videoModel") or initials["videoPageComponent"]["videoInfo"]["videoInfo"]
+    except LookupError:
+        # shorts
+        video = initials["layoutPage"]["momentProps"]
 
     hls_sources: list[Format] = []
     mp4_sources: list[Format] = []
@@ -285,12 +295,15 @@ def _parse_video(initials: dict[str, Any]) -> Video:
             elif allow_mp4:
                 mp4_sources.append(src)
 
+    video_id = video.get("idHashSlug") or video.get("videoIdHashSlug") or video_id
+    assert video_id
     return Video(
-        id=video.get("idHashSlug") or video["videoIdHashSlug"],
+        id=video_id,
         title=video["title"],
         created=video.get("created") or video["addTime"],
         best_hls=max(hls_sources),
         best_mp4=max(mp4_sources, default=None),
+        thumb=video.get("thumbURL") or video.get("posterUrl"),
     )
 
 

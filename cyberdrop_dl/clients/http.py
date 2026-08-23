@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import logging
+import http.cookies
 import time
-import warnings
 from contextvars import ContextVar
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, Self, Unpack, final, override
@@ -14,7 +13,7 @@ import aiohttp
 from aiohttp import hdrs
 
 from cyberdrop_dl import aio, cookies, ddos_guard
-from cyberdrop_dl.clients import flaresolverr, tcp
+from cyberdrop_dl.clients import curl_cffi, flaresolverr, get_logger, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
@@ -31,6 +30,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
+    from cyberdrop_dl.clients.wreq import WreqClient  # pyright: ignore[reportPrivateLocalImportUsage]
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -43,7 +43,7 @@ type JSONCheck = Callable[[Any, AbstractResponse[Any]], None]
 
 JSON_CHECK: ContextVar[JSONCheck | None] = ContextVar("JSON_CHECK", default=None)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _LazyResponseLog:
@@ -98,6 +98,7 @@ class HTTPClient:
         self._cookies: aiohttp.CookieJar | None = None
         self._flaresolverr: flaresolverr.Client | None = None
         self._curl_session: AsyncSession[CurlResponse] | None = None
+        self._wreq_session: WreqClient | None = None
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
 
@@ -117,6 +118,16 @@ class HTTPClient:
         if self._curl_session is None:
             self._curl_session = self._create_curl_session()
         return self._curl_session
+
+    @property
+    def wreq_session(self) -> WreqClient:
+        if self._wreq_session is None:
+            self._wreq_session = wreq.create_client(self.config)
+            jar = self._wreq_session.cookie_jar
+            assert jar is not None
+            for (domain, path), cookie in self.cookies.cookies.items():
+                jar.add(cookie.output(), f"https://{domain}{path}")
+        return self._wreq_session
 
     @property
     def cookies(self) -> aiohttp.CookieJar:
@@ -146,6 +157,17 @@ class HTTPClient:
             simple_cookie = make_simple_cookie(cookie, now)
             self.cookies.update_cookies(simple_cookie, url)
 
+    def __sync_wreq_cookies(self, url: AbsoluteHttpURL) -> None:
+        now = time.time()
+        jar = self.wreq_session.cookie_jar
+        assert jar is not None
+        for cookie in jar.get_all():
+            try:
+                simple_cookie = wreq.make_simple_cookie(cookie, now)
+            except (http.cookies.CookieError, ValueError):
+                continue
+            self.cookies.update_cookies(simple_cookie, url)
+
     async def __aenter__(self) -> Self:
         await tcp.choose_dns_resolver()
         self._session = self.create_aiohttp_session()
@@ -158,13 +180,16 @@ class HTTPClient:
             if self._curl_session is not None:
                 tg.create_task(self._curl_session.close())
 
+            if self._wreq_session is not None:
+                self._wreq_session.close()
+
             if self._flaresolverr is not None:
                 # close before closing aiohttp session
                 await self._flaresolverr.aclose()
             await self._session.close()
 
     def _create_curl_session(self) -> AsyncSession[CurlResponse]:
-        session = _create_curl_session(self.config)
+        session = curl_cffi.create_session(self.config)
         session.cookies = {cookie.key: cookie.value for cookie in self.cookies}
         return session
 
@@ -230,11 +255,11 @@ class HTTPClient:
 
     @contextlib.asynccontextmanager
     async def _request(self, request: Request) -> AsyncGenerator[AbstractResponse[Any]]:
-        logger.debug("Starting %s request [id=%s]\n%s", request.method, request.id, request)
+        logger.traffic("Starting %s request [id=%s]\n%s", request.method, request.id, request)
         exc = None
         async with self.__request(request) as resp:
             resp.id = request.id
-            logger.debug("Finished %s request [id=%s]\n%s", request.method, request.id, _LazyResponseLog(resp))
+            logger.traffic("Finished %s request [id=%s]\n%s", request.method, request.id, _LazyResponseLog(resp))
             try:
                 yield resp
             except Exception as e:
@@ -242,7 +267,7 @@ class HTTPClient:
                 raise
             finally:
                 if resp.has_content_not_logged:
-                    logger.debug(
+                    logger.traffic(
                         "Content from %s request [id=%s]\n%s",
                         request.method,
                         request.id,
@@ -256,6 +281,22 @@ class HTTPClient:
     @contextlib.asynccontextmanager
     async def __request(self, request: Request) -> AsyncGenerator[AbstractResponse[Any]]:
         if request.impersonate:
+            if wreq.IS_INSTALLED:
+                resp = await self.wreq_session.request(
+                    wreq.cast_method(request.method),
+                    str(request.url),
+                    headers=dict(request.headers),
+                    json=request.json,
+                    body=request.data,
+                    emulation=wreq.cast_impersonate(request.impersonate),  # pyright: ignore[reportArgumentType]
+                    **request.params,
+                )
+                async with resp:
+                    resp = AbstractResponse.create(resp)
+                    self.__sync_wreq_cookies(resp.url)
+                    yield resp
+                    return
+
             async with contextlib.aclosing(
                 await self.curl_session.request(
                     request.method,
@@ -264,12 +305,12 @@ class HTTPClient:
                     headers=request.headers,
                     json=request.json,
                     data=request.data,
-                    impersonate=request.impersonate,
+                    impersonate=curl_cffi.cast_impersonation(request.impersonate),
                     **request.params,
                 )
             ) as curl_resp:
-                yield AbstractResponse.create(curl_resp)
                 self.__sync_session_cookies(request.url)
+                yield AbstractResponse.create(curl_resp)
 
             return
 
@@ -412,28 +453,6 @@ class HTTPControllerProxy[T: HTTPMixin]:
         self.text = http.request_text
         self.redirect = http.request_redirect
         self.location = http.request_location
-
-
-def _create_curl_session(config: Config) -> AsyncSession[CurlResponse]:
-    from curl_cffi.aio import AsyncCurl
-    from curl_cffi.requests import AsyncSession
-    from curl_cffi.utils import CurlCffiWarning
-
-    loop = asyncio.get_running_loop()
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=CurlCffiWarning)
-        acurl = AsyncCurl(loop=loop)
-
-    return AsyncSession(
-        loop=loop,
-        async_curl=acurl,
-        impersonate="chrome",
-        verify=config.network.tls.verify,
-        proxy=str(proxy) if (proxy := config.network.proxy) else None,
-        timeout=config.network.curl_timeout,
-        max_redirects=8,
-    )
 
 
 @final

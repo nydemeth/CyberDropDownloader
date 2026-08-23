@@ -22,6 +22,34 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## UNRELEASED
+
+### Added
+
+- New `--logs.http-traffic` option
+- Support direct local connection to JDownloader using their deprecated API
+- `wreq` as optional HTTP backend for browser impersonation (via the `wreq` extra)
+
+### Changed
+
+- Log HTTP requests made to JDownloader
+- Logs of HTTP requests/responses will be emitted at INFO instead of DEBUG level
+- If scraping has already started, sending `SIGINT` (`Ctrl + C`) to the process will stop all scraping but will continue with post-runtime actions
+  (sorting, hashing, send notifications, etc..). Press `Ctrl + C` again to force quit
+- Reduced the maximum size the log file can have to be sent as attachment in notifications, from 25 MB to 20 MB.
+
+## [10.5.0] - 2026-08-15
+
+### Added
+
+- Support defining config settings across 2 different files.
+  A second config file can be created at the same location as the current `--config-file` with the suffix (`.override`):
+  ex: `/.config/cyberdrop-dl/config.yaml`, `/.config/cyberdrop-dl/config.override.yaml`.
+
+### Fixed
+
+- Update website salt (Gofile)
+
 ## [10.4.0] - 2026-08-14
 
 ### Added
@@ -65,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
--- `--ssl-context` is deprecated and will be removed in a future version
+- `--ssl-context` is deprecated and will be removed in a future version
 
 ### Fixed
 
