@@ -70,6 +70,17 @@ This wiki does not cover flaresolverr setup process. If you need help, refer to 
 See: [How to extract cookies (DDoSGuard or login errors) #839](https://github.com/Cyberdrop-DL/cyberdrop-dl/discussions/839) for alternatives using cookies
 {% endhint %}
 
+# `flaresolverr_use_session`
+
+| Type   | Default |
+| ------ | ------- |
+| `bool` | `true`  |
+
+Create a custom flaresolverr session that keeps cookies. This reduces the likelihood of CF challenges and speeds up requests since Flaresolverr won't
+have to launch a new browser instance on every new one.
+
+Set this to `false` if you are using a Flaresolverr fork that does not support the `sessions.create` command
+
 # `proxy`
 
 | Type                | Default |

@@ -154,7 +154,6 @@ class Config(ConfigModel, title="cyberdrop-dl config"):
                     sources.append(override)
                     data = merge_dicts(data, _load_yaml(override))
 
-        logger.info(data)
         config = Config.load(data)
         config._sources = tuple(sources)
         return config
