@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- All scrapes failing if running with `--dump-responses`
 - Handle malformed JSON responses wrapped in HTML (Flaresolverr)
 
 ## [10.5.0] - 2026-08-15
