@@ -29,11 +29,16 @@ logger = logging.getLogger(__name__)
 
 FileHashes = dict[str, dict[int, set[Path]]]
 
+type HashAlgoLiteral = Literal["md5", "xxh128", "sha256"]
+
 
 class HashAlgo(StrEnum):
     MD5 = "md5"
     XXH128 = "xxh128"
     SHA256 = "sha256"
+
+    if TYPE_CHECKING:
+        value: HashAlgoLiteral  # pyright: ignore[reportIncompatibleMethodOverride]
 
 
 _HASHERS: Final = {
@@ -45,13 +50,13 @@ _CHUNK_SIZE: Final = 1024 * 1024  # 1MB
 _CONCURRENCY: Final = 10
 
 
-def _compute_hash(file: Path, algorithm: HashAlgo, shutdown: threading.Event) -> str:
+def _compute_hash(file: Path, algorithm: HashAlgo | HashAlgoLiteral, shutdown: threading.Event | None = None) -> str:
+    hasher = _HASHERS[HashAlgo(algorithm)]()
     with file.open("rb") as fp:
-        hasher = _HASHERS[algorithm]()
         buffer = bytearray(_CHUNK_SIZE)
         mem_view = memoryview(buffer)
         while size := fp.readinto(buffer):
-            if shutdown.is_set():
+            if shutdown and shutdown.is_set():
                 raise RuntimeError("Hasher shutting down")
             hasher.update(mem_view[:size])
 
@@ -73,12 +78,12 @@ async def hash_directory(hasher: Hasher) -> HashingStats:
 
 @final
 class Hasher:
-    def __init__(self, hashes: Iterable[Literal["md5", "sha256", "xxh128"]], database: Database, path: Path) -> None:
+    def __init__(self, hashes: Iterable[HashAlgo | HashAlgoLiteral], database: Database, path: Path) -> None:
         self.path = path
         self.hashes: tuple[HashAlgo, ...] = tuple(sorted(set(map(HashAlgo, hashes)) | {HashAlgo.XXH128}))
         self.database = database
         self.tui = HashingUI(path)
-        self._cwd = Path.cwd().resolve()
+        self._cwd = Path.cwd().resolve().absolute()
         self._hashes_map: FileHashes = defaultdict(lambda: defaultdict(set))
         self._sem = asyncio.BoundedSemaphore(_CONCURRENCY)
         self._hashed_items: set[tuple[str, ...]] = set()
@@ -96,23 +101,19 @@ class Hasher:
 
     @classmethod
     def create(cls, config: Config, db: Database, path: Path | None = None) -> Self:
-        return cls(
-            config.hashing.extra_hashes,
-            db,
-            path=(path or config.download_folder).expanduser().resolve().absolute(),
-        )
+        return cls(config.hashing.extra_hashes, db, path=(path or config.download_folder).expanduser())
 
     @property
     def stats(self) -> HashingStats:
         return self.tui.stats
 
-    async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
+    async def hash_file(self, filename: Path | str, hash_type: HashAlgoLiteral) -> str:
         file_path = self._cwd / filename
         return await asyncio.get_running_loop().run_in_executor(
             self._pool,
             _compute_hash,
             file_path,
-            HashAlgo(hash_type),
+            hash_type,
             self._shutdown,
         )
 
@@ -153,7 +154,7 @@ class Hasher:
                                 file,
                                 original_filename,
                                 referer,
-                                algo,  # pyright: ignore[reportArgumentType]
+                                algo.value,
                             )
                         )
                         for algo in self.hashes
@@ -169,7 +170,7 @@ class Hasher:
         file: Path,
         original_filename: str | None,
         referer: AbsoluteHttpURL | None,
-        hash_type: Literal["xxh128", "md5", "sha256"],
+        hash_type: HashAlgoLiteral,
     ) -> str | None:
         """Generates hash of a file."""
 
