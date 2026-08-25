@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
@@ -44,12 +45,14 @@ _CHUNK_SIZE: Final = 1024 * 1024  # 1MB
 _CONCURRENCY: Final = 10
 
 
-def _compute_hash(file: Path, algorithm: HashAlgo) -> str:
+def _compute_hash(file: Path, algorithm: HashAlgo, shutdown: threading.Event) -> str:
     with file.open("rb") as fp:
         hasher = _HASHERS[algorithm]()
         buffer = bytearray(_CHUNK_SIZE)
         mem_view = memoryview(buffer)
         while size := fp.readinto(buffer):
+            if shutdown.is_set():
+                raise RuntimeError("Hasher shutting down")
             hasher.update(mem_view[:size])
 
     return hasher.hexdigest()
@@ -79,10 +82,8 @@ class Hasher:
         self._hashes_map: FileHashes = defaultdict(lambda: defaultdict(set))
         self._sem = asyncio.BoundedSemaphore(_CONCURRENCY)
         self._hashed_items: set[tuple[str, ...]] = set()
-        self._pool: ThreadPoolExecutor = ThreadPoolExecutor(
-            max_workers=_CONCURRENCY * len(self.hashes),
-            thread_name_prefix="hashing",
-        )
+        self._pool = ThreadPoolExecutor(max_workers=_CONCURRENCY * len(self.hashes), thread_name_prefix="hashing")
+        self._shutdown = threading.Event()
 
     __repr__ = simple_repr("path", "hashes", "database")
 
@@ -90,6 +91,7 @@ class Hasher:
         return self
 
     def __exit__(self, *_) -> None:
+        self._shutdown.set()
         self._pool.shutdown(wait=True)
 
     @classmethod
@@ -111,6 +113,7 @@ class Hasher:
             _compute_hash,
             file_path,
             HashAlgo(hash_type),
+            self._shutdown,
         )
 
     async def hash_item(self, media_item: MediaItem) -> None:
