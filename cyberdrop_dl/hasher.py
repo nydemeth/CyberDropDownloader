@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import hashlib
 import logging
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, Self
+from typing import TYPE_CHECKING, Final, Literal, Self, final
 
 import xxhash
 
@@ -14,6 +15,7 @@ from cyberdrop_dl import aio
 from cyberdrop_dl.constants import TempExt
 from cyberdrop_dl.progress.hashing import HashingStats, HashingUI
 from cyberdrop_dl.progress.scraping import show_msg
+from cyberdrop_dl.signature import simple_repr
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -22,20 +24,27 @@ if TYPE_CHECKING:
     from cyberdrop_dl.database._db import Database
     from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 
-FileHashes = dict[str, dict[int, set[Path]]]
-
-_HASHERS: Final = {
-    "md5": hashlib.md5,
-    "xxh128": xxhash.xxh128,
-    "sha256": hashlib.sha256,
-}
-_CHUNK_SIZE: Final = 1024 * 1024  # 1MB
-
-
 logger = logging.getLogger(__name__)
 
+FileHashes = dict[str, dict[int, set[Path]]]
 
-def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> str:
+
+class HashAlgo(StrEnum):
+    MD5 = "md5"
+    XXH128 = "xxh128"
+    SHA256 = "sha256"
+
+
+_HASHERS: Final = {
+    HashAlgo.MD5: hashlib.md5,
+    HashAlgo.XXH128: xxhash.xxh128,
+    HashAlgo.SHA256: hashlib.sha256,
+}
+_CHUNK_SIZE: Final = 1024 * 1024  # 1MB
+_CONCURRENCY: Final = 10
+
+
+def _compute_hash(file: Path, algorithm: HashAlgo) -> str:
     with file.open("rb") as fp:
         hasher = _HASHERS[algorithm]()
         buffer = bytearray(_CHUNK_SIZE)
@@ -59,32 +68,29 @@ async def hash_directory(hasher: Hasher) -> HashingStats:
     return hasher.stats
 
 
-@dataclasses.dataclass(slots=True)
+@final
 class Hasher:
-    extra_hashes: tuple[Literal["md5", "sha256"], ...]
-    database: Database
-    path: Path
-    tui: HashingUI = dataclasses.field(init=False, repr=False)
+    def __init__(self, hashes: Iterable[Literal["md5", "sha256", "xxh128"]], database: Database, path: Path) -> None:
+        self.path = path
+        self.hashes: tuple[HashAlgo, ...] = tuple(sorted(set(map(HashAlgo, hashes)) | {HashAlgo.XXH128}))
+        self.database = database
+        self.tui = HashingUI(path)
+        self._cwd = Path.cwd().resolve()
+        self._hashes_map: FileHashes = defaultdict(lambda: defaultdict(set))
+        self._sem = asyncio.BoundedSemaphore(_CONCURRENCY)
+        self._hashed_items: set[tuple[str, ...]] = set()
+        self._pool: ThreadPoolExecutor = ThreadPoolExecutor(
+            max_workers=_CONCURRENCY * len(self.hashes),
+            thread_name_prefix="hashing",
+        )
 
-    _cwd: Path = dataclasses.field(init=False, default_factory=Path.cwd)
-    _hashes_map: FileHashes = dataclasses.field(
-        init=False,
-        repr=False,
-        default_factory=lambda: defaultdict(lambda: defaultdict(set)),
-    )
-    _sem: asyncio.BoundedSemaphore = dataclasses.field(
-        init=False,
-        repr=False,
-        default_factory=lambda: asyncio.BoundedSemaphore(20),
-    )
-    _hashed_items: set[tuple[str, ...]] = dataclasses.field(
-        init=False,
-        repr=False,
-        default_factory=set,
-    )
+    __repr__ = simple_repr("path", "hashes", "database")
 
-    def __post_init__(self) -> None:
-        self.tui = HashingUI(self.path)
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_) -> None:
+        self._pool.shutdown(wait=True)
 
     @classmethod
     def create(cls, config: Config, db: Database, path: Path | None = None) -> Self:
@@ -100,7 +106,12 @@ class Hasher:
 
     async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
         file_path = self._cwd / filename
-        return await asyncio.to_thread(_compute_hash, file_path, hash_type)
+        return await asyncio.get_running_loop().run_in_executor(
+            self._pool,
+            _compute_hash,
+            file_path,
+            HashAlgo(hash_type),
+        )
 
     async def hash_item(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
@@ -129,29 +140,26 @@ class Hasher:
         except IsADirectoryError:
             return None
 
-        hashes: dict[str, asyncio.Task[str | None]] = {}
-
-        def compute_hash(algo: Literal["xxh128", "md5", "sha256"]) -> asyncio.Task[str | None]:
-            hashes[algo] = task = tg.create_task(
-                self._update_db_and_retrive_hash(file, original_filename, referer, algo)
-            )
-            return task
-
         async with self._sem:
             with self.tui.new_file(file):
                 async with asyncio.TaskGroup() as tg:
                     logger.info("Computing hashes of '%s'", file)
-                    xxxhash = compute_hash("xxh128")
-                    for algo in self.extra_hashes:
-                        _ = compute_hash(algo)
+                    task_map = {
+                        algo: tg.create_task(
+                            self._update_db_and_retrive_hash(
+                                file,
+                                original_filename,
+                                referer,
+                                algo,  # pyright: ignore[reportArgumentType]
+                            )
+                        )
+                        for algo in self.hashes
+                    }
 
-            logger.debug(
-                "hashes of '%s'\n%s",
-                file,
-                {algo: result for algo, task in hashes.items() if (result := task.result()) is not None},
-            )
+            hashes = {algo: result for algo, task in task_map.items() if (result := task.result()) is not None}
+            logger.debug("hashes of '%s'\n%s", file, hashes)
 
-        return xxxhash.result()
+        return hashes.get(HashAlgo.XXH128)
 
     async def _update_db_and_retrive_hash(
         self,

@@ -12,7 +12,7 @@ from aiohttp import ClientConnectorError
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.crawlers import Registry
-from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, DownloadConfig, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DDOSGuardError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, open_graph
@@ -42,6 +42,7 @@ class Selector:
 
 
 @HTTPConfig(rate_limit=(5, 1))
+@DownloadConfig(server_lock=True)
 class BunkrCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ("bunkr",)
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {

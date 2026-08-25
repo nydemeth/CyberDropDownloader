@@ -187,22 +187,7 @@ class DownloadClient:
         downloaded = await self._download(domain, media_item)
         if downloaded:
             await aio.move(media_item.partial_file, media_item.path)
-            if not media_item.is_segment:
-                if await self.__skip_by_duration(media_item):
-                    return False
-                await self.process_completed(media_item, domain)
-                await self.handle_media_item_completion(media_item, downloaded=True)
         return downloaded
-
-    async def __skip_by_duration(self, media_item: MediaItem) -> bool:
-        proceed = not await filter_by_duration(media_item, self.config)
-        await self.manager.database.history.add_duration(media_item.domain, media_item)
-        if not proceed:
-            logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
-            await aio.unlink(media_item.path)
-            await self.mark_incomplete(media_item, media_item.domain)
-            self.manager.scrape_mapper.tui.files.stats.skipped += 1
-        return not proceed
 
     async def mark_incomplete(self, media_item: MediaItem, domain: str) -> None:
         if media_item.is_segment:

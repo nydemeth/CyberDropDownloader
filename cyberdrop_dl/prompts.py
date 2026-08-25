@@ -3,17 +3,27 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-import inquirer
-import inquirer.questions
-from inquirer.themes import BlueComposure
+import questionary
 from rich.console import Console
 from rich.text import Text
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+
+_PROMP_STYLE = questionary.Style(
+    [
+        ("qmark", "fg:#FF9D00 bold"),
+        ("question", "bold"),
+        ("pointer", "fg:#2196f3 bold"),
+        ("highlighted", "fg:#2196f3 "),
+        ("selected", "fg:#cc5454"),
+        ("disabled", "fg:#858585 italic"),
+        ("answer", "fg:#2196f3 bold"),
+    ]
+)
 
 _ERROR = Text("ERROR:  ", style="bold red")
 _WARNING = Text("WARNING:", style="bold yellow")
@@ -38,8 +48,8 @@ class _ConsoleWrapper:
     def line(self, count: int = 1) -> None:
         self.console.line(count)
 
-    def input(self, msg: str = "") -> None:
-        self.console.input(msg)
+    def input(self, msg: str = "") -> str:
+        return self.console.input(msg)
 
     def clear(self) -> None:
         _ = os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
@@ -55,26 +65,22 @@ def enter_to_continue() -> None:
     console.input("Press <ENTER> to continue")
 
 
-def ask(question: inquirer.questions.Question) -> Any:
-    answers = inquirer.prompt([question], raise_keyboard_interrupt=True, theme=BlueComposure())
-    assert answers
-    return next(iter(answers.values()))
+def ask_choices(choices: Iterable[str]) -> str:
+    return questionary.select("What would you like to do", choices=tuple(choices), style=_PROMP_STYLE).unsafe_ask()
 
 
-def ask_choices[T](choices: Iterable[T]) -> T:
-    return ask(inquirer.List("main", message="What would you like to do", choices=list(choices)))
-
-
-def ask_text(text: str, default: object | None = None) -> str:
-    return ask(inquirer.Text("text", message=text, default=default))
+def ask_text(text: str, default: str = "") -> str:
+    return questionary.text(text, default=default, style=_PROMP_STYLE).unsafe_ask()
 
 
 def ask_confirmation(text: str = "", *, explicit: bool = False) -> bool:
     if explicit:
-        msg = "Type 'YES' to proceed"
-        answer = ask_text(f"{text}. {msg}" if text else msg)
+        msg = "Type 'YES' to proceed: "
+        if text and not text.endswith("?"):
+            text += "?"
+        answer = console.input(f"{text}. {msg}" if text else msg)
         return answer.strip().casefold() == "yes"
-    return ask(inquirer.Confirm("text", message=text))
+    return questionary.confirm(text, default=False, style=_PROMP_STYLE).unsafe_ask()
 
 
 def ask_dir(message: str = "Select dir path", default: Path | None = None) -> Path:
@@ -83,7 +89,7 @@ def ask_dir(message: str = "Select dir path", default: Path | None = None) -> Pa
         if not path.is_dir():
             raise NotADirectoryError(str(path))
 
-    return ask_path(message, default, validate=is_dir)
+    return ask_path(message, default, validate=is_dir, only_dir=True)
 
 
 def ask_path(
@@ -92,10 +98,13 @@ def ask_path(
     *,
     validate: Callable[[Path], None] | None = None,
     must_exists: bool = True,
+    only_dir: bool = False,
 ) -> Path:
     while True:
         try:
-            answer = ask_text(message, default=default or Path.home())
+            answer = questionary.path(
+                message, default=str(default or Path.home()), only_directories=only_dir, style=_PROMP_STYLE
+            ).unsafe_ask()
             path = Path(answer).expanduser()
             if must_exists and not path.exists():
                 raise FileNotFoundError(answer)
