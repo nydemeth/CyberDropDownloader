@@ -256,7 +256,26 @@ class Downloader:
             return False
 
         async with self.__download_context(media_item):
-            return await self._download(media_item)
+            downloaded = await self._download(media_item)
+
+        if not downloaded:
+            return False
+        assert not media_item.is_segment
+        if await self.__skip_by_duration(media_item):
+            return False
+        await self.client.process_completed(media_item, media_item.domain)
+        await self.client.handle_media_item_completion(media_item, downloaded=True)
+        return True
+
+    async def __skip_by_duration(self, media_item: MediaItem) -> bool:
+        proceed = not await filter_by_duration(media_item, self.config)
+        await self.manager.database.history.add_duration(media_item.domain, media_item)
+        if not proceed:
+            logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
+            await aio.unlink(media_item.path)
+            await self.client.mark_incomplete(media_item, media_item.domain)
+            self.manager.scrape_mapper.tui.files.stats.skipped += 1
+        return not proceed
 
     @error_handling_wrapper
     async def download_hls(self, media_item: MediaItem, m3u8_group: Rendition) -> None:
