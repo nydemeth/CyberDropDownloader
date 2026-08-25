@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- All downloads freezing if too many files where currently hashing
+- All downloads freezing if too many files were currently hashing
 
 ## [10.6.0] - 2026-08-24
 
