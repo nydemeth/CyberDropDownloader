@@ -107,14 +107,14 @@ def _validate_inputs(args: ArgumentCollection) -> None:
         cyclopts.validators.LimitedChoice(min=1, max=1)(args)
     except ValueError as e:
         if "choices may be specified." in str(e):
-            raise ValueError("You must provide either URLs or a file with `--input-file`") from None
+            raise ValueError("You must provide either URLs, `--input-file`, `--input-folder` or `--source`") from None
         raise
 
 
 _inputs_group = Group(sort_key=-1, validator=_validate_inputs)
 
 
-def download(
+def download(  # noqa: PLR0913
     urls: Annotated[
         tuple[HttpURL, ...],
         Parameter(
@@ -131,19 +131,37 @@ def download(
         Path | None,
         Parameter(
             group=_inputs_group,
-            alias="-i",
             help="Text/HTML file with URL(s) to download",
             validator=cyclopts.validators.Path(exists=True, dir_okay=False),
+        ),
+    ] = None,
+    input_folder: Annotated[
+        Path | None,
+        Parameter(
+            group=_inputs_group,
+            help="""Read all '.txt' within this folder for URL(s) to download (non recursive).
+            All URLs within the same file will be grouped in the own subfolder (the filename) within the downloads folder""",
+            validator=cyclopts.validators.Path(exists=True, dir_okay=True, file_okay=False),
+        ),
+    ] = None,
+    source: Annotated[
+        Path | None,
+        Parameter(
+            group=_inputs_group,
+            alias="-i",
+            help="File/folder with URL(s) to download (non recursive)",
+            validator=cyclopts.validators.Path(exists=True),
         ),
     ] = None,
     cli_args: CLIarguments | None = None,
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
-    if input_file:
-        input_file = input_file.resolve().absolute()
+    source = source or input_folder or input_file
+    if source:
+        source = source.resolve().absolute()
     with prepare_manager(cli_args, cli_overrides)() as manager:
-        scrape(manager, input_file or urls)
+        scrape(manager, source or urls)
 
 
 def prepare_manager(cli_args: CLIarguments | None, cli_overrides: Config | None) -> Manager:

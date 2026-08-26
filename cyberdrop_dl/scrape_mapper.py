@@ -21,8 +21,8 @@ from cyberdrop_dl.scrape_source import (
     RetryScrapeSource,
     URLsSource,
     load_items_from_db,
-    load_items_from_file,
     load_items_from_iterable,
+    load_items_from_path,
 )
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import remove_trailing_slash
@@ -446,7 +446,7 @@ def _build_max_children_map(config: Config) -> dict[ScrapeItemType, int]:
 
 
 def _parse_source(
-    src: RetryScrapeSource | Path | Iterable[AbsoluteHttpURL], manager: Manager
+    src: RetryScrapeSource | URLsSource, manager: Manager
 ) -> tuple[ScrapeStats, AsyncGenerator[ScrapeItem]]:
     match src:
         case RetryScrapeSource():
@@ -460,7 +460,7 @@ def _parse_source(
             )
         case Path():
             source = src
-            items = load_items_from_file(src)
+            items = load_items_from_path(src)
         case _:
             source = "--links (CLI args)"
             items = load_items_from_iterable(src)
