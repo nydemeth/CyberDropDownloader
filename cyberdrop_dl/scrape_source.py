@@ -68,11 +68,15 @@ async def load_items_from_folder(path: Path) -> AsyncGenerator[ScrapeItem]:
         [f async for f in aio.glob(path, "*.txt") if not f.name.startswith(".")], key=lambda x: str(x).casefold()
     )
     for file in files:
-        async with contextlib.aclosing(load_items_from_file(file)) as items:
-            async for item in items:
-                item.append_folders(file.stem)
-                item.part_of_album = True
-                yield item
+        async with contextlib.aclosing(_parse_input_file_groups(file)) as lines:
+            async for group_name, urls in lines:
+                for url in urls:
+                    item = ScrapeItem.from_url(url)
+                    item.append_folders(file.stem)
+                    item.part_of_album = True
+                    if group_name:
+                        item.append_folders(group_name)
+                    yield item
 
 
 async def load_items_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
