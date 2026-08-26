@@ -101,7 +101,11 @@ class Hasher:
 
     @classmethod
     def create(cls, config: Config, db: Database, path: Path | None = None) -> Self:
-        return cls(config.hashing.extra_hashes, db, path=(path or config.download_folder).expanduser())
+        return cls(
+            config.hashing.extra_hashes,
+            db,
+            path=(path or config.download_folder).expanduser().resolve().absolute(),
+        )
 
     @property
     def stats(self) -> HashingStats:
