@@ -461,3 +461,54 @@ def periodic_sleep(period: int, /) -> Callable[[], Awaitable[None]]:
             await asyncio.sleep(0)
 
     return sleep
+
+
+@dataclasses.dataclass(frozen=True, slots=True, eq=False)
+class BackgroundTask:
+    "Run a callable very <period>"
+
+    fn: Callable[[], Awaitable[Any]]
+    period: float
+    name: str | None = None
+    cancel_msg: str = "Background task took too long"
+    cancelled: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+    done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+    _task: asyncio.Task[None] = dataclasses.field(init=False, repr=False)
+
+    async def __aenter__(self) -> Self:
+        object.__setattr__(self, "_task", asyncio.create_task(self._run_forever(), name=self.name))
+        return self
+
+    async def __aexit__(
+        self,
+        et: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.cancelled.set()
+        try:
+            async with asyncio.timeout(self.period + 0.1):
+                await self.done.wait()
+        except TimeoutError:
+            await self._force_cancel()
+
+    async def _force_cancel(self) -> None:
+        try:
+            _ = self._task.cancel(self.cancel_msg)
+            await self._task
+        except asyncio.CancelledError:
+            pass
+
+    async def _run_forever(self) -> None:
+        try:
+            while True:
+                await self.fn()
+                try:
+                    async with asyncio.timeout(self.period):
+                        await self.cancelled.wait()
+                except TimeoutError:
+                    continue
+                else:
+                    return
+        finally:
+            self.done.set()

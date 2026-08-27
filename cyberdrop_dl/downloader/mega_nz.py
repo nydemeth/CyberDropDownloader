@@ -35,7 +35,7 @@ class MegaDownloadClient(DownloadClient):  # pyright: ignore[reportGeneralTypeIs
         chunk_decryptor = MegaChunker(crypto.key, crypto.iv, crypto.meta_mac)
 
         aiohttp_resp = resp.aiohttp_resp
-        async with aio.open(media_item.partial_file, mode="ab") as f:
+        async with self._track_speed(hook), aio.open(media_item.partial_file, mode="ab") as f:
             for _, chunk_size in get_chunks(file_size):
                 raw_chunk = await aiohttp_resp.content.readexactly(chunk_size)
                 chunk = chunk_decryptor.read(raw_chunk)

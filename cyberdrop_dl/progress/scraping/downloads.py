@@ -144,7 +144,10 @@ class DownloadsPanel(OverFlowPanel):
             ),
             max_rows=max_rows,
         )
+
         self._hls_progress: Final[DictProgress] = DictProgress("")
+        for prog in (self._progress, self._hls_progress):
+            prog.speed_estimate_period = 4
         self._total_bytes = 0
 
     @override

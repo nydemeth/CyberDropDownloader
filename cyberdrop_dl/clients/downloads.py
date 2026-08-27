@@ -140,13 +140,21 @@ class DownloadClient:
             url=media_item.url,
         )
 
+    def _track_speed(self, hook: ProgressHook) -> aio.BackgroundTask:
+        "force update task speed at least every 0.1 seconds"
+
+        async def update_speed() -> None:
+            hook.advance(0)
+
+        return aio.BackgroundTask(update_speed, period=0.1)
+
     async def _append_content(self, media_item: MediaItem, hook: ProgressHook, resp: AbstractResponse[Any]) -> None:
         check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
         await check_free_space(media_item.size)
         await self._pre_download_check(media_item)
 
-        async with aio.open(media_item.partial_file, mode="ab") as f:
+        async with self._track_speed(hook), aio.open(media_item.partial_file, mode="ab") as f:
             async for chunk in resp.iter_chunked(self.chunk_size):
                 n_bytes = len(chunk)
                 await self.speed_limiter.acquire(n_bytes)
