@@ -43,7 +43,7 @@ def main_menu(
     input_file: Annotated[
         Path,
         Parameter(
-            alias="-i",
+            alias=("-i", "--input"),
             help="Text/HTML file with URL(s) to download",
             validator=cyclopts.validators.Path(dir_okay=False),
             show_default=False,

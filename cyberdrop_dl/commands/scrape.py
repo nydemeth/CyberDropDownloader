@@ -144,7 +144,7 @@ def download(  # noqa: PLR0913
             validator=cyclopts.validators.Path(exists=True, dir_okay=True, file_okay=False),
         ),
     ] = None,
-    source: Annotated[
+    input: Annotated[  # noqa: A002
         Path | None,
         Parameter(
             group=_inputs_group,
@@ -157,7 +157,7 @@ def download(  # noqa: PLR0913
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
-    source = source or input_folder or input_file
+    source = input or input_folder or input_file
     if source:
         source = source.resolve().absolute()
     with prepare_manager(cli_args, cli_overrides)() as manager:
