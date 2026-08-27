@@ -471,11 +471,29 @@ class BackgroundTask:
     period: float
     name: str | None = None
     cancel_msg: str = "Background task took too long"
-    cancelled: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
-    done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+    cancel_timeout: float = 0.2
+
+    _cancelled: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+    _done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
     _task: asyncio.Task[None] = dataclasses.field(init=False, repr=False)
 
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled.is_set()
+
+    @property
+    def done(self) -> bool:
+        return self._cancelled.is_set()
+
+    def __post_init__(self) -> None:
+        assert self.period >= 0.01
+        assert self.cancel_msg
+
     async def __aenter__(self) -> Self:
+        if self.done:
+            raise RuntimeError("This background task is already done. Create a new instance")
+        if self.cancelled:
+            raise RuntimeError("This background task has already been cancelled. Create a new instance")
         object.__setattr__(self, "_task", asyncio.create_task(self._run_forever(), name=self.name))
         return self
 
@@ -485,10 +503,10 @@ class BackgroundTask:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        self.cancelled.set()
+        self._cancelled.set()
         try:
-            async with asyncio.timeout(self.period + 0.1):
-                await self.done.wait()
+            async with asyncio.timeout(self.period + self.cancel_timeout):
+                await self._done.wait()
         except TimeoutError:
             await self._force_cancel()
 
@@ -505,10 +523,10 @@ class BackgroundTask:
                 await self.fn()
                 try:
                     async with asyncio.timeout(self.period):
-                        await self.cancelled.wait()
+                        await self._cancelled.wait()
                 except TimeoutError:
                     continue
                 else:
                     return
         finally:
-            self.done.set()
+            self._done.set()
