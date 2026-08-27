@@ -25,7 +25,12 @@ else:
 
     class WreqClient: ...
 
-    class Response: ...
+    if IS_INSTALLED:
+        from wreq.wreq import Response
+
+    else:
+
+        class Response: ...
 
 
 def cast_method(method: HttpMethod) -> Method:
@@ -41,10 +46,11 @@ def cast_tls(version: Literal["1.2", "1.3"]) -> TlsVersion:
     return getattr(TlsVersion, tls)
 
 
-def cast_impersonate(target: ImpersonateTarget) -> Emulation | Profile:
+def cast_impersonate(target: ImpersonateTarget | Literal[True]) -> Emulation | Profile:
     from wreq.emulation import Emulation, Platform
 
     return {
+        True: Emulation.Chrome149,
         "chrome": Emulation.Chrome149,
         "edge": Emulation.Edge148,
         "safari": Emulation.Safari26_4,
