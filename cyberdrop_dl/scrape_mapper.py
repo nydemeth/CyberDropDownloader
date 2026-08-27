@@ -169,10 +169,12 @@ class ScrapeMapper:
         assert not self.task_mngr.scrape.done.is_set()
         self.logs.delete_old_logs()
         config = self.manager.config
-        _ = filepath.MAX_FILE_LEN.set(config.max_file_name_length)
-        _ = filepath.MAX_FOLDER_LEN.set(config.max_folder_name_length)
+
         _ = CONCURRENT_SEGMENTS.set(config.downloads.concurrent_segments)
         _ = ALLOW_NO_EXT.set(config.filters.allow_files_with_no_extension)
+
+        filepath.setup(config.max_file_name_length, config.max_folder_name_length, config.restrict_path)
+
         if config.ui.portrait:
             env.FORCE_PORTRAIT_MODE = True
 
