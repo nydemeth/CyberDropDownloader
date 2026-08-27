@@ -263,6 +263,11 @@ class _FlareSolverrResponse(AbstractResponse[FlaresolverrSolution]):
     def __post_init__(self) -> None:
         super().__post_init__()
         self.id: str = self._resp.id
+        if not self.content_type:
+            self.content_type: str = "text/html"
+            logger.warning(
+                "Unable to detect content type of Flaresolverr response %s, assuming '%s'", self.id, self.content_type
+            )
 
     @override
     async def _read(self) -> bytes:
@@ -463,9 +468,9 @@ def _parse_headers(url: AbsoluteHttpURL, headers: CIMultiDictProxy[str]) -> tupl
 
 
 def _infer_content_type_from_body(content: str) -> str:
-    text = content.lstrip()
-    if text.startswith("<") and "html>" in text[:20]:
+    sample = content.lstrip()[:20]
+    if sample.startswith("<html") or (sample.startswith("<") and "html>" in sample):
         return "text/html"
-    if text.startswith(("{", "[")):
+    if sample.startswith(("{", "[")):
         return "application/json"
     return ""
