@@ -64,7 +64,7 @@ type SupportedDomains = OneOrTuple[str]
 type DebridURL = Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None
 
 _ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
-_CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY", default=True)
+_CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY")
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
@@ -235,6 +235,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
+        _CHECK_DL_CAPACITY.set(self.config.downloads.back_pressure)
         assert self.__dl_config__.server_lock is not None
         self.downloader: Downloader = Downloader(
             manager,

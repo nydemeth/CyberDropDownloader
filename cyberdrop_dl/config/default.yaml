@@ -68,6 +68,7 @@ delete_partial_files: false
 download_folder: downloads/cyberdrop-dl
 downloads:
   attempts: 2
+  back_pressure: true
   concurrency: 15
   concurrency_per_domain: 5
   concurrent_segments: 10

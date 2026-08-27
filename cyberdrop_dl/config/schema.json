@@ -225,6 +225,11 @@
           "$ref": "#/$defs/ByteSizeSerilized",
           "default": 0
         },
+        "back_pressure": {
+          "default": true,
+          "title": "Back Pressure",
+          "type": "boolean"
+        },
         "jitter": {
           "default": 0,
           "minimum": 0,

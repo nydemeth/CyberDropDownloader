@@ -315,6 +315,9 @@ class Downloads(ConfigGroup):
     speed_limit: ByteSizeSerilized = ByteSize(0)
     "Max speed rate (in bytes per second) to limit downloads (combined)"
 
+    back_pressure: bool = True
+    "Throttle scrape requests if there are too many downloads queued for the same site"
+
     jitter: NonNegativeFloat = 0
     "Wait a random additional number of seconds in between 0 and <jitter> before downloads"
 
