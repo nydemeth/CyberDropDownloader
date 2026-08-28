@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `-i` is now an alias for `--input` instead of `--input-file`
 
+### Fixed
+
+- Clips downloads (Twitch)
+
 ## [10.6.1] - 2026-08-25
 
 ### Changed

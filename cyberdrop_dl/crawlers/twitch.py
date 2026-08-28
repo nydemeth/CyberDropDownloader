@@ -158,7 +158,7 @@ class TwitchCrawler(Crawler):
             ".mp4",
             file_id=slug,
             resolution=best.resolution,
-            audio_codec=f"{round(best.fps)}fps" if best.fps > 45 else None,
+            fps=round(best.fps) if best.fps > 45 else None,
         )
         source = best.url.update_query(token=access_token["value"], sig=access_token["signature"])
         await self.handle_file(source, scrape_item, title, custom_filename=filename)
@@ -232,7 +232,7 @@ class TwitchAPI(API):
             {
                 "slug": slug,
             },
-            "0a02bb974443b576f5579aab0fef1d4b7f44e58a8a256f0c5adfead0db70640f",
+            "2db6a3b20eabf510bd3cf465ae2408834b59eb6b8af89ca73ab1486cacecfb63",
         )
         clip = resp["data"]["clip"]
         if clip is None:
