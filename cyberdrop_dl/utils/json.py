@@ -85,6 +85,8 @@ def _verbose_context() -> Generator[None]:
         yield
     except json.JSONDecodeError as e:
         sub_string = e.doc[e.pos - 10 : e.pos + 10]
+        if not sub_string:
+            raise
         msg = f"{e.msg} at around '{sub_string}', char: '{e.doc[e.pos]}'"
         raise json.JSONDecodeError(msg, e.doc, e.pos) from None
 
