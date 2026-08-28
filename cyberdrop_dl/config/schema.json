@@ -119,6 +119,23 @@
       "format": "path",
       "type": "string"
     },
+    "ClonrConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "use_source": {
+          "default": false,
+          "title": "Use Source",
+          "type": "boolean"
+        },
+        "zip": {
+          "default": false,
+          "title": "Zip",
+          "type": "boolean"
+        }
+      },
+      "title": "ClonrConfig",
+      "type": "object"
+    },
     "ClypitConfig": {
       "additionalProperties": false,
       "properties": {
@@ -168,6 +185,9 @@
         },
         "octave_music": {
           "$ref": "#/$defs/OctaveMusicConfig"
+        },
+        "clonr": {
+          "$ref": "#/$defs/ClonrConfig"
         }
       },
       "title": "Crawlers",

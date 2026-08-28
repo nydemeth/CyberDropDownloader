@@ -66,7 +66,7 @@ class ClonrCrawler(Crawler):
     @error_handling_wrapper
     async def _file(self, scrape_item: ScrapeItem, file: File) -> None:
         if file["state"] != "done":
-            self.log.warning("Ignoring file [%s] %s", file["state"], file["name"])
+            self.log.warning("Ignoring file [%s] '%s'", file["state"], file["name"])
             return
 
         src = self.parse_url(file["url"])

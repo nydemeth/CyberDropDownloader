@@ -26,6 +26,9 @@ crawlers:
     - vorbis
     - aiff
     - alas
+  clonr:
+    use_source: false
+    zip: false
   clypit:
     prefer_mp3: false
   disabled: []
