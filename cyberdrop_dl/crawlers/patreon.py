@@ -1,20 +1,23 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict, cast
 
-from bs4 import BeautifulSoup
 from typing_extensions import ReadOnly
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.clients.http import HTTPConfig
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, next_js
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Generator
+    from collections.abc import AsyncGenerator, Generator
+
+    from bs4 import BeautifulSoup
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
@@ -50,7 +53,10 @@ class Post(Included):
 
 class PatreonCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Post": "/posts/<slug>",
+        "Post": (
+            "/posts/<slug>-<post-id>",
+            "/<creator>/posts/<slug>-<post-id>",
+        ),
         "Creator": (
             "/<creator>",
             "/cw/<creator>",
@@ -61,23 +67,26 @@ class PatreonCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com")
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date:%Y-%m-%d} - {title}"
 
+    def __post_init__(self) -> None:
+        self.api: PatreonV1API = PatreonV1API.from_crawler(self)
+
     @property
     def separate_posts(self) -> bool:
         return True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["posts", _]:
-                return await self.post(scrape_item)
+            case ["posts", slug] | [_, "posts", slug]:
+                post_id = slug.rpartition("-")[-1]
+                await self.post(scrape_item, post_id)
             case [creator] | ["cw", creator]:
-                return await self.creator(scrape_item, creator)
+                await self.creator(scrape_item, creator)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
-    async def post(self, scrape_item: ScrapeItem) -> None:
-        soup = await self.request_soup(scrape_item.url, impersonate=True)
-        post: dict[str, Any] = _extract_bootstrap(soup)["post"]
+    async def post(self, scrape_item: ScrapeItem, post_id: str) -> None:
+        post = await self.api.post(post_id)
         self._post(
             scrape_item,
             post=_flatten_post(post["data"]),
@@ -146,6 +155,12 @@ class PatreonCrawler(Crawler):
             url = self.parse_url(post_file["url"])
             yield Media(media_id, post_file.get("name"), url, post_file)
 
+        if image := post.get("image"):
+            url = self.parse_url(image.get("large_url") or image["url"])
+            media_id = url.parts[url.parts.index(post["id"]) + 1]
+            media_ids.add(media_id)
+            yield Media(media_id, None, url, image)
+
         for media_id in _get_post_media(post):
             media = included[media_id]
             attributes = media["attributes"]
@@ -154,35 +169,17 @@ class PatreonCrawler(Crawler):
                 media_ids.add(media_id)
                 yield Media(media_id, attributes.get("file_name"), self.parse_url(url), attributes)
 
-        return
         # TODO: convert tiptap JSON to HTML or extract media ids from tiptap
-        if not post["content"]:
-            return
-        soup = BeautifulSoup(post["content"], "html.parser")
-        for media_id in css.iselect(soup, "[data-media-id]", "data-media-id"):
-            if media_id in media_ids:
-                continue
-            self.log.warning("Found extra media id %s", media_id)
-            media_ids.add(media_id)
 
     @error_handling_wrapper
     async def creator(self, scrape_item: ScrapeItem, creator: str) -> None:
-        campaign_id = await self._get_campaign_id(creator)
+        campaign_id = await self.api.campaign_id(creator)
         await self.campaign(scrape_item, campaign_id)
 
     @error_handling_wrapper
     async def campaign(self, scrape_item: ScrapeItem, campaign_id: str) -> None:
         scrape_item.setup_as_profile("")
-        api_url = (
-            (self.PRIMARY_URL / "api/posts")
-            .with_query(_CAMPAIGN_API_PARAMS)
-            .extend_query(
-                {
-                    "filter[campaign_id]": campaign_id,
-                }
-            )
-        )
-        async for resp in self._api_pager(api_url):
+        async for resp in self.api.posts(campaign_id):
             included = _flatten_included(resp["included"])
             for post in resp["data"]:
                 post = _flatten_post(post)
@@ -190,9 +187,46 @@ class PatreonCrawler(Crawler):
                 self._post(new_item, post, included)
                 scrape_item.add_children()
 
-    async def _api_pager(self, api_url: AbsoluteHttpURL) -> AsyncIterator[dict[str, Any]]:
+
+@HTTPConfig(impersonate=True)
+class PatreonV1API(API):
+    # Public API v1 is retiring on October 7, 2026.
+    # https://docs.patreon.com/#apiv2-resource-endpoints
+    ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com/api")
+
+    async def post(self, post_id: str) -> dict[str, Any]:
+        url = (self.ENTRYPOINT / "posts" / post_id).with_query({"json-api-version": 1.0})
+        return await self.request_json(url)
+
+    async def campaign_id(self, creator: str) -> str:
+        async with self.request(self.PRIMARY_URL / creator, impersonate=True) as resp:
+            soup = await resp.soup()
+            with contextlib.suppress(css.SelectorError):
+                bootstrap = _extract_bootstrap(soup)
+                return bootstrap["campaign"]["data"]["id"]
+
+            with contextlib.suppress(css.SelectorError):
+                url = self.parse_url(css.select(soup, "head link[href*='/campaign/']", "href"))
+                return url.parts[url.parts.index("campaign") + 1]
+
+            # TODO: fix next_js chunk parsing
+            return _extract_campaign_id(await resp.text())
+
+    def posts(self, campaign_id: str) -> AsyncGenerator[dict[str, Any]]:
+        url = (
+            (self.ENTRYPOINT / "posts")
+            .with_query(_CAMPAIGN_API_PARAMS)
+            .extend_query(
+                {
+                    "filter[campaign_id]": campaign_id,
+                }
+            )
+        )
+        return self.pager(url)
+
+    async def pager(self, api_url: AbsoluteHttpURL) -> AsyncGenerator[dict[str, Any]]:
         while True:
-            resp = await self.request_json(api_url, impersonate=True)
+            resp = await self.request_json(api_url)
             yield resp
 
             try:
@@ -202,21 +236,6 @@ class PatreonCrawler(Crawler):
             if not cursor:
                 break
             api_url = api_url.update_query({"page[cursor]": cursor})
-
-    async def _get_campaign_id(self, creator: str) -> str:
-        async with self.request(self.PRIMARY_URL / creator, impersonate=True) as resp:
-            soup = await resp.soup()
-            try:
-                bootstrap = _extract_bootstrap(soup)
-                return bootstrap["campaign"]["data"]["id"]
-            except css.SelectorError:
-                # TODO: fix next_js chunk parsing
-                try:
-                    url = self.parse_url(css.select(soup, "head link[href*='/campaign/']", "href"))
-                except css.SelectorError:
-                    return _extract_campaign_id(await resp.text())
-                else:
-                    return url.parts[url.parts.index("campaign") + 1]
 
 
 def _extract_campaign_id(content: str) -> str:
@@ -229,11 +248,6 @@ def _extract_campaign_id(content: str) -> str:
         except ValueError:
             pass
     raise ScrapeError(422, "Unable to extract campaign id")
-
-
-def _extract_campaign_id_next_js(soup: BeautifulSoup) -> str:
-    included = next_js.ifind(next_js.extract(soup), "id", "type", "attributes")
-    return next(incl["id"] for incl in included if incl["type"] == "campaign")
 
 
 def _flatten_included(included: list[Included]) -> dict[str, Included]:
