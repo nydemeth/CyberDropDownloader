@@ -14,7 +14,6 @@ import aiohttp.multipart
 from aiohttp import ClientResponse, hdrs
 from bs4 import BeautifulSoup
 from multidict import CIMultiDict, CIMultiDictProxy
-from propcache import under_cached_property
 from typing_extensions import TypeVar
 
 from cyberdrop_dl.clients import get_logger, wreq
@@ -161,7 +160,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         return cls_.create(resp)  # pyright: ignore[reportArgumentType]
 
     @final
-    @under_cached_property
+    @property
     def content_disposition(self) -> ContentDisposition:
         try:
             header = self.headers[hdrs.CONTENT_DISPOSITION]
