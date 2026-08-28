@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, override
 
 from pydantic import Field
 from pydantic.functional_validators import AfterValidator
@@ -108,6 +108,20 @@ class OnePaceConfig(ConfigModel):
     """Download episodes with english audio tracks instead of japanese (if available)"""
 
 
+class ClonrConfig(ConfigModel):
+    use_source: bool = False
+    "Ignore files in clone and process the original Mega.nz URL"
+
+    zip: bool = False
+    "Download entire clone as a single ZIP file"
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        super().model_post_init(context)
+        if self.use_source and self.zip:
+            raise ValueError("'clonr.zip' and 'clonr.use_source' are mutually exclusive")
+
+
 class GenericCrawlers(ConfigModel):
     wordpress_media: tuple[HttpURL, ...] = ()
     wordpress_html: tuple[HttpURL, ...] = ()
@@ -130,3 +144,4 @@ class Crawlers(ConfigGroup, name=None):
     pawchive: KemonoConfig = Field(default_factory=KemonoConfig)
     only_haven: KemonoConfig = Field(default_factory=KemonoConfig)
     octave_music: OctaveMusicConfig = Field(default_factory=OctaveMusicConfig)
+    clonr: ClonrConfig = Field(default_factory=ClonrConfig)
