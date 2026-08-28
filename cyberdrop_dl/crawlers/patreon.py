@@ -157,9 +157,13 @@ class PatreonCrawler(Crawler):
 
         if image := post.get("image"):
             url = self.parse_url(image.get("large_url") or image["url"])
-            media_id = url.parts[url.parts.index(post["id"]) + 1]
-            media_ids.add(media_id)
-            yield Media(media_id, None, url, image)
+            try:
+                media_id = url.parts[url.parts.index(post["id"]) + 1]
+            except ValueError:
+                pass
+            else:
+                media_ids.add(media_id)
+                yield Media(media_id, None, url, image)
 
         for media_id in _get_post_media(post):
             media = included[media_id]
