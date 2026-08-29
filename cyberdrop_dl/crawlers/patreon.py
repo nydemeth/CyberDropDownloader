@@ -12,22 +12,36 @@ from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, next_js
+from cyberdrop_dl.utils.dataclass import DictDataclass
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Iterable
 
     from bs4 import BeautifulSoup
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(frozen=True, slots=True, order=True)
 class Media:
     id: str
     name: str | None
     url: AbsoluteHttpURL
     attributes: dict[str, Any]
+    hash: str | None = None
+
+    __iter__ = DictDataclass.__iter__
+
+    def __json__(self) -> dict[str, Any]:
+        me = dict(self)
+        del me["attributes"]
+        me["url"] = str(self.url)
+        return me
+
+    def __post_init__(self) -> None:
+        if not self.hash:
+            object.__setattr__(self, "hash", _md5_from_url(self.url))
 
 
 class Asset(TypedDict):
@@ -107,12 +121,24 @@ class PatreonCrawler(Crawler):
         scrape_item.append_folders(post_title)
 
         self.create_eager_task(self.write_metadata(scrape_item, f"post_{post['id']}", post))
-        for media in self._parse_media(post, included):
+
+        medias = tuple(_parse_media(post, included))
+        unique_medias = tuple(_unique_media(medias))
+        self.log.debug(
+            "Found %s media assets in post %s (%s unique)\n%s",
+            len(medias),
+            post["id"],
+            len(unique_medias),
+            LazyLogMedia(medias),
+        )
+
+        for media in unique_medias:
             self.create_task(self._media(scrape_item, media))
             self.create_eager_task(self.write_metadata(scrape_item, f"media_{media.id}", media))
             scrape_item.add_children()
 
         if embed := post.get("embed"):
+            self.log.debug("Found embed in post %s: %s", post["id"], embed)
             new_item = scrape_item.create_child(self.parse_url(embed["url"]))
             self.handle_embed(new_item)
             self.create_eager_task(self.write_metadata(scrape_item, f"embed_{post['id']}", embed))
@@ -126,7 +152,10 @@ class PatreonCrawler(Crawler):
         name = media.name
         if not name:
             async with self.request(media.url) as resp:
-                name = resp.content_disposition.filename
+                try:
+                    name = resp.content_disposition.filename
+                except ScrapeError:
+                    name = media.url.name or media.url.parent.name
 
         try:
             filename, ext = self.get_filename_and_ext(name)
@@ -134,46 +163,25 @@ class PatreonCrawler(Crawler):
             name = media.url.name
             filename, ext = self.get_filename_and_ext(name)
 
-        await self.handle_file(media.url, scrape_item, name, ext, custom_filename=filename)
+        await self.handle_file(
+            media.url,
+            scrape_item,
+            name,
+            ext,
+            custom_filename=self.create_custom_filename(filename, ext, file_id=media.id),
+        )
 
     async def _m3u8_media(self, scrape_item: ScrapeItem, media: Media) -> None:
         m3u8, info = await self.request_m3u8_playlist(media.url)
         filename = self.create_custom_filename(
-            media.url.name.removesuffix(".m3u8"),
+            media.hash or media.url.name.removesuffix(".m3u8"),
             ext := ".mp4",
+            file_id=media.id,
             resolution=info.resolution,
             video_codec=info.codecs.video,
             audio_codec=info.codecs.audio,
         )
         await self.handle_file(media.url, scrape_item, filename, ext, m3u8=m3u8)
-
-    def _parse_media(self, post: Post, included: dict[str, Included]) -> Generator[Media]:
-        media_ids: set[str] = set()
-        if post_file := post.get("post_file"):
-            media_id = str(post_file["media_id"])
-            media_ids.add(media_id)
-            url = self.parse_url(post_file["url"])
-            yield Media(media_id, post_file.get("name"), url, post_file)
-
-        if image := post.get("image"):
-            url = self.parse_url(image.get("large_url") or image["url"])
-            try:
-                media_id = url.parts[url.parts.index(post["id"]) + 1]
-            except ValueError:
-                pass
-            else:
-                media_ids.add(media_id)
-                yield Media(media_id, None, url, image)
-
-        for media_id in _get_post_media(post):
-            media = included[media_id]
-            attributes = media["attributes"]
-
-            if media["type"] == "media" and (url := attributes.get("download_url")) and media_id not in media_ids:
-                media_ids.add(media_id)
-                yield Media(media_id, attributes.get("file_name"), self.parse_url(url), attributes)
-
-        # TODO: convert tiptap JSON to HTML or extract media ids from tiptap
 
     @error_handling_wrapper
     async def creator(self, scrape_item: ScrapeItem, creator: str) -> None:
@@ -192,6 +200,17 @@ class PatreonCrawler(Crawler):
                 scrape_item.add_children()
 
 
+class LazyLogMedia:
+    def __init__(self, media: tuple[Media, ...]) -> None:
+        self.media: tuple[Media, ...] = media
+
+    def __json__(self) -> dict[str, dict[str, Any]]:
+        return {m.id: m.__json__() for m in self.media}
+
+    def __str__(self):
+        return str(self.__json__())
+
+
 @HTTPConfig(impersonate=True)
 class PatreonV1API(API):
     # Public API v1 is retiring on October 7, 2026.
@@ -199,7 +218,7 @@ class PatreonV1API(API):
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com/api")
 
     async def post(self, post_id: str) -> dict[str, Any]:
-        url = (self.ENTRYPOINT / "posts" / post_id).with_query({"json-api-version": 1.0})
+        url = (self.ENTRYPOINT / "posts" / post_id).with_query(_API_PARAMS)
         return await self.request_json(url)
 
     async def campaign_id(self, creator: str) -> str:
@@ -219,7 +238,7 @@ class PatreonV1API(API):
     def posts(self, campaign_id: str) -> AsyncGenerator[dict[str, Any]]:
         url = (
             (self.ENTRYPOINT / "posts")
-            .with_query(_CAMPAIGN_API_PARAMS)
+            .with_query(_API_PARAMS)
             .extend_query(
                 {
                     "filter[campaign_id]": campaign_id,
@@ -305,7 +324,49 @@ def _get_post_media(post: Post) -> Generator[str]:
             yield asset["id"]
 
 
-_CAMPAIGN_API_PARAMS = (
+def _md5_from_url(url: AbsoluteHttpURL) -> str | None:
+    for p in reversed(url.parts):
+        if len(p) == 32:
+            return p
+
+
+def _unique_media(medias: Iterable[Media]) -> Generator[Media]:
+    media_ids: set[str] = set()
+    media_hashes: set[str] = set()
+
+    for media in medias:
+        if media.id in media_ids:
+            continue
+        media_ids.add(media.id)
+        if media.hash:
+            if media.hash in media_hashes:
+                continue
+            media_hashes.add(media.hash)
+        yield media
+
+
+def _parse_media(post: Post, included: dict[str, Included]) -> Generator[Media]:
+    if post_file := post.get("post_file"):
+        media_id = str(post_file["media_id"])
+        url = PatreonCrawler.parse_url(post_file["url"])
+        yield Media(media_id, post_file.get("name"), url, post_file)
+
+    for media_id in _get_post_media(post):
+        media = included[media_id]
+        attributes = media["attributes"]
+
+        if media["type"] == "media" and (url := attributes.get("download_url")):
+            yield Media(media_id, attributes.get("file_name"), PatreonCrawler.parse_url(url), attributes)
+
+    if image := post.get("image"):
+        url = PatreonCrawler.parse_url(image.get("large_url") or image["url"])
+        if m_hash := _md5_from_url(url):
+            yield Media(m_hash, None, url, image)
+
+    # TODO: convert tiptap JSON to HTML or extract media ids from tiptap
+
+
+_API_PARAMS = (
     (
         "include",
         ",".join(
