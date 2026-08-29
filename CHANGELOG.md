@@ -36,10 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `-i` is now an alias for `--input` instead of `--input-file`
+- Increase limit of concurrent scrapes from the same site, from 20 to 40
+- Use multiple concurrent connections to the database for faster reads (up to 10)
+- Database will now operate in WAL mode, which may create additional temp files in the same folder as the database file (`.db-shm` and `.db-wal`)
 
 ### Fixed
 
 - Clips downloads (Twitch)
+- Single post downloads (Patreon)
 
 ## [10.6.1] - 2026-08-25
 
