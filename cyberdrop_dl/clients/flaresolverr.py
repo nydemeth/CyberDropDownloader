@@ -159,20 +159,28 @@ class Client:
                 self.disable()
                 raise FlaresolverrError(msg) from e
 
-    async def request(self, url: AbsoluteHttpURL, data: dict[str, Any] | None = None) -> Solution:
+    async def request(
+        self, url: AbsoluteHttpURL, data: dict[str, Any] | None = None, wait: int | None = None
+    ) -> Solution:
         await self._ensure_session()
         try:
-            return await self.raw_request(url, data)
+            return await self.raw_request(url, data, wait=wait)
         except aiohttp.ClientError as e:
             self.disable()
             raise FlaresolverrError(f"Could not connect to Flaresolverr at {self.url} ({e!r})") from None
 
-    async def raw_request(self, url: AbsoluteHttpURL, data: dict[str, Any] | None = None) -> Solution:
+    async def raw_request(
+        self,
+        url: AbsoluteHttpURL,
+        data: dict[str, Any] | None = None,
+        wait: int | None = None,
+    ) -> Solution:
         resp = await self._request(
             Command.POST_REQUEST if data else Command.GET_REQUEST,
             url=str(url),
             data=data,
             session=self._session_id,
+            wait=wait,
         )
 
         if not resp.ok:
@@ -183,19 +191,10 @@ class Client:
 
         return resp.solution
 
-    async def _request(self, command: Command, /, data: dict[str, Any] | None = None, **params: Any) -> Response:
-        timeout = {}
-        if command is Command.CREATE_SESSION:
-            timeout.update(timeout=aiohttp.ClientTimeout(total=5 * 60, connect=60))  # 5 minutes to create session
-
-        #  timeout in milliseconds (60s)
-        params = {"cmd": str(command), "maxTimeout": 60_000} | params
-        if not self.use_session:
-            params.pop("session", None)
-
-        if data:
-            assert command is Command.POST_REQUEST
-            params["postData"] = aiohttp.FormData(data)().decode()
+    async def _request(
+        self, command: Command, /, data: dict[str, Any] | None = None, wait: int | None = None, **json_data: Any
+    ) -> Response:
+        req_params, json_data = self._prepare_req(command, json_data, data=data, wait=wait)
 
         async with self._request_lock:
             request_id = self._request_id()
@@ -205,8 +204,8 @@ class Client:
                 else f"Waiting for Flaresolverr [{request_id}]"
             )
             with show_msg(msg):
-                logger.traffic("Making FlareSolverr request [id=%s]\n%s", request_id, params)
-                async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
+                logger.traffic("Making FlareSolverr request [id=%s]\n%s", request_id, json_data)
+                async with self._aiohttp_session.post(self.url, json=json_data, **req_params) as response:
                     resp_json = await response.json()
                     try:
                         resp = Response.from_dict(resp_json)
@@ -237,6 +236,37 @@ class Client:
         if self._session_id:
             _ = await self._request(Command.DESTROY_SESSION, session=self._session_id)
             self._session_id = ""
+
+    def _prepare_req(
+        self,
+        command: Command,
+        /,
+        json: dict[str, Any],
+        *,
+        wait: int | None,
+        data: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        json = {"cmd": str(command), "maxTimeout": 60_000} | json
+        if not self.use_session:
+            json.pop("session", None)
+
+        req_params: dict[str, Any] = {}
+        timeout = None
+        if command is Command.CREATE_SESSION:
+            timeout = aiohttp.ClientTimeout(total=5 * 60, connect=60)
+
+        elif wait:
+            timeout = aiohttp.ClientTimeout(total=wait + 60, connect=60)
+            json["waitInSeconds"] = wait
+
+        if timeout:
+            req_params["timeout"] = timeout
+
+        if data:
+            assert command is Command.POST_REQUEST
+            json["postData"] = aiohttp.FormData(data)().decode()
+
+        return req_params, json
 
 
 def _parse_cookies(cookies: Iterable[Mapping[str, Any]]) -> SimpleCookie:

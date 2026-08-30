@@ -17,7 +17,7 @@ from cyberdrop_dl.clients import curl_cffi, flaresolverr, get_logger, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
-from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError
+from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, FlaresolverrError, ScrapeError
 from cyberdrop_dl.signature import simple_repr
 from cyberdrop_dl.utils import enter_context, truncated_preview
 from cyberdrop_dl.utils.dataclass import ConfigDataclass, frozen
@@ -328,17 +328,28 @@ class HTTPClient:
         ) as aio_resp:
             yield AbstractResponse.create(aio_resp)
 
+    async def flaresolverr_request(
+        self, url: AbsoluteHttpURL, data: Any | None = None, wait: int | None = None
+    ) -> AbstractResponse[Any]:
+        flare = self.flaresolverr
+        flare = self._flaresolverr
+        if not flare:
+            raise ScrapeError(
+                "Flaresolverr Required", "This request needs a real running browser to execute javascript"
+            )
+        if flare.is_down:
+            raise FlaresolverrError(f"Could not connect to Flaresolverr at {flare.url}")
+        return await self._flaresolverr_request(url, data, wait=wait)
+
     async def _flaresolverr_request(
-        self,
-        url: AbsoluteHttpURL,
-        data: Any | None = None,
+        self, url: AbsoluteHttpURL, data: Any | None = None, wait: int | None = None
     ) -> AbstractResponse[Any]:
         """Make a request with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page, even if flaresolverr fails to detect/solve a challenge"""
 
         assert self.flaresolverr
-        solution = await self.flaresolverr.request(url, data)
+        solution = await self.flaresolverr.request(url, data, wait=wait)
         self.cookies.update_cookies(solution.cookies)
         flaresolverr.verify_solution(self.config.network.user_agent, solution)
         return AbstractResponse.create(solution)
