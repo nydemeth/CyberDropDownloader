@@ -108,7 +108,7 @@ class Client:
 
     _session_id: str = dataclasses.field(init=False, default="")
     _session_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
-    _request_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
+    _sem: asyncio.Semaphore = dataclasses.field(init=False, default_factory=lambda: asyncio.Semaphore(10))
     _request_id: Callable[[], int] = dataclasses.field(
         init=False, repr=False, default_factory=lambda: itertools.count(1).__next__
     )
@@ -196,7 +196,7 @@ class Client:
     ) -> Response:
         req_params, json_data = self._prepare_req(command, json_data, data=data, wait=wait)
 
-        async with self._request_lock:
+        async with self._sem:
             request_id = self._request_id()
             msg = (
                 "Destroying Flaresolverr session"
@@ -227,7 +227,7 @@ class Client:
         if proxy := self._aiohttp_session._default_proxy:
             params.update(proxy={"url": str(proxy)})
 
-        resp = await self._request(Command.CREATE_SESSION, session=session_id, **params)
+        resp = await self._request(Command.CREATE_SESSION, session=session_id, wait=None, **params)
         if not resp.ok:
             raise FlaresolverrError(f"FlareSolverr said: {resp.message}")
         self._session_id = session_id

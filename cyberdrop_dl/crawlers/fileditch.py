@@ -73,7 +73,7 @@ class FileditchCrawler(Crawler):
         await self.handle_file(src, scrape_item, filename, ext, thumbnail=thumb)
 
     async def request_download(self, url: AbsoluteHttpURL) -> tuple[AbsoluteHttpURL, str | None]:
-        resp = await self.client.flaresolverr_request(url, wait=20)
+        resp = await self.flaresolverr_request(url, wait=20)
         soup = await resp.soup()
         if soup.select_one(".gone-path"):
             raise ScrapeError(410)

@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support multiple files as input
 - Support mixing URLs and input files on the same run (all files must exists and all URLs/files must be positional arguments)
 
+### Changed
+
+- Allow up to 10 concurrent requests with Flaresolverr
+
 ### Fixed
 
 - URL matching (Anysex)

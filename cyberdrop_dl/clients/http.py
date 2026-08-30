@@ -385,6 +385,17 @@ class HTTPController(Protocol):
 
 class HTTPMixin(HTTPController, Protocol):
     @contextlib.asynccontextmanager
+    async def rate_limit_ctx(
+        self,
+    ) -> AsyncGenerator[None]:
+        ctx = self.__http_ctx__
+        if ctx.throttle is not None:
+            await ctx.throttle()
+
+        async with self.client.rate_limit_ctx(ctx.domain, ctx.json_check):
+            yield
+
+    @contextlib.asynccontextmanager
     async def request(
         self,
         url: AbsoluteHttpURL,
@@ -394,17 +405,20 @@ class HTTPMixin(HTTPController, Protocol):
     ) -> AsyncGenerator[AbstractResponse[Any]]:
 
         ctx = self.__http_ctx__
-        if ctx.throttle is not None:
-            await ctx.throttle()
-
         kwargs.setdefault("impersonate", ctx.impersonate)
         kwargs["headers"] = ctx.headers | kwargs.setdefault("headers", {})
 
         async with (
-            self.client.rate_limit_ctx(ctx.domain, ctx.json_check),
+            self.rate_limit_ctx(),
             self.client.request(url, method, **kwargs) as resp,
         ):
             yield resp
+
+    async def flaresolverr_request(
+        self, url: AbsoluteHttpURL, data: Any | None = None, wait: int | None = None
+    ) -> AbstractResponse[Any]:
+        async with self.rate_limit_ctx():
+            return await self.client.flaresolverr_request(url, data, wait)
 
     async def request_json(
         self,
