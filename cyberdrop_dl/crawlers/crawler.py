@@ -858,7 +858,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     ) -> AsyncIterator[BeautifulSoup]:
         """Generator of website pages"""
 
-        relative_to = relative_to or url.origin()
+        relative_to = relative_to or url
         page_url = url
         if callable(selector):
             get_next_page = selector
