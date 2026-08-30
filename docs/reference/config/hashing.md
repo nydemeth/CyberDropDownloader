@@ -72,7 +72,11 @@ hashing:
 | ------ | ------- |
 | `bool` | `false` |
 
-Deduped files are sent to the trash bin instead of being deleted
+Deduped files are sent to the trash bin instead of being deleted.
+
+{% hint style="warning" %}
+Files on a network drive can't be sent to the trasbin. They will always be permanently deleted
+{% endhint %}
 
 ```yaml
 hashing:

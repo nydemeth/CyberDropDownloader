@@ -8,7 +8,7 @@ Normally, downloads may create a folder structure like:
 
 > `downloads/folderA/folderB/folderC/image.jpg`
 
-If this si set to `false` will only create a single folder per URL place all its children inside it:
+If this is `false`, a single folder per URL will be created and all its children will be placed inside it:
 
 > `Downloads/folderA/image.jpg`
 
@@ -66,7 +66,6 @@ This option only works with sites that have 'posts':
 - `Forums`
 - `Discourse`
 - `Tiktok`
-- `Coomer`, `Kemono` and `Nekohouse`.
 
 For some sites, this value is hardcorded to `true` because each post is always an individual page:
 

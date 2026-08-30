@@ -134,7 +134,7 @@ Values lower than `512MB` will always be replaced with `512MB`
 | ---------------- | ------- |
 | `Path` or `null` | `null`  |
 
-Path to a file/folder with Netscape cookies. All cookie files must have a `.txt` extension. If the path is a folder, all `.txt` in the folder are read (non recursive)
+Path to a file/folder with Netscape cookies. All cookie files must have a `.txt` extension. If the path is a folder, all `.txt` in the folder are read (non recursive).
 
 These can be used for websites that require login or to pass DDoS-Guard challenges.
 
@@ -174,11 +174,11 @@ With `--deep-scrape`, CDL will make `n` requests per album, where `n` is the tot
 | ------ | ------- |
 | `bool` | `false` |
 
-Files downloaded by CDL have a `.part` extension (or `.cdl_hls` for HLS segments) that will replaced with the original extension the download reaches 100%.
+Files downloaded by CDL have a `.part` extension (or `.cdl_hls` for HLS segments) that will be replaced with the original extension when the download reaches 100%.
 
 This allows CDL to resume downloads on subsequent runs.
 
-Set `true` will delete any `.part` and `.cdl_hls` files in the download folder at the end of a session.
+Setting this to `true` will delete any `.part` and `.cdl_hls` files in the download folder at the end of a session.
 
 ```yaml
 delete_partial_files: false
@@ -190,7 +190,7 @@ delete_partial_files: false
 | ------ | ------- |
 | `bool` | `false` |
 
-Download files even if their hash matches a file downloaded on the database.
+Download files even if their hash matches a file on the database.
 
 {% hint style="info" %}
 Not all file hosts provide hash information before download
@@ -232,7 +232,7 @@ delete_empty_folders: true
 | ------ | ------- |
 | `bool` | `True`  |
 
-CDL dos it's absolute best to extract the upload date of a files.
+CDL does it's absolute best to extract the upload date of files.
 
 By default, this date will be set as the `last modified` and `last accessed` date on the downloaded file.
 

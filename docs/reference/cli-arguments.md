@@ -32,7 +32,7 @@ For items not explained below, you can find their counterparts in the configurat
 
 ## CLI only arguments
 
-These options can onlny be supplied via CLI argmunets. They are not included on the config file
+These options can only be supplied via CLI argmunets. They are not included on the config file
 
 ### `--config-file`
 
