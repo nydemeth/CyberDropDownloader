@@ -1,6 +1,6 @@
 [project]
 name = "cyberdrop-dl-patched"
-version = "10.7.0"
+version = "10.8.0dev1"
 authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -63,6 +63,7 @@ apprise = [
 wreq = ["wreq>=0.12.1"]
 
 [project.scripts]
+cyberdrop = "cyberdrop_dl.__main__:main"
 cyberdrop-dl = "cyberdrop_dl.__main__:main"
 cyberdrop-dl-patched = "cyberdrop_dl.__main__:main"
 
