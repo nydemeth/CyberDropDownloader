@@ -247,7 +247,7 @@ class HTTPClient:
         **kwargs: Unpack[RequestParams],
     ) -> RequestContext:
         request = Request.from_params(url, method, kwargs)
-        if self.config.network.impersonate:
+        if self.config.network.impersonate and request.impersonate is not False:
             request.impersonate = self.config.network.impersonate
 
         if request.impersonate:
