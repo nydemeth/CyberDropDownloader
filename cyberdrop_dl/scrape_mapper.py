@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self, override
 
 from cyberdrop_dl import aio, env, filepath, storage
-from cyberdrop_dl.constants import BlockedDomains
+from cyberdrop_dl.constants import BLOCKED_DOMAINS
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.csv_logs import CSVLogsManager
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
@@ -21,11 +21,12 @@ from cyberdrop_dl.scrape_source import (
     RetryScrapeSource,
     URLsSource,
     load_items_from_db,
-    load_items_from_file,
     load_items_from_iterable,
+    load_items_from_path,
 )
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import remove_trailing_slash
+from cyberdrop_dl.utils._url import matches_any_host
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable, Iterator
@@ -169,10 +170,12 @@ class ScrapeMapper:
         assert not self.task_mngr.scrape.done.is_set()
         self.logs.delete_old_logs()
         config = self.manager.config
-        _ = filepath.MAX_FILE_LEN.set(config.max_file_name_length)
-        _ = filepath.MAX_FOLDER_LEN.set(config.max_folder_name_length)
+
         _ = CONCURRENT_SEGMENTS.set(config.downloads.concurrent_segments)
         _ = ALLOW_NO_EXT.set(config.filters.allow_files_with_no_extension)
+
+        filepath.setup(config.max_file_name_length, config.max_folder_name_length, config.restrict_path)
+
         if config.ui.portrait:
             env.FORCE_PORTRAIT_MODE = True
 
@@ -446,7 +449,7 @@ def _build_max_children_map(config: Config) -> dict[ScrapeItemType, int]:
 
 
 def _parse_source(
-    src: RetryScrapeSource | Path | Iterable[AbsoluteHttpURL], manager: Manager
+    src: RetryScrapeSource | URLsSource, manager: Manager
 ) -> tuple[ScrapeStats, AsyncGenerator[ScrapeItem]]:
     match src:
         case RetryScrapeSource():
@@ -460,26 +463,26 @@ def _parse_source(
             )
         case Path():
             source = src
-            items = load_items_from_file(src)
+            items = load_items_from_path(src)
         case _:
-            source = "--links (CLI args)"
+            source = "CLI args"
             items = load_items_from_iterable(src)
 
     return ScrapeStats(source), items
 
 
 def _skip_by_config(url: AbsoluteHttpURL, config: Config) -> bool:
-    if _filter_by_domain(url, BlockedDomains.partial_match) or url.host in BlockedDomains.exact_match:
+    if matches_any_host(url, BLOCKED_DOMAINS):
         logger.info("Skipping %s as it is a blocked domain", url)
         return True
 
     hosts = config.filters.skip_hosts
-    if hosts and _filter_by_domain(url, hosts):
+    if hosts and matches_any_host(url, hosts):
         logger.info("Skipping %s by skip_hosts config", url)
         return True
 
     hosts = config.filters.only_hosts
-    if hosts and not _filter_by_domain(url, hosts):
+    if hosts and not matches_any_host(url, hosts):
         logger.info("Skipping %s by only_hosts config", url)
         return True
 

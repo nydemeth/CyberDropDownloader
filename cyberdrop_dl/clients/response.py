@@ -14,7 +14,6 @@ import aiohttp.multipart
 from aiohttp import ClientResponse, hdrs
 from bs4 import BeautifulSoup
 from multidict import CIMultiDict, CIMultiDictProxy
-from propcache import under_cached_property
 from typing_extensions import TypeVar
 
 from cyberdrop_dl.clients import get_logger, wreq
@@ -161,7 +160,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         return cls_.create(resp)  # pyright: ignore[reportArgumentType]
 
     @final
-    @under_cached_property
+    @property
     def content_disposition(self) -> ContentDisposition:
         try:
             header = self.headers[hdrs.CONTENT_DISPOSITION]
@@ -255,88 +254,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         if not any(type_ in self.content_type for type_ in (content_type, *additional_content_types)):
             msg = f"Received {self.content_type}, was expecting {expecting}"
             raise InvalidContentTypeError(message=msg)
-
-
-class _FlareSolverrResponse(AbstractResponse[FlaresolverrSolution]):
-    __slots__ = ()
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        self.id: str = self._resp.id
-
-    @override
-    async def _read(self) -> bytes:
-        return self._text.encode()
-
-    @override
-    async def _read_text(self, encoding: str | None = None) -> str:
-        return self._text
-
-    @override
-    async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
-        yield self._text.encode()
-
-    @override
-    async def aclose(self) -> None: ...
-
-    async def json(
-        self,
-        encoding: str | None = None,  # noqa: ARG002
-        content_type: tuple[str, ...] | str | Literal[False] | None = ("text/plain", "json"),
-    ) -> Any:
-        if not self._text:
-            # Resp content is already parsed JSON
-            assert "json" in self.content_type
-            return self._resp.content
-
-        try:
-            return self._load_json(self._text)
-        finally:
-            self._check_json(content_type)
-
-    def _load_json(self, text: str) -> Any:
-        try:
-            return json.loads(text)
-        except ValueError:
-            if "html" not in self.content_type:
-                raise
-            text = BeautifulSoup(text, "html.parser").text
-            data = json.loads(text)
-            self.content_type = "application/json"
-            self._text = text
-            self._resp.content = copy.deepcopy(data)
-            logger.warning(
-                "Detected wrapped JSON in Flaresolverr response [id=%s], overriding content type to '%s'",
-                self.id,
-                self.content_type,
-            )
-            logger.traffic("Content from Flaresolverr request [id=%s]\n%s", self.id, {"content": self._resp.content})
-            return data
-
-    def _get_content(self) -> Any:
-        return super()._get_content() or self._resp.content
-
-    @override
-    @classmethod
-    def create(cls, solution: FlaresolverrSolution, /) -> Self:
-        content_type, location = _parse_headers(solution.url, solution.headers)
-        if type(solution.content) is str:
-            text = solution.content
-            if not content_type and text:
-                content_type = _infer_content_type_from_body(text)
-        else:
-            text = ""
-            content_type = content_type or "application/json"
-
-        return cls(
-            content_type=content_type,
-            status=solution.status,
-            headers=solution.headers,
-            url=solution.url,
-            location=location,
-            _text=text,
-            _resp=solution,
-        )
 
 
 class _AIOHTTPResponse(AbstractResponse[ClientResponse]):
@@ -455,6 +372,95 @@ class _WreqResponse(AbstractResponse[wreq.Response]):
         )
 
 
+class _FlareSolverrResponse(AbstractResponse[FlaresolverrSolution]):
+    __slots__ = ()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.id: str = self._resp.id
+        if not self.content_type:
+            self.content_type: str = "text/html"
+            logger.warning(
+                "Unable to detect content type of Flaresolverr response [id=%s], assuming '%s'",
+                self.id,
+                self.content_type,
+            )
+
+    @override
+    async def _read(self) -> bytes:
+        return self._text.encode()
+
+    @override
+    async def _read_text(self, encoding: str | None = None) -> str:
+        return self._text
+
+    @override
+    async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
+        yield self._text.encode()
+
+    @override
+    async def aclose(self) -> None: ...
+
+    async def json(
+        self,
+        encoding: str | None = None,  # noqa: ARG002
+        content_type: tuple[str, ...] | str | Literal[False] | None = ("text/plain", "json"),
+    ) -> Any:
+        if not self._text:
+            # Resp content is already parsed JSON
+            assert "json" in self.content_type
+            return self._resp.content
+
+        try:
+            return self._load_json(self._text)
+        finally:
+            self._check_json(content_type)
+
+    def _load_json(self, text: str) -> Any:
+        try:
+            return json.loads(text)
+        except ValueError:
+            if "html" not in self.content_type:
+                raise
+            text = BeautifulSoup(text, "html.parser").text
+            data = json.loads(text)
+            self.content_type = "application/json"
+            self._text = text
+            self._resp.content = copy.deepcopy(data)
+            logger.warning(
+                "Detected wrapped JSON in Flaresolverr response [id=%s], overriding content type to '%s'",
+                self.id,
+                self.content_type,
+            )
+            logger.traffic("Content from Flaresolverr request [id=%s]\n%s", self.id, {"content": self._resp.content})
+            return data
+
+    def _get_content(self) -> Any:
+        return super()._get_content() or self._resp.content
+
+    @override
+    @classmethod
+    def create(cls, solution: FlaresolverrSolution, /) -> Self:
+        content_type, location = _parse_headers(solution.url, solution.headers)
+        if type(solution.content) is str:
+            text = solution.content
+            if not content_type and text:
+                content_type = _infer_content_type_from_body(text)
+        else:
+            text = ""
+            content_type = content_type or "application/json"
+
+        return cls(
+            content_type=content_type,
+            status=solution.status,
+            headers=solution.headers,
+            url=solution.url,
+            location=location,
+            _text=text,
+            _resp=solution,
+        )
+
+
 def _parse_headers(url: AbsoluteHttpURL, headers: CIMultiDictProxy[str]) -> tuple[str, AbsoluteHttpURL | None]:
     location = parse_url(location, url.origin(), trim=False) if (location := headers.get(hdrs.LOCATION)) else None
 
@@ -463,9 +469,9 @@ def _parse_headers(url: AbsoluteHttpURL, headers: CIMultiDictProxy[str]) -> tupl
 
 
 def _infer_content_type_from_body(content: str) -> str:
-    text = content.lstrip()
-    if text.startswith("<") and "html>" in text[:20]:
+    sample = content.lstrip()[:20]
+    if sample.startswith("<html") or (sample.startswith("<") and "html>" in sample):
         return "text/html"
-    if text.startswith(("{", "[")):
+    if sample.startswith(("{", "[")):
         return "application/json"
     return ""

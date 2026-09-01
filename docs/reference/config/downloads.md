@@ -11,6 +11,26 @@ downloads:
   attempts: 2
 ```
 
+# `back_pressure`
+
+| Type   | Default |
+| ------ | ------- |
+| `bool` | `True`  |
+
+Throttle scrape requests if too many downloads for the same site are queued.
+
+This works by setting a limit of max queued downloads of a single site to the value of `<concurrency>` x10 (capped at 50). If the number of pending downloads
+for that site reaches the limit, all scraping for the site will be paused until the queue goes below it
+
+```yaml
+downloads:
+  back_pressure: True
+```
+
+{% hint style="warning" %}
+Disabling `back_pressure` will cause high memory usage and performance degradation if the number of URLs pending to be scrapped is high (1K+)
+{% endhint %}
+
 # `delay`
 
 | Type               | Default |

@@ -26,6 +26,9 @@ crawlers:
     - vorbis
     - aiff
     - alas
+  clonr:
+    use_source: false
+    zip: false
   clypit:
     prefer_mp3: false
   disabled: []
@@ -68,6 +71,7 @@ delete_partial_files: false
 download_folder: downloads/cyberdrop-dl
 downloads:
   attempts: 2
+  back_pressure: true
   concurrency: 15
   concurrency_per_domain: 5
   concurrent_segments: 10
@@ -156,7 +160,9 @@ network:
   connection_timeout: 15.0
   dump_responses: false
   flaresolverr: null
+  flaresolverr_concurrency: 1
   flaresolverr_use_session: true
+  flaresolverr_wait: 0
   impersonate: null
   proxy: null
   rate_limit: 25.0
@@ -170,6 +176,7 @@ network:
 notifications:
   apprise: []
   webhook: null
+restrict_path: []
 sort:
   enabled: false
   formats:

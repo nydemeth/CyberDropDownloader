@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import yarl
 
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, is_absolute_http_url
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def fix_query_params_encoding(link: str) -> str:
@@ -67,3 +71,17 @@ def remove_trailing_slash(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     if url.name or url.path == "/":
         return url
     return url.parent.with_fragment(url.fragment).with_query(url.query)
+
+
+def matches_any_host(url: yarl.URL, hosts: Iterable[str]) -> bool:
+    if not url.host:
+        return False
+
+    assert not isinstance(hosts, str)
+    for host in hosts:
+        if host in url.host:
+            return True
+        if host.startswith(("https://", "http://")) and yarl.URL(host).host == url.host:
+            return True
+
+    return False

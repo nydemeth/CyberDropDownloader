@@ -22,12 +22,61 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## UNRELEASED
+
+### Added
+
+- New `--flaresolverr-wait` option
+- New `--flaresolverr-concurrency` option
+- Support file paths as positional arguments
+- Support multiple files as input
+- Support mixing URLs and input files on the same run (all files must exists and all URLs/files must be positional arguments)
+
+### Changed
+
+- Allow multiple concurrent requests with Flaresolverr
+- `--skip-hosts` and `--only-hosts` now perform exact domain matching if an absolute URL is provided.
+  ex: `--skip-hosts https://x.com` will skip `x.com` URLs but not `vix.com` URLs. Using `--skip-hosts x.com` will skip both
+- Hardcoded max rate limit to 3 requests/second (Pawchive)
+- Hardcoded concurrent downloads limit to 5 (Pawchive)
+
+### Fixed
+
+- Corrupted/mixed up video segments when downloading multiple concurrent HLS streams and `--subfolders.create` is `False`
+- `403 Forbidden` on all downloads (AdobeLightroom)
+- URL matching (Anysex)
+
+## [10.7.0] - 2026-08-29
+
+### Added
+
+- New `--downloads.back-pressure` option
+- New `--restrict-path` option
+- New `--input-folder` option that scans all `.txt` within a folder for URLs (non recursive). URLs within the same file will create a group. The name of the group is the filename;
+  Each group will be downloaded to their own subfolder within the downloads folder. See: <https://script-ware.gitbook.io/cyberdrop-dl/reference/config/sorting#group-urls>
+- New `--input` option that accepts either a file or a folder
+- Clonr.co support
+
+### Changed
+
+- `-i` is now an alias for `--input` instead of `--input-file`
+- Increase limit of concurrent scrapes from the same site, from 20 to 40
+- Use multiple concurrent connections to the database for faster reads (up to 10)
+- Database will now operate in WAL mode, which may create additional temp files next to the database file (`.db-shm` and `.db-wal` files)
+- Download previews of video assets (Patreon)
+
+### Fixed
+
+- Clips downloads (Twitch)
+- Single post downloads (Patreon)
+- Download of image assets with no name (Patreon)
+
 ## [10.6.1] - 2026-08-25
 
 ### Changed
 
 - Hashing files no longer blocks the download queue. When a download reaches 100%, a slot is immediately available while hashes are computed in the background (if enabled)
-- Restore harcoded limit of 1 concurrent download per server (Bunkr)
+- Restore hardcoded limit of 1 concurrent download per server (Bunkr)
 
 ### Fixed
 

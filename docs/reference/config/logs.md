@@ -8,7 +8,7 @@ Only log messages of this level or higher to the main log file, according to [Py
 
 | Level      | Value | Description                                                                                        |
 | ---------- | ----- | -------------------------------------------------------------------------------------------------- |
-| `DEBUG`    | 10    | Offers detailed information and HTTP requests details, typically useful to troubleshoot problems   |
+| `DEBUG`    | 10    | Offers detailed information, typically useful to troubleshoot problems                             |
 | `INFO`     | 20    | Provides general information about scrape and download progress                                    |
 | `WARNING`  | 30    | Potential issues or something that might need attention (e.g. `Login wasn't provided for <FORUM>`) |
 | `ERROR`    | 40    | Serious problem preventing `cyberdrop-dl` to execute some function                                 |
@@ -22,10 +22,6 @@ logs:
 {% hint style="info" %}
 Using anything other that `DEBUG` makes troubleshooting issues harder. Practically speaking, you should _only_ change this if you expect CDL to run for an extended period
 (with a large number of input URLs) to minimize the log files sizes
-{% endhint %}
-
-{% hint style="warning" %}
-`DEBUG` logs raw HTTP requests to the main log file. These requests may have personally identifiable information like your IP or login credentials for sites in cookies/headers
 {% endhint %}
 
 # `console_level`
@@ -48,6 +44,10 @@ logs:
 | `bool` | `true`  |
 
 Log HTTP requests and responses (at INFO level)
+
+{% hint style="warning" %}
+These requests may have personally identifiable information like your IP or login credentials for sites in cookies/headers.
+{% endhint %}
 
 ```yaml
 logs:

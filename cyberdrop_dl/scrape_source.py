@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import logging
 import re
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 _FETCH_MANY_SIZE = 1000
 _REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
-type URLsSource = Path | Iterable[AbsoluteHttpURL]
+type URLsSource = Path | Iterable[AbsoluteHttpURL | Path]
 
 
 class RetryQuery(StrEnum):
@@ -55,14 +56,38 @@ class RetryScrapeSource:
     before: datetime.date
 
 
-async def load_items_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
-    async for group_name, urls in _parse_input_file_groups(file):
-        for url in urls:
-            item = ScrapeItem.from_url(url)
-            if group_name:
-                item.append_folders(group_name)
-                item.part_of_album = True
+async def load_items_from_path(path: Path) -> AsyncGenerator[ScrapeItem]:
+    gen_fn = load_items_from_file if await aio.is_file(path) else load_items_from_folder
+    async with contextlib.aclosing(gen_fn(path)) as items:
+        async for item in items:
             yield item
+
+
+async def load_items_from_folder(path: Path) -> AsyncGenerator[ScrapeItem]:
+    files = sorted(
+        [f async for f in aio.glob(path, "*.txt") if not f.name.startswith(".")], key=lambda x: str(x).casefold()
+    )
+    for file in files:
+        async with contextlib.aclosing(_parse_input_file_groups(file)) as lines:
+            async for group_name, urls in lines:
+                for url in urls:
+                    item = ScrapeItem.from_url(url)
+                    item.append_folders(file.stem)
+                    item.part_of_album = True
+                    if group_name:
+                        item.append_folders(group_name)
+                    yield item
+
+
+async def load_items_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
+    async with contextlib.aclosing(_parse_input_file_groups(file)) as lines:
+        async for group_name, urls in lines:
+            for url in urls:
+                item = ScrapeItem.from_url(url)
+                if group_name:
+                    item.append_folders(group_name)
+                    item.part_of_album = True
+                yield item
 
 
 async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
@@ -86,9 +111,21 @@ async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str
                 yield ("", list(_regex_links(line)))
 
 
-async def load_items_from_iterable(links: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem]:
-    for url in links:
+async def load_items_from_iterable(items: Iterable[AbsoluteHttpURL | Path]) -> AsyncGenerator[ScrapeItem]:
+    paths: list[Path] = []
+    for url in items:
+        if isinstance(url, Path):
+            paths.append(url)
+            continue
         yield ScrapeItem.from_url(url)
+
+    if not paths:
+        return
+
+    for path in sorted(paths, key=lambda x: str(x).casefold()):
+        async with contextlib.aclosing(load_items_from_file(path)) as p_items:
+            async for item in p_items:
+                yield item
 
 
 def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:

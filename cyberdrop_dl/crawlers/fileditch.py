@@ -1,22 +1,16 @@
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import json
 from typing import TYPE_CHECKING, ClassVar, override
 
-from cyberdrop_dl import multi_process
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, extr_text, parse_url
+from cyberdrop_dl.utils import css, extr_text
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-
     import bs4
 
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -71,44 +65,21 @@ class FileditchCrawler(Crawler):
         if await self.check_complete_from_referer(scrape_item.url):
             return
 
-        soup = await self.request_pow_soup(scrape_item.url)
-        if soup.select_one(".gone-path"):
-            raise ScrapeError(410)
-        src = _extract_dl_url(soup)
+        src, thumb = await self.request_download(scrape_item.url)
         if src.path == _HOMEPAGE_CATCH_ALL:
             raise ScrapeError(422)
 
         filename, ext = self.get_filename_and_ext(src.name)
-        await self.handle_file(src, scrape_item, filename, ext, thumbnail=_extr_thumb(soup))
+        await self.handle_file(src, scrape_item, filename, ext, thumbnail=thumb)
 
-    async def _solve_pow(self, url: AbsoluteHttpURL, pow: dict[str, str]) -> int:  # noqa: A002
-        challenge, diff = pow["pow_challenge"], int(pow["pow_diff"])
-        try:
-            async with self._startup_lock:
-                self.log.warning("Solving proof of work challenge for %s\n%s", url, pow)
-                solution = await asyncio.to_thread(multi_process.race, _pow_worker, challenge, diff)
-
-        except TimeoutError:
-            msg = f"Unable to solve challenge {challenge} after {multi_process.TIMEOUT.get()} seconds"
-            raise TimeoutError(msg) from None
-
-        self.log.debug("Solved pow %s after %s seconds", challenge, solution.elapsed)
-        return solution.value
-
-    async def request_pow_soup(self, url: AbsoluteHttpURL) -> bs4.BeautifulSoup:
-        soup = await self.request_soup(url)
-        if form := soup.select_one("form#pow-form"):
-            pow = dict(_inputs(form))  # noqa: A001
-            nonce = await self._solve_pow(url, pow)
-            soup = await self.request_soup(
-                url,
-                "POST",
-                headers={"Referer": str(url), "Origin": "https://fileditchfiles.me"},
-                data=pow | {"pow_nonce": nonce},
-            )
-            if soup.select_one("form#pow-form"):
-                raise ScrapeError(422, "Proof of work verification failed")
-        return soup
+    async def request_download(self, url: AbsoluteHttpURL) -> tuple[AbsoluteHttpURL, str | None]:
+        resp = await self.flaresolverr_request(url, wait=20)
+        soup = await resp.soup()
+        if soup.select_one(".gone-path"):
+            raise ScrapeError(410)
+        src = self.parse_url(css.select(soup, "a.btn-main[download]", "href"))
+        _check_url(src)
+        return src, _extr_thumb(soup)
 
 
 def _extr_thumb(soup: bs4.Tag) -> str | None:
@@ -118,42 +89,8 @@ def _extr_thumb(soup: bs4.Tag) -> str | None:
         pass
 
 
-def _inputs(form: bs4.Tag) -> Generator[tuple[str, str]]:
-    for field in css.iselect(form, "input[name][value]"):
-        yield css.attr(field, "name"), css.attr(field, "value")
-
-
-def _pow_worker(worker_idx: int, _: int, challenge: str, difficulty: int) -> int:
-    nonce = worker_idx * 15_000
-    while True:
-        checksum = hashlib.sha256(f"{challenge}:{nonce}".encode()).digest()
-        if _is_valid_solution(checksum, difficulty):
-            return nonce
-        nonce += 1
-
-
-def _is_valid_solution(checksum: bytes, difficulty: int) -> bool:
-    idx, rem = difficulty >> 3, difficulty & 7
-    if idx and checksum[:idx] != b"\x00" * idx:
-        return False
-    if rem:
-        return (checksum[idx] & (0xFF << (8 - rem) & 0xFF)) == 0
-    return True
-
-
-def _extract_dl_url(soup: bs4.BeautifulSoup) -> AbsoluteHttpURL:
-    js_join = '].join("")'
-    js_text = css.select_text(soup, f"script:-soup-contains-own('{js_join}')")
-    array = extr_text(js_text, "= [", js_join)
-    try:
-        return _parse_url_parts(f"[{array}]")
-    except ValueError as e:
-        raise ScrapeError(422, "Unable to extract download URL") from e
-
-
-def _parse_url_parts(js_array: str) -> AbsoluteHttpURL:
-    parts: list[str] = json.loads(js_array)
-    url = parse_url("".join(parts), trim=False)
-    if not ((url.query.get("md5") and url.query.get("expires")) or (url.query.get("exp") and url.query.get("sig"))):
-        raise ValueError(url)
-    return url
+def _check_url(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+    for params in [("md5", "expires"), ("exp", "sig")]:
+        if all(map(url.query.get, params)):
+            return url
+    raise ScrapeError(422, f"Unable to extract a valid download URL. Found: {url}")

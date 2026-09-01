@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl.clients.flaresolverr import Solution, _parse_cookies
 from cyberdrop_dl.clients.response import _FlareSolverrResponse, _infer_content_type_from_body
+
+if TYPE_CHECKING:
+    import pytest
 
 # ---------------------------------------------------------------------------
 # Fixtures: example FlareSolverr JSON responses
@@ -258,13 +261,14 @@ def test_solution_from_dict_json_resp() -> None:
     assert type(solution.content) is dict
 
 
-async def test_flaresolverr_response_infers_html_from_empty_headers() -> None:
+def test_flaresolverr_response_infers_html_from_empty_headers(logs: pytest.LogCaptureFixture) -> None:
     """When FlareSolverr returns empty headers, content-type should be inferred from the body."""
     solution = Solution.from_dict(FLARESOLVERR_RESPONSE_EMPTY_HEADERS["solution"])
     response = _FlareSolverrResponse.create(solution)
     assert response.content_type == "text/html"
     assert response.status == 200
     assert response.location is None
+    assert len(logs.messages) == 0
 
 
 async def test_flaresolverr_response_reads_text() -> None:
@@ -284,7 +288,7 @@ async def test_flaresolverr_response_from_json_resp() -> None:
     assert await response.text() == ""
 
 
-async def test_flaresolverr_response_with_explicit_content_type() -> None:
+def test_flaresolverr_response_with_explicit_content_type() -> None:
     """When headers contain Content-Type, it should be used instead of inference."""
     solution_data = {
         **FLARESOLVERR_RESPONSE_EMPTY_HEADERS["solution"],
@@ -296,15 +300,20 @@ async def test_flaresolverr_response_with_explicit_content_type() -> None:
     assert response.content_type == "application/json"
 
 
-async def test_flaresolverr_response_empty_body_and_empty_headers() -> None:
-    """Empty body + empty headers should result in empty content-type string."""
+def test_flaresolverr_response_empty_body_and_empty_headers(logs: pytest.LogCaptureFixture) -> None:
+    """Empty body + empty headers should assume text/html"""
     solution_data = {
         **FLARESOLVERR_RESPONSE_EMPTY_HEADERS["solution"],
         "response": "",
     }
     solution = Solution.from_dict(solution_data)
+    solution.id = "1"
     response = _FlareSolverrResponse.create(solution)
-    assert response.content_type == ""
+    assert response.content_type == "text/html"
+    assert len(logs.records) == 1
+    assert (
+        logs.records[0].message == "Unable to detect content type of Flaresolverr response [id=1], assuming 'text/html'"
+    )
 
 
 async def test_flaresolverr_response_from_json_resp_wrapped_in_html() -> None:

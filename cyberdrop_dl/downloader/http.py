@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, ClassVar
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
 from cyberdrop_dl import aio, constants, ffmpeg, storage
-from cyberdrop_dl.clients.downloads import filter_by_duration
+from cyberdrop_dl.clients.downloads import filter_by_duration, resolve_download_dir
 from cyberdrop_dl.downloader import hls
 from cyberdrop_dl.exceptions import (
     DownloadError,
@@ -287,6 +287,7 @@ class Downloader:
             await self.__hls_download(media_item, m3u8_group)
 
     async def __hls_download(self, media_item: MediaItem, rendition: Rendition) -> None:
+        media_item.download_folder = resolve_download_dir(media_item.download_folder, self.config)
         media_item.path = media_item.download_folder / media_item.filename
         media_item.download_filename = media_item.path.name
         await self.manager.database.history.add_download_filename(media_item.domain, media_item)

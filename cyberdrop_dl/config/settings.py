@@ -315,6 +315,9 @@ class Downloads(ConfigGroup):
     speed_limit: ByteSizeSerilized = ByteSize(0)
     "Max speed rate (in bytes per second) to limit downloads (combined)"
 
+    back_pressure: bool = True
+    "Throttle scrape requests if there are too many downloads queued for the same site"
+
     jitter: NonNegativeFloat = 0
     "Wait a random additional number of seconds in between 0 and <jitter> before downloads"
 
@@ -338,13 +341,19 @@ class TLS(ConfigModel):
 
 class Network(ConfigGroup):
     dump_responses: bool = False
-    "Save text/HTML/JSON responses to disk (flaresolverr responses are excluded)"
+    "Save text/HTML/JSON responses to disk (Flaresolverr responses are excluded)"
 
     flaresolverr: FalsyAsNone[HttpURL] = None
-    "HTTP URL of an existing flaresolverr instance"
+    "HTTP URL of an existing Flaresolverr instance"
 
     flaresolverr_use_session: bool = True
-    "Create a custom session before making any request with flaresolverr"
+    "Create a custom session before making any request with Flaresolverr"
+
+    flaresolverr_wait: NonNegativeInt = 0
+    "Force Flaresolverr to wait (at least) this number of seconds before returning the results, to allow dynamic content to load"
+
+    flaresolverr_concurrency: PositiveInt = 1
+    "Number of concurrent requests to make with Flaresolverr"
 
     proxy: Annotated[FalsyAsNone[HttpURL], Parameter(alias=("http-proxy"))] = None
     "HTTP/HTTPS proxy"
@@ -365,6 +374,13 @@ class Network(ConfigGroup):
     user_agent: NonEmptyStr = "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0"
     impersonate: FalsyAsNone[ImpersonateTarget] = None
     "Use this target as impersonation for all scrape requests"
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        super().model_post_init(context)
+        # https://github.com/FlareSolverr/FlareSolverr/issues/1685
+        if self.flaresolverr_concurrency > 1 and self.flaresolverr_use_session:
+            raise ValueError("'flaresolverr_concurrency' can't be > 1 if 'flaresolverr_use_session' is True")
 
 
 class UIMode(CIStrEnum):

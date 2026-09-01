@@ -5,38 +5,93 @@ import platform
 import re
 import unicodedata
 from contextvars import ContextVar
+from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal, Self
 
 from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.exceptions import FileNameError, InvalidExtensionError, NoExtensionError, PathTraversalError
+from cyberdrop_dl.signature import simple_repr
 
-_ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
-_SANITIZE_FILENAME_PATTERN = r'[<>:"/\\|?*\']'
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+type PathOptions = Literal["unix", "windows", "no_emoji", "ascii"]
+
+_ALLOWED_UNICODE_SYMBOLS_AND_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
 _RAR_MULTIPART_PATTERN = r"^part\d+"
+_MAX_FILE_LEN: ContextVar[int] = ContextVar("_MAX_FILE_LEN", default=95)
+_MAX_FOLDER_LEN: ContextVar[int] = ContextVar("_MAX_FOLDER_LEN", default=60)
+_PATH_SANITIZER: ContextVar[PathSanitizer] = ContextVar("_PATH_SANITIZER")
 
-MAX_FILE_LEN: ContextVar[int] = ContextVar("_MAX_FILE_LEN", default=95)
-MAX_FOLDER_LEN: ContextVar[int] = ContextVar("_MAX_FOLDER_LEN", default=60)
+
+class RestrictPath(StrEnum):
+    ASCII = "^0-9A-Za-z_."
+    WINDOWS = r'<>:"/\\|?*\''
+    UNIX = "/"
+
+
+class UnicodeCategory(StrEnum):
+    CONTROL = "C"
+    LETTER = "L"
+    MARK = "M"
+    NUMBER = "N"
+    PUNCTUATION = "P"
+    SIMBOL = "S"
+    SEPARATOR = "Z"
+
+
+class PathSanitizer:
+    def __init__(self, banned_chars: str | None = None, *post_process: Callable[[str], str]) -> None:
+        self.banned_chars: str | None = banned_chars
+        self.post_process: tuple[Callable[[str], str], ...] = post_process
+
+    __repr__ = simple_repr("banned_chars", "post_process")
+
+    def __call__(self, name: str, repl: str = "") -> str:
+        if self.banned_chars:
+            name = re.sub(f"[{self.banned_chars}]", repl, name).strip()
+        for fn in self.post_process:
+            name = fn(name)
+
+        return name
+
+    def __or__(self, other: Self) -> Self:
+        return type(self)(self.banned_chars, *self.post_process, other)
+
+    @classmethod
+    def v9_default(cls) -> Self:
+        if platform.system() in {"Windows", "Darwin"}:
+            return cls(RestrictPath.WINDOWS, remove_emojis_and_symbols)
+        return cls(RestrictPath.WINDOWS)
+
+
+def _is_allowed_unicode(char: str) -> bool:
+    return char in _ALLOWED_UNICODE_SYMBOLS_AND_PUNCTUATION or unicodedata.category(char)[0] in {
+        UnicodeCategory.LETTER,
+        UnicodeCategory.NUMBER,
+        UnicodeCategory.MARK,
+    }
 
 
 def remove_emojis_and_symbols(filename: str) -> str:
-    """Allow all Unicode letters/numbers/marks, plus safe filename punctuation, but not symbols or emoji."""
-    return "".join(
-        char
-        for char in filename
-        if (char in _ALLOWED_FILEPATH_PUNCTUATION or unicodedata.category(char)[0] in {"L", "N", "M"})
-    ).strip()
+    """Allow all Unicode letters/numbers/marks, plus safe filename punctuation, but not symbols (emojis)."""
+    return "".join(filter(_is_allowed_unicode, filename)).strip()
 
 
 def sanitize_filename(name: str, sub: str = "") -> str:
-    clean_name = re.sub(_SANITIZE_FILENAME_PATTERN, sub, name).strip()
-    if platform.system() in {"Windows", "Darwin"}:
-        clean_name = remove_emojis_and_symbols(clean_name)
-    path = Path(clean_name)
+    try:
+        clean = _PATH_SANITIZER.get()
+    except LookupError:
+        clean = PathSanitizer.v9_default()
+        _PATH_SANITIZER.set(clean)
+
+    path = Path(clean(name, sub))
     return path.stem.strip() + path.suffix
 
 
 def sanitize_folder(title: str, max_len: int | None = None) -> str:
-    max_len = max_len or MAX_FOLDER_LEN.get()
+    max_len = max_len or _MAX_FOLDER_LEN.get()
     title = title.replace("\n", "").replace("\t", "").strip()
     title = sanitize_filename(re.sub(r" +", " ", title), "-")
     title = re.sub(r"\.{2,}", ".", title).rstrip(".").strip()
@@ -94,7 +149,7 @@ def compose_filename(name: str, suffix: str, *extras: str, max_len: int | None =
     assert suffix.startswith(".")
     name = sanitize_filename(remove_os_sep(name)).removesuffix(suffix)
 
-    max_len = (max_len or MAX_FILE_LEN.get()) - len(suffix)
+    max_len = (max_len or _MAX_FILE_LEN.get()) - len(suffix)
     if extras:
         extra_info = sanitize_filename("".join(f"[{info}]" for info in extras))
         if (new_max_len := max_len - len(extra_info) - 1) > 0:
@@ -142,3 +197,26 @@ def check_dangerous_filename(filename: str) -> None:
     path = Path(filename)
     if "\\" in filename or "/" in filename or path.name != filename or path.suffix.lower() in FileExt.DANGEROUS:
         raise FileNameError("Dangerous File Extension", message=filename)
+
+
+def setup(
+    max_file_len: int,
+    max_folder_len: int,
+    restrict_path: tuple[PathOptions, ...],
+) -> None:
+    _MAX_FILE_LEN.set(max_file_len)
+    _MAX_FOLDER_LEN.set(max_folder_len)
+
+    if not restrict_path:
+        return
+
+    sanitizer = PathSanitizer()
+    for name in restrict_path:
+        other = (
+            PathSanitizer(None, remove_emojis_and_symbols)
+            if name == "no_emoji"
+            else PathSanitizer(RestrictPath[name.upper()])
+        )
+        sanitizer = sanitizer | other
+
+    _PATH_SANITIZER.set(sanitizer)

@@ -26,7 +26,7 @@ notifications:
 ```
 
 {% hint style="info" %}
-Attachments have a size limit of 25MB. If you use `attach_logs=` and the main log file exceeds this limit, CDL will ignore it and send the notification without it
+Attachments have a size limit of 20MB. If you use `attach_logs=` and the main log file exceeds this limit, CDL will ignore it and send the notification without it
 {% endhint %}
 
 Example:
@@ -92,7 +92,7 @@ attach_logs=mailto://user:password@domain.com
 
 {% tab title="Native OS notifications" %}
 Some operating systems require additional dependencies for notifications to work. `cyberdrop-dl` includes the required dependencies for Windows if you installed it
-with the [`apprise`] extra. Follow the url on the OS name to get additional information on how to set them up.
+with the [`apprise`] extra. Follow the URL on the OS name to get additional information on how to set them up.
 
 | OS                                                                   | Syntax                                              |
 | -------------------------------------------------------------------- | --------------------------------------------------- |

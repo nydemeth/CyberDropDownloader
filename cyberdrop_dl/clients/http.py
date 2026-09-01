@@ -17,7 +17,7 @@ from cyberdrop_dl.clients import curl_cffi, flaresolverr, get_logger, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import make_simple_cookie
-from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError
+from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.signature import simple_repr
 from cyberdrop_dl.utils import enter_context, truncated_preview
 from cyberdrop_dl.utils.dataclass import ConfigDataclass, frozen
@@ -98,11 +98,20 @@ class HTTPClient:
         self._cookies: aiohttp.CookieJar | None = None
         self._flaresolverr: flaresolverr.Client | None = None
         self._curl_session: AsyncSession[CurlResponse] | None = None
+        self._use_flaresolverr_ua: set[str] = set()
         self._wreq_session: WreqClient | None = None
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
 
-    __repr__ = simple_repr("config", "_ssl_context", "_cookies", "_flaresolverr", "limiter", "request_done_callback")
+    __repr__ = simple_repr(
+        "config",
+        "_ssl_context",
+        "_cookies",
+        "_flaresolverr",
+        "limiter",
+        "request_done_callback",
+        "_use_flaresolverr_ua",
+    )
 
     @property
     def ssl_context(self):
@@ -139,13 +148,17 @@ class HTTPClient:
     @property
     def flaresolverr(self) -> flaresolverr.Client | None:
         if self._flaresolverr is None and (url := self.config.network.flaresolverr):
+            net = self.config.network
             self._flaresolverr = flaresolverr.Client(
-                url,
                 self._session,
-                use_session=self.config.network.flaresolverr_use_session,
+                flaresolverr.Config(
+                    url=url.origin() / "v1",
+                    use_session=net.flaresolverr_use_session,
+                    concurrency=net.flaresolverr_concurrency,
+                    wait=net.flaresolverr_wait,
+                    proxy=net.proxy,
+                ),
             )
-        if self._flaresolverr and self._flaresolverr.is_down:
-            return None
         return self._flaresolverr
 
     def __sync_session_cookies(self, url: AbsoluteHttpURL) -> None:
@@ -233,11 +246,33 @@ class HTTPClient:
                 await check_http_status(resp)
             except DDOSGuardError:
                 await resp.aclose()
-                if not self.flaresolverr:
+                flare = self.flaresolverr
+                if not flare or flare.is_down:
                     raise
-                yield await self._flaresolverr_request(url, kwargs.get("data"))
             else:
                 yield resp
+                return
+
+        # TODO: implement per host weak locks to only make one flaresolverr request
+        # Use the cookies from that request for all future ones
+        resp = await self._flaresolverr_request(url, method=method, data=kwargs.get("data"))
+        custom_headers = tuple(
+            sorted(map(str, set(kwargs.get("headers", ())) - {hdrs.USER_AGENT, hdrs.REFERER, hdrs.ORIGIN}))
+        )
+        has_json = kwargs.get("json") is not None
+        if not (has_json or custom_headers):
+            yield resp
+            return
+
+        logger.info(
+            "Making %s request to %s again with Flaresolverr cookies. Reasons: %s",
+            method,
+            url,
+            f"{has_json = }, {custom_headers = }",
+        )
+        async with self.raw_request(url, method, **kwargs) as resp:
+            await check_http_status(resp)
+            yield resp
 
     def raw_request(
         self,
@@ -247,10 +282,16 @@ class HTTPClient:
         **kwargs: Unpack[RequestParams],
     ) -> RequestContext:
         request = Request.from_params(url, method, kwargs)
-        if self.config.network.impersonate:
+        if self.config.network.impersonate and request.impersonate is not False:
             request.impersonate = self.config.network.impersonate
 
-        if request.impersonate:
+        if url.host in self._use_flaresolverr_ua:
+            # We already made a (successful) flaresolverr request to this host
+            # Use the same UA as flaresolverr to make sure cookies are valid
+            request.impersonate = False
+            request.headers[hdrs.USER_AGENT] = flaresolverr.USER_AGENT.get()
+
+        elif request.impersonate:
             request.headers.pop(hdrs.USER_AGENT, None)
         else:
             request.headers.setdefault(hdrs.USER_AGENT, self.config.network.user_agent)
@@ -328,27 +369,37 @@ class HTTPClient:
         ) as aio_resp:
             yield AbstractResponse.create(aio_resp)
 
+    async def flaresolverr_request(
+        self,
+        url: AbsoluteHttpURL,
+        **params: Unpack[flaresolverr.RequestParams],
+    ) -> AbstractResponse[Any]:
+        flare = self.flaresolverr
+        if not flare:
+            raise ScrapeError(
+                "Flaresolverr Required", "This request needs a real running browser to execute javascript"
+            )
+        flare.check_can_connect()
+        return await self._flaresolverr_request(url, **params)
+
     async def _flaresolverr_request(
         self,
         url: AbsoluteHttpURL,
-        data: Any | None = None,
+        /,
+        **params: Unpack[flaresolverr.RequestParams],
     ) -> AbstractResponse[Any]:
         """Make a request with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page, even if flaresolverr fails to detect/solve a challenge"""
 
-        assert self.flaresolverr
-        solution = await self.flaresolverr.request(url, data)
+        flare = self.flaresolverr
+        assert flare
+        assert not flare.is_down
+        solution = await flare.request(url, **params)
         self.cookies.update_cookies(solution.cookies)
         flaresolverr.verify_solution(self.config.network.user_agent, solution)
+        self._use_flaresolverr_ua.add(url.host)
         return AbstractResponse.create(solution)
-
-    @contextlib.asynccontextmanager
-    async def rate_limit_ctx(self, domain: str, json_check: JSONCheck | None = None) -> AsyncGenerator[None]:
-        limiter = self.limiter.per_domain.get(domain, contextlib.nullcontext())
-        with enter_context(JSON_CHECK, json_check):
-            async with limiter, self.limiter.global_:
-                yield
 
 
 async def _check_json(response: AbstractResponse[Any]) -> None:
@@ -374,6 +425,19 @@ class HTTPController(Protocol):
 
 class HTTPMixin(HTTPController, Protocol):
     @contextlib.asynccontextmanager
+    async def rate_limit_ctx(
+        self,
+    ) -> AsyncGenerator[None]:
+        ctx = self.__http_ctx__
+        if ctx.throttle is not None:
+            await ctx.throttle()
+
+        limiter = self.client.limiter.per_domain.get(ctx.domain, contextlib.nullcontext())
+        with enter_context(JSON_CHECK, ctx.json_check):
+            async with limiter, self.client.limiter.global_:
+                yield
+
+    @contextlib.asynccontextmanager
     async def request(
         self,
         url: AbsoluteHttpURL,
@@ -383,17 +447,22 @@ class HTTPMixin(HTTPController, Protocol):
     ) -> AsyncGenerator[AbstractResponse[Any]]:
 
         ctx = self.__http_ctx__
-        if ctx.throttle is not None:
-            await ctx.throttle()
-
         kwargs.setdefault("impersonate", ctx.impersonate)
         kwargs["headers"] = ctx.headers | kwargs.setdefault("headers", {})
 
         async with (
-            self.client.rate_limit_ctx(ctx.domain, ctx.json_check),
+            self.rate_limit_ctx(),
             self.client.request(url, method, **kwargs) as resp,
         ):
             yield resp
+
+    async def flaresolverr_request(
+        self,
+        url: AbsoluteHttpURL,
+        **kwargs: Unpack[flaresolverr.RequestParams],
+    ) -> AbstractResponse[Any]:
+        async with self.rate_limit_ctx():
+            return await self.client.flaresolverr_request(url, **kwargs)
 
     async def request_json(
         self,

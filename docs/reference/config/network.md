@@ -6,7 +6,7 @@
 
 The number of seconds to wait while connecting to a website before timing out
 
-{% hint style="info" %} This value will also be used for Flaresolverr (if enabled) as the max number of seconds to solve a CAPTCHA challenge {% endhint %}
+{% hint style="info" %} This value will also be used for Flaresolverr (if enabled) as the max number of seconds to solve a challenge {% endhint %}
 
 ```yaml
 network:
@@ -62,6 +62,13 @@ network:
 ```
 
 {% hint style="info" %}
+You can use any software with Flaresolverr like capabilities as long as it supports the `/v1` endpoint.
+
+You may need to disable sessions with `flaresolverr_use_session`
+
+{% endhint %}
+
+{% hint style="info" %}
 `0.0.0.0` is NOT a valid IP address. To set up a flaresolverr instance running on the same machine as CDL, use `127.0.0.1` as the IP
 {% endhint %}
 
@@ -79,7 +86,29 @@ See: [How to extract cookies (DDoSGuard or login errors) #839](https://github.co
 Create a custom flaresolverr session that keeps cookies. This reduces the likelihood of CF challenges and speeds up requests since Flaresolverr won't
 have to launch a new browser instance on every new one.
 
-Set this to `false` if you are using a Flaresolverr fork that does not support the `sessions.create` command
+Set this to `false` if you are using other Flaresolverr like software that supports the `v1` endpoint but does not support the `sessions.create` command
+
+# `flaresolverr_concurrency`
+
+| Type          | Default |
+| ------------- | ------- |
+| `PositiveInt` | `1`     |
+
+Number of concurrent requests to make with Flaresolverr
+
+{% hint style="warning" %}
+if `flaresolverr_use_session` is True, `flaresolverr_concurrency` **must be** 1. Sessions can only handle 1 request at a time.
+{% endhint %}
+
+# `flaresolverr_wait`
+
+| Type             | Default |
+| ---------------- | ------- |
+| `NonNegativeInt` | `0`     |
+
+Force Flaresolverr to wait (at least) this number of seconds before returning the results, to allow dynamic content to load.
+
+Equivalent to the `waitInSeconds` param of the `request.get` command
 
 # `proxy`
 
@@ -113,11 +142,11 @@ Flaresolverr responses are excluded. They are never dumped to disk
 
 # `impersonate`
 
-| Type                                                                             | Default | Action        |
-| -------------------------------------------------------------------------------- | ------- | ------------- |
-| `chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"` or `null` | `null`  | `store_const` |
+| Type                                                                             | Default |
+| -------------------------------------------------------------------------------- | ------- |
+| `chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"` or `null` | `null`  |
 
-Impersonation allows CDL to make requests and appear to be a legitimate web browser. This helps bypass bot-protection on some sites and it's required for any site that only accepts HTTP2 connections.
+Impersonation allows CDL to make requests as a real web browser. This helps bypass bot-protection on some sites and it's required for any site that only accepts HTTP2 connections.
 
 - The default value (`null`) means CDL will automatically use impersonation for crawlers that were programmed to use it.
 - Passing an specific target (ex: `--impersonate chrome_android`) will make CDL use impersonation for all requests, using that tarjet
@@ -204,11 +233,13 @@ If you use flaresolverr, this value **MUST** match with flaresolverr's user agen
 These crawlers will ignore custom user-agents and will always use `cyberdrop-dl/<version>`
 
 <!-- START_CUSTOM_UA_CRAWLERS -->
+
 - Archive.org
 - E621
 - MegaNz
 - RealDebrid
 - Transfer.it
+
 <!-- END_CUSTOM_UA_CRAWLERS -->
 
 {% endhint %}

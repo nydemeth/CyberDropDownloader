@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import cyclopts.validators
-from cyclopts import Parameter
+from cyclopts import Parameter, Token
 from cyclopts.group import Group
 
 from cyberdrop_dl.commands import CLIarguments
@@ -14,13 +14,16 @@ from cyberdrop_dl.config import Config
 from cyberdrop_dl.config.appdata import AppData
 from cyberdrop_dl.exceptions import CDLConfigRuntimeErrorsGroup
 from cyberdrop_dl.logs import log_spacer, set_console_level, setup_file_logging
-from cyberdrop_dl.models.types import HttpURL  # noqa: TC001
+from cyberdrop_dl.models.validators import to_yarl_url
 from cyberdrop_dl.scrape_source import URLsSource
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import cleanup
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cyclopts.argument import ArgumentCollection
 
     from cyberdrop_dl.manager import Manager
@@ -107,43 +110,76 @@ def _validate_inputs(args: ArgumentCollection) -> None:
         cyclopts.validators.LimitedChoice(min=1, max=1)(args)
     except ValueError as e:
         if "choices may be specified." in str(e):
-            raise ValueError("You must provide either URLs or a file with `--input-file`") from None
+            raise ValueError(
+                "You must provide either URLs/Files as positional arguments, `--input-file`, `--input-folder` or `--input` (and only one)"
+            ) from None
         raise
 
 
 _inputs_group = Group(sort_key=-1, validator=_validate_inputs)
 
 
+def _file_or_url(_, tokens: Sequence[Token]) -> Path | AbsoluteHttpURL:
+
+    value = tokens[0].value
+    path = Path(value)
+    if path.is_file():
+        return path.resolve().absolute()
+    if value.startswith(("http://", "https://")):
+        return to_yarl_url(value)
+
+    raise ValueError(f"'{value}' if not a valid URL or file")
+
+
+type FileOrURL = Annotated[AbsoluteHttpURL | Path, Parameter(converter=_file_or_url)]
+
+
 def download(
-    urls: Annotated[
-        tuple[HttpURL, ...],
+    *urls_or_files: Annotated[
+        FileOrURL,
         Parameter(
             group=_inputs_group,
-            help="URL(s) to download",
+            help="File(s)/ URL(s) to download",
             show_default=False,
             consume_multiple=True,
             allow_repeating=False,
         ),
-    ] = (),
-    /,
-    *,
+    ],
     input_file: Annotated[
         Path | None,
         Parameter(
             group=_inputs_group,
-            alias="-i",
             help="Text/HTML file with URL(s) to download",
             validator=cyclopts.validators.Path(exists=True, dir_okay=False),
+        ),
+    ] = None,
+    input_folder: Annotated[
+        Path | None,
+        Parameter(
+            group=_inputs_group,
+            help="""Read all '.txt' within this folder for URL(s) to download (non recursive).
+            All URLs within the same file will be grouped in the own subfolder (the filename) within the downloads folder""",
+            validator=cyclopts.validators.Path(exists=True, dir_okay=True, file_okay=False),
+        ),
+    ] = None,
+    input: Annotated[  # noqa: A002
+        Path | None,
+        Parameter(
+            group=_inputs_group,
+            alias="-i",
+            help="File/folder with URL(s) to download (non recursive)",
+            validator=cyclopts.validators.Path(exists=True),
         ),
     ] = None,
     cli_args: CLIarguments | None = None,
     cli_overrides: Config | None = None,
 ) -> None:
     "Download URLs"
-    if input_file:
-        input_file = input_file.resolve().absolute()
+    source = input or input_folder or input_file
+    if source:
+        source = source.resolve().absolute()
     with prepare_manager(cli_args, cli_overrides)() as manager:
-        scrape(manager, input_file or urls)
+        scrape(manager, source or urls_or_files)
 
 
 def prepare_manager(cli_args: CLIarguments | None, cli_overrides: Config | None) -> Manager:

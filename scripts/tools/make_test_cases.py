@@ -36,6 +36,8 @@ def parse_jsonl(file: Path) -> Generator[tuple[str, str, TestCase]]:
     base = Path.cwd() / Config().download_folder
     for line in file.read_text(encoding="utf-8").splitlines():
         media = json.loads(line)
+        if media["url"].startswith("metadata:"):
+            continue
         url = media["parents"][0] if media["parents"] else media["referer"]
         media["download_folder"] = "re:" + str(Path(media["download_folder"]).relative_to(base))
         yield media["domain"], url, {key: media[key] for key in KEYS}

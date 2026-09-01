@@ -66,7 +66,7 @@ However, `cyberdrop-dl` has a ton of configuration options if you want more cont
 - A cache file (JSON)
 
 Additionally, a dedicated `logs` folder is created to store logs files of a session.
-On Windows, all files are stored in `%AppData%/cyberdrop-dl`, with the logs folder being `%AppData%/cyberdrop-dl/logs`
+On Windows, all files are stored in `%AppData%/cyberdrop-dl`, with the logs folder being `%AppData%/cyberdrop-dl/Logs`
 On Unix systems, `cyberdrop-dl` follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/0.8/) to store application files.
 
 These are the default locations used on each platform

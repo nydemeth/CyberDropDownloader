@@ -17,9 +17,9 @@ jdownloader:
 | ------------------- | ------- |
 | `HttpURL` or `None` | `null`  |
 
-HTTP URL of a local JDownloader instance to connect to via their deprecated API (insecure, default port=3128)
+HTTP URL of a local JDownloader instance to connect to via their deprecated API (insecure, default port=`3128`)
 
-The 'Deprecated API' options need to be enabled on JDownloader instance (`Settings` -> `Advanced Options`)
+The `Deprecated API` options need to be enabled on JDownloader instance (`Settings` -> `Advanced Options`)
 
 ```yaml
 jdownloader:
@@ -32,9 +32,9 @@ jdownloader:
 | ------ | ------- |
 | `bool` | `false` |
 
-Request to JDownloader start downloads as immediately.
+Make JDownloader start downloads immediately.
 
-If disabled, downloads will be added to the LinkGrabber queue and you have to manually start them on JDDownloader itself
+If disabled, downloads will be added to the LinkGrabber queue and you have to manually start them from JDownloader itself
 
 ```yaml
 jdownloader:
@@ -47,7 +47,7 @@ jdownloader:
 | ---------------- | ------- |
 | `Path` or `null` | `null`  |
 
-The `download_folder` jdownloader will use. A `null` value (the default) will use the same value as CDL's download folder (`--download-folder`).
+The `download_folder` JDownloader will use. A `null` value (the default) will use the same value as CDL's download folder (`--download-folder`).
 
 Use this option as path mapping when JDownloader is running on a different host / docker.
 
@@ -64,7 +64,7 @@ jdownloader:
 
 List of domain names. An unsupported URL will only be sent to JDownloader if its host is found on the list.
 
-An empty whitelist will send _any_ unsupported URL to jdownloader.
+An empty whitelist will send _any_ unsupported URL to JDownloader.
 
 ```yaml
 jdownloader:

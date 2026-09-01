@@ -171,6 +171,7 @@ class MegaNzCrawler(Crawler):
     @override
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         media_item.extra_info.setdefault(self.DOMAIN, {})["key"] = self._decryption_keys.pop(media_item.url)
+        media_item.extra_info["impersonate"] = False  # We need aiohttp for precise chunks reads
         await super().handle_media_item(media_item, m3u8)
 
     async def _login(self) -> None:

@@ -1,6 +1,6 @@
 [project]
 name = "cyberdrop-dl-patched"
-version = "10.6.1"
+version = "10.8.0dev1"
 authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -25,24 +25,21 @@ dependencies = [
     "beautifulsoup4 >=4.15.0",
     "brotli >=1.2.0; implementation_name=='cpython' and sys_platform!='ios'",
     "cffi == 2.1.1",
-    "curl-cffi ==0.16.2; implementation_name == 'cpython' ",
+    "curl-cffi >=0.16.2; implementation_name == 'cpython' ",
     "cyclopts==4.23.2",
-    "idna>=3.18",
-    "imagesize == 2.0.0",
+    "idna>=3.19",
+    "imagesize >= 2.0.1",
     "m3u8 >=6.0.0",
-    "propcache >=0.5.2",
     "psutil >=7.2.1; sys_platform != 'android'",
     "pycryptodome >=3.23.0",
     "pydantic == 2.13.4",
     "pyyaml >=6.0.3",
     "questionary>=2.1.1",
-    "readchar >= 4.2.2",
     "rich >=15.0.0",
     "rich-rst==2.0.2",
     "send2trash >=2.0.0",
     "soupsieve >=2.9.2",
     "typing-extensions>=4.16.0",
-    "urllib3>=2.7.0",  # Transient dep with CVE
     "wassima>=2.1.3",
     "xxhash >=4.0.1",
     "yarl >=1.24.5"
@@ -58,13 +55,15 @@ requires-python = ">=3.12"
 [project.optional-dependencies]
 apprise = [
     "apprise >=1.13.0,<2.0.0",
-    "click >=8.4.2",
+    "click ==8.5.0",
+    "urllib3>=2.7.0",  # Transient dep with CVE
     'pywin32>=312; platform_system == "Windows"',
     'tzdata>=2026.3; platform_system == "Windows"'
 ]
-wreq = ["wreq==0.12.1"]
+wreq = ["wreq>=0.12.1"]
 
 [project.scripts]
+cyberdrop = "cyberdrop_dl.__main__:main"
 cyberdrop-dl = "cyberdrop_dl.__main__:main"
 cyberdrop-dl-patched = "cyberdrop_dl.__main__:main"
 

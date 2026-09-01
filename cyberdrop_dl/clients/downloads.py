@@ -67,12 +67,14 @@ class DownloadClient:
 
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
-        downloaded_filename = await self.manager.database.history.get_downloaded_filename(domain, media_item)
-        media_item.download_folder = _resolve_download_dir(media_item.download_folder, self.config)
         if media_item.is_segment:
             media_item.partial_file = media_item.path = media_item.download_folder / media_item.filename
         else:
-            media_item.partial_file = media_item.download_folder / f"{downloaded_filename}{constants.TempExt.PART}"
+            name = (
+                await self.manager.database.history.get_downloaded_filename(domain, media_item) or media_item.filename
+            )
+            media_item.download_folder = resolve_download_dir(media_item.download_folder, self.config)
+            media_item.partial_file = media_item.download_folder / f"{name}{constants.TempExt.PART}"
 
         resume_point = 0
         if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
@@ -140,13 +142,21 @@ class DownloadClient:
             url=media_item.url,
         )
 
+    def _track_speed(self, hook: ProgressHook) -> aio.BackgroundTask:
+        "force update task speed at least every 0.1 seconds"
+
+        async def update_speed() -> None:
+            hook.advance(0)
+
+        return aio.BackgroundTask(update_speed, period=0.1)
+
     async def _append_content(self, media_item: MediaItem, hook: ProgressHook, resp: AbstractResponse[Any]) -> None:
         check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = make_speed_checker(media_item, hook, self.download_speed_threshold)
         await check_free_space(media_item.size)
         await self._pre_download_check(media_item)
 
-        async with aio.open(media_item.partial_file, mode="ab") as f:
+        async with self._track_speed(hook), aio.open(media_item.partial_file, mode="ab") as f:
             async for chunk in resp.iter_chunked(self.chunk_size):
                 n_bytes = len(chunk)
                 await self.speed_limiter.acquire(n_bytes)
@@ -463,7 +473,10 @@ def _set_upload_date(media_item: MediaItem, headers: Mapping[str, str]) -> None:
 
 async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], resume_point: int) -> None:
     if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
-        logger.warning("Deleting partial file '%s'. Download is corrupted. Partial file is bigger that expected size")
+        logger.warning(
+            "Deleting partial file '%s'. Download is corrupted. Partial file is bigger that expected size",
+            media_item.partial_file,
+        )
         await aio.unlink(media_item.partial_file)
 
     etag.check(resp.headers)
@@ -476,12 +489,13 @@ async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], re
 
     if resp.status != HTTPStatus.PARTIAL_CONTENT and resume_point:
         logger.warning(
-            "Deleting partial file '%s'. Server did not acknowledge byte-range request", media_item.partial_file
+            "Deleting partial file '%s'. Server did not acknowledge byte-range request",
+            media_item.partial_file,
         )
         await aio.unlink(media_item.partial_file)
 
 
-def _resolve_download_dir(download_folder: Path, config: Config) -> Path:
+def resolve_download_dir(download_folder: Path, config: Config) -> Path:
     if config.subfolders.create:
         return download_folder
 

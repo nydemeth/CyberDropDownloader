@@ -119,6 +119,23 @@
       "format": "path",
       "type": "string"
     },
+    "ClonrConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "use_source": {
+          "default": false,
+          "title": "Use Source",
+          "type": "boolean"
+        },
+        "zip": {
+          "default": false,
+          "title": "Zip",
+          "type": "boolean"
+        }
+      },
+      "title": "ClonrConfig",
+      "type": "object"
+    },
     "ClypitConfig": {
       "additionalProperties": false,
       "properties": {
@@ -168,6 +185,9 @@
         },
         "octave_music": {
           "$ref": "#/$defs/OctaveMusicConfig"
+        },
+        "clonr": {
+          "$ref": "#/$defs/ClonrConfig"
         }
       },
       "title": "Crawlers",
@@ -224,6 +244,11 @@
         "speed_limit": {
           "$ref": "#/$defs/ByteSizeSerilized",
           "default": 0
+        },
+        "back_pressure": {
+          "default": true,
+          "title": "Back Pressure",
+          "type": "boolean"
         },
         "jitter": {
           "default": 0,
@@ -801,6 +826,18 @@
           "default": true,
           "title": "Flaresolverr Use Session",
           "type": "boolean"
+        },
+        "flaresolverr_wait": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Flaresolverr Wait",
+          "type": "integer"
+        },
+        "flaresolverr_concurrency": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "title": "Flaresolverr Concurrency",
+          "type": "integer"
         },
         "proxy": {
           "$ref": "#/$defs/FalsyAsNone_HttpURL_",
@@ -1391,6 +1428,20 @@
     },
     "notifications": {
       "$ref": "#/$defs/Notifications"
+    },
+    "restrict_path": {
+      "default": [],
+      "items": {
+        "enum": [
+          "unix",
+          "windows",
+          "no_emoji",
+          "ascii"
+        ],
+        "type": "string"
+      },
+      "title": "Restrict Path",
+      "type": "array"
     },
     "sort": {
       "$ref": "#/$defs/Sort"

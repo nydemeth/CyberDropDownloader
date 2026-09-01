@@ -28,7 +28,7 @@ from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
 from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, parse_url, unique
-from cyberdrop_dl.utils._url import remove_trailing_slash
+from cyberdrop_dl.utils._url import matches_any_host, remove_trailing_slash
 from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, frozen
 from cyberdrop_dl.utils.errors import error_handling_context
 
@@ -64,7 +64,7 @@ type SupportedDomains = OneOrTuple[str]
 type DebridURL = Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None
 
 _ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
-_CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY", default=True)
+_CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY")
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
@@ -232,9 +232,10 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self._ready: bool = False
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
-        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(40)
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
+        _CHECK_DL_CAPACITY.set(self.config.downloads.back_pressure)
         assert self.__dl_config__.server_lock is not None
         self.downloader: Downloader = Downloader(
             manager,
@@ -434,25 +435,28 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     catch_errors: Final = error_handling_context
 
     @final
-    async def run(self, scrape_item: ScrapeItem) -> None:
+    async def run(self, scrape_item: ScrapeItem, *, check_referer: bool = False) -> None:
         if self.disabled:
             return
 
+        with scrape_item.track_changes:
+            scrape_item.url = url = self.transform_url(scrape_item.url)
+
+        lookup = url.path_qs if self.__url_config__.ignore_fragment else _path_qs_frag(url)
+        if lookup in self._scraped_items:
+            logger.info(f"Skipping {url} as it has already been scrapped")
+            return
+
+        self._scraped_items.add(lookup)
+
+        if not self.__url_config__.allow_empty_path and url.path == "/":
+            self.raise_exc(scrape_item, ScrapeError.unsupported())
+            return
+
+        if check_referer and await self.check_complete_from_referer(url):
+            return
+
         async with self._semaphore:
-            with scrape_item.track_changes:
-                scrape_item.url = url = self.transform_url(scrape_item.url)
-
-            lookup = url.path_qs if self.__url_config__.ignore_fragment else _path_qs_frag(url)
-            if lookup in self._scraped_items:
-                logger.info(f"Skipping {url} as it has already been scraped")
-                return
-
-            self._scraped_items.add(lookup)
-
-            if not self.__url_config__.allow_empty_path and url.path == "/":
-                self.raise_exc(scrape_item, ScrapeError.unsupported())
-                return
-
             with self.new_task_id(scrape_item.url):
                 try:
                     await self.fetch(scrape_item)
@@ -854,7 +858,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     ) -> AsyncIterator[BeautifulSoup]:
         """Generator of website pages"""
 
-        relative_to = relative_to or url.origin()
+        relative_to = relative_to or url
         page_url = url
         if callable(selector):
             get_next_page = selector
@@ -1157,14 +1161,13 @@ def auto_task_id[CrawlerT: Crawler, **P, R](
 
 
 def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
-    media_host = media_item.url.host
     filters = config.filters
 
-    if (hosts := filters.skip_hosts) and any(host in media_host for host in hosts):
+    if (hosts := filters.skip_hosts) and matches_any_host(media_item.url, hosts):
         logger.info(f"Download skipped {media_item.url} due to skip_hosts config")
         return True
 
-    if (hosts := filters.only_hosts) and not any(host in media_host for host in hosts):
+    if (hosts := filters.only_hosts) and not matches_any_host(media_item.url, hosts):
         logger.info(f"Download skipped {media_item.url} due to only_hosts config")
         return True
 
