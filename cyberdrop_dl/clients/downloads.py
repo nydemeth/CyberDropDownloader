@@ -471,7 +471,10 @@ def _set_upload_date(media_item: MediaItem, headers: Mapping[str, str]) -> None:
 
 async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], resume_point: int) -> None:
     if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
-        logger.warning("Deleting partial file '%s'. Download is corrupted. Partial file is bigger that expected size")
+        logger.warning(
+            "Deleting partial file '%s'. Download is corrupted. Partial file is bigger that expected size",
+            media_item.partial_file,
+        )
         await aio.unlink(media_item.partial_file)
 
     etag.check(resp.headers)
@@ -484,7 +487,8 @@ async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], re
 
     if resp.status != HTTPStatus.PARTIAL_CONTENT and resume_point:
         logger.warning(
-            "Deleting partial file '%s'. Server did not acknowledge byte-range request", media_item.partial_file
+            "Deleting partial file '%s'. Server did not acknowledge byte-range request",
+            media_item.partial_file,
         )
         await aio.unlink(media_item.partial_file)
 
