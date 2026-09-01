@@ -67,12 +67,14 @@ class DownloadClient:
 
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
-        downloaded_filename = await self.manager.database.history.get_downloaded_filename(domain, media_item)
-        media_item.download_folder = _resolve_download_dir(media_item.download_folder, self.config)
         if media_item.is_segment:
             media_item.partial_file = media_item.path = media_item.download_folder / media_item.filename
         else:
-            media_item.partial_file = media_item.download_folder / f"{downloaded_filename}{constants.TempExt.PART}"
+            name = (
+                await self.manager.database.history.get_downloaded_filename(domain, media_item) or media_item.filename
+            )
+            media_item.download_folder = resolve_download_dir(media_item.download_folder, self.config)
+            media_item.partial_file = media_item.download_folder / f"{name}{constants.TempExt.PART}"
 
         resume_point = 0
         if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
@@ -493,7 +495,7 @@ async def _check_response(media_item: MediaItem, resp: AbstractResponse[Any], re
         await aio.unlink(media_item.partial_file)
 
 
-def _resolve_download_dir(download_folder: Path, config: Config) -> Path:
+def resolve_download_dir(download_folder: Path, config: Config) -> Path:
     if config.subfolders.create:
         return download_folder
 

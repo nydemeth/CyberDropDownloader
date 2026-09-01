@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Corrupted/mixed up video segments when downloading multiple concurrent HLS streams and `--subfolders.create` is `False`
 - URL matching (Anysex)
 
 ## [10.7.0] - 2026-08-29
