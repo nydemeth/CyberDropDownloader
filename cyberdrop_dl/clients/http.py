@@ -98,11 +98,20 @@ class HTTPClient:
         self._cookies: aiohttp.CookieJar | None = None
         self._flaresolverr: flaresolverr.Client | None = None
         self._curl_session: AsyncSession[CurlResponse] | None = None
+        self._use_flaresolverr_ua: set[str] = set()
         self._wreq_session: WreqClient | None = None
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
 
-    __repr__ = simple_repr("config", "_ssl_context", "_cookies", "_flaresolverr", "limiter", "request_done_callback")
+    __repr__ = simple_repr(
+        "config",
+        "_ssl_context",
+        "_cookies",
+        "_flaresolverr",
+        "limiter",
+        "request_done_callback",
+        "_use_flaresolverr_ua",
+    )
 
     @property
     def ssl_context(self):
@@ -276,7 +285,13 @@ class HTTPClient:
         if self.config.network.impersonate and request.impersonate is not False:
             request.impersonate = self.config.network.impersonate
 
-        if request.impersonate:
+        if url.host in self._use_flaresolverr_ua:
+            # We already made a (successful) flaresolverr request to this host
+            # Use the same UA as flaresolverr to make sure cookies are valid
+            request.impersonate = False
+            request.headers[hdrs.USER_AGENT] = flaresolverr.USER_AGENT.get()
+
+        elif request.impersonate:
             request.headers.pop(hdrs.USER_AGENT, None)
         else:
             request.headers.setdefault(hdrs.USER_AGENT, self.config.network.user_agent)
@@ -383,6 +398,7 @@ class HTTPClient:
         solution = await flare.request(url, **params)
         self.cookies.update_cookies(solution.cookies)
         flaresolverr.verify_solution(self.config.network.user_agent, solution)
+        self._use_flaresolverr_ua.add(url.host)
         return AbstractResponse.create(solution)
 
 

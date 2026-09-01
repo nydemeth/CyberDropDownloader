@@ -5,6 +5,7 @@ import contextlib
 import dataclasses
 import itertools
 import time
+from contextvars import ContextVar
 from enum import StrEnum
 from http.cookies import SimpleCookie
 from typing import TYPE_CHECKING, Any, Literal, Self, TypedDict, Unpack
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+USER_AGENT: ContextVar[str] = ContextVar("USER_AGENT")
 
 MAX_TIMEOUT = 60_000
 
@@ -345,6 +347,8 @@ def verify_solution(cdl_user_agent: str, solution: Solution) -> None:
         f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
         f"\n  Flaresolverr: '{solution.user_agent}'"
     )
+
+    USER_AGENT.set(solution.user_agent)
 
     if type(solution.content) is str:
         try:
