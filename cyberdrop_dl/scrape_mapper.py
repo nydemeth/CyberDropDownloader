@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self, override
 
 from cyberdrop_dl import aio, env, filepath, storage
-from cyberdrop_dl.constants import BlockedDomains
+from cyberdrop_dl.constants import BLOCKED_DOMAINS
 from cyberdrop_dl.crawlers import ALLOW_NO_EXT, create_crawlers
 from cyberdrop_dl.csv_logs import CSVLogsManager
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
@@ -26,6 +26,7 @@ from cyberdrop_dl.scrape_source import (
 )
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem, ScrapeItemType
 from cyberdrop_dl.utils import remove_trailing_slash
+from cyberdrop_dl.utils._url import matches_any_host
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable, Iterator
@@ -471,17 +472,17 @@ def _parse_source(
 
 
 def _skip_by_config(url: AbsoluteHttpURL, config: Config) -> bool:
-    if _filter_by_domain(url, BlockedDomains.partial_match) or url.host in BlockedDomains.exact_match:
+    if matches_any_host(url, BLOCKED_DOMAINS):
         logger.info("Skipping %s as it is a blocked domain", url)
         return True
 
     hosts = config.filters.skip_hosts
-    if hosts and _filter_by_domain(url, hosts):
+    if hosts and matches_any_host(url, hosts):
         logger.info("Skipping %s by skip_hosts config", url)
         return True
 
     hosts = config.filters.only_hosts
-    if hosts and not _filter_by_domain(url, hosts):
+    if hosts and not matches_any_host(url, hosts):
         logger.info("Skipping %s by only_hosts config", url)
         return True
 

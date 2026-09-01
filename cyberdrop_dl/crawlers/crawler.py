@@ -28,7 +28,7 @@ from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, is_absolute_http_url
 from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, parse_url, unique
-from cyberdrop_dl.utils._url import remove_trailing_slash
+from cyberdrop_dl.utils._url import matches_any_host, remove_trailing_slash
 from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, frozen
 from cyberdrop_dl.utils.errors import error_handling_context
 
@@ -1161,14 +1161,13 @@ def auto_task_id[CrawlerT: Crawler, **P, R](
 
 
 def _should_skip_by_config(media_item: MediaItem, config: Config) -> bool:
-    media_host = media_item.url.host
     filters = config.filters
 
-    if (hosts := filters.skip_hosts) and any(host in media_host for host in hosts):
+    if (hosts := filters.skip_hosts) and matches_any_host(media_item.url, hosts):
         logger.info(f"Download skipped {media_item.url} due to skip_hosts config")
         return True
 
-    if (hosts := filters.only_hosts) and not any(host in media_host for host in hosts):
+    if (hosts := filters.only_hosts) and not matches_any_host(media_item.url, hosts):
         logger.info(f"Download skipped {media_item.url} due to only_hosts config")
         return True
 

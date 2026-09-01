@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Allow multiple concurrent requests with Flaresolverr
+- `--skip-hosts` and `--only-hosts` now perform exact domain matching if an absolute URL is provided.
+  ex: `--skip-hosts https://x.com` will skip `x.com` URLs but not `vix.com` URLs. Using `--skip-hosts x.com` will skip both
 
 ### Fixed
 

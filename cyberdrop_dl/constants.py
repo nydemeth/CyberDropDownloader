@@ -47,9 +47,8 @@ class TempExt(StrEnum):
     PART = ".part"
 
 
-@final
-class BlockedDomains:
-    partial_match = (
+BLOCKED_DOMAINS = frozenset(
+    (
         "facebook",
         "instagram",
         "fbcdn",
@@ -65,8 +64,7 @@ class BlockedDomains:
         "beacons.ai",
         "allmylinks.com",
     )
-
-    exact_match = ()
+)
 
 
 class HashMode(CIStrEnum):

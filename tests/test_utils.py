@@ -11,7 +11,7 @@ from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
 from cyberdrop_dl.filepath import get_filename_and_ext
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import file_browser, operators, text_editor
-from cyberdrop_dl.utils._url import fix_multi_slashes, parse_http_url
+from cyberdrop_dl.utils._url import fix_multi_slashes, matches_any_host, parse_http_url
 
 
 class TestGetFilenameAndExt:
@@ -228,3 +228,17 @@ def test_file_browser() -> None:
 
     browsers = tuple(f.name for f in file_browser.get_file_browsers())
     assert browsers == expected
+
+
+@pytest.mark.parametrize(
+    ("url", "hosts", "expected"),
+    [
+        ("https://x.com", {"x.com"}, True),
+        ("https://x.com", {"http://x.com"}, True),
+        ("https://x.com", {"https://x.com"}, True),
+        ("https://vix.com", {"x.com"}, True),
+        ("https://vix.com", {"https://x.com"}, False),
+    ],
+)
+def test_matches_any_host(url: str, hosts: tuple[str, ...], *, expected: bool) -> None:
+    assert matches_any_host(AbsoluteHttpURL(url), hosts) is expected
