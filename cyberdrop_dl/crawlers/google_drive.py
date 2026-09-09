@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl import aio
@@ -42,6 +43,7 @@ from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.config.crawlers import GoogleDriveConfig
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
@@ -50,12 +52,7 @@ if TYPE_CHECKING:
 _KNOWN_FILE_ID_VERSIONS = 0, 1
 _DRIVE_ID_LEN = 28  # v0 uses 28, v1 uses 33
 _DOCS_ID_LEN = 44  # v1 uses 44. I have not seen v0 doc URL
-
-
-_PRIMARY_URL = AbsoluteHttpURL("https://drive.google.com")
 _DOCS_URL = AbsoluteHttpURL("https://docs.google.com")
-
-_FOLDER_ITEM_SELECTOR = "div.flip-entry-info > a[href]"
 _DOC_FORMATS: dict[str, tuple[str, ...]] = {
     "spreadsheets": ("xslx", "ods", "html", "csv", "tsv"),
     "presentation": ("pptx", "odp"),
@@ -75,10 +72,14 @@ def _valid_formats_string() -> str:
 
 class GoogleDriveCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Files": "/file/d/<file_id>",
+        "Files": (
+            "/file/d/<file_id>",
+            "/download?id=<file_id>",
+        ),
         "Folders": (
             "/drive/folders/<folder_id>",
             "/embeddedfolderview/<folder_id>",
+            "/embeddedfolderview?id=<folder_id>",
         ),
         "Docs": "/document/d/<file_id>",
         "Sheets": "/spreadsheets/d/<file_id>",
@@ -90,30 +91,32 @@ class GoogleDriveCrawler(Crawler):
         ),
     }
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "drive.google", "docs.google", "drive.usercontent.google.com"
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://drive.google.com")
     DOMAIN: ClassVar[str] = "drive.google"
     FOLDER_DOMAIN: ClassVar[str] = "GoogleDrive"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         url = scrape_item.url
-        if file_id := url.query.get("id"):
-            return await self.file(scrape_item, file_id)
 
         def next_to(name: str) -> str | None:
-            try:
-                index = url.parts.index(name)
-                return url.parts[index + 1]
-            except (ValueError, IndexError):
-                return None
+            with contextlib.suppress(ValueError, IndexError):
+                return url.parts[url.parts.index(name) + 1]
 
-        if folder_id := (next_to("folders") or next_to("embeddedfolderview")):
-            return await self.folder(scrape_item, folder_id)
+        if query_id := url.query.get("id"):
+            if "embeddedfolderview" in url.parts:
+                await self.folder(scrape_item, query_id)
+            else:
+                await self.file(scrape_item, query_id)
 
-        if file_id := next_to("d"):
+        elif folder_id := (next_to("folders") or next_to("embeddedfolderview")):
+            await self.folder(scrape_item, folder_id)
+
+        elif file_id := next_to("d"):
             doc = first if (first := url.parts[1]) in _DOC_FORMATS else None
-            return await self.file(scrape_item, file_id, doc)
+            await self.file(scrape_item, file_id, doc)
 
-        raise ValueError
+        else:
+            raise ValueError
 
     @error_handling_wrapper
     async def folder(self, scrape_item: ScrapeItem, folder_id: str) -> None:
@@ -125,7 +128,7 @@ class GoogleDriveCrawler(Crawler):
         scrape_item.setup_as_album(title, album_id=folder_id)
 
         sleep = aio.periodic_sleep(100)
-        for child in self.iter_urls(soup, _FOLDER_ITEM_SELECTOR):
+        for child in self.iter_urls(soup, "div.flip-entry-info > a[href]"):
             new_scrape_item = scrape_item.create_child(child)
             self.create_task(self.run(new_scrape_item))
             scrape_item.add_children()
@@ -150,8 +153,8 @@ class GoogleDriveCrawler(Crawler):
         return await self._docs_file(scrape_item, file_id, doc)
 
     async def _drive_file(self, scrape_item: ScrapeItem, file_id: str) -> None:
-        scrape_item.url = _PRIMARY_URL / "file/d" / file_id
-        export_url = (_PRIMARY_URL / "uc").with_query(id=file_id, export="download", confirm="True")
+        scrape_item.url = self.PRIMARY_URL / "file/d" / file_id
+        export_url = (self.PRIMARY_URL / "uc").with_query(id=file_id, export="download", confirm="True")
         return await self._file(scrape_item, export_url)
 
     @error_handling_wrapper
@@ -165,10 +168,10 @@ class GoogleDriveCrawler(Crawler):
         if not doc:
             raise ScrapeError(422, "Unable to identify google docs file type")
 
-        format_ = scrape_item.url.query.get("format")
-        proper_format = _get_proper_doc_format(doc, format_)
-        if format_ and format_ != proper_format:
-            msg = f"{scrape_item.url} with {format_ = } is not valid. Falling back to {proper_format}"
+        q_format = scrape_item.url.query.get("format")
+        proper_format = _get_proper_doc_format(doc, q_format, self.config.crawlers.google_drive)
+        if q_format and q_format != proper_format:
+            msg = f"{scrape_item.url} with {q_format = } is not valid. Falling back to {proper_format}"
             self.log.warning(msg)
 
         scrape_item.url = (_DOCS_URL / doc / "d" / file_id).with_query(format=proper_format)
@@ -195,6 +198,18 @@ class GoogleDriveCrawler(Crawler):
         return resp.url, resp.content_disposition.filename
 
 
-def _get_proper_doc_format(doc: str, fmt: str | None) -> str:
-    valid_formats = _DOC_FORMATS[doc]
-    return fmt if fmt in valid_formats else valid_formats[0]
+def _get_proper_doc_format(doc: str, query_format: str | None, config: GoogleDriveConfig) -> str:
+    if query_format:
+        valid_formats = _DOC_FORMATS[doc]
+        if query_format in valid_formats:
+            return query_format
+
+    match doc:
+        case "spreadsheets":
+            return config.default_formats.sheets
+        case "presentation":
+            return config.default_formats.slides
+        case "document":
+            return config.default_formats.docs
+        case _:
+            raise ValueError(doc)

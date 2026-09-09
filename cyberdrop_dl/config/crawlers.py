@@ -1,11 +1,33 @@
 from typing import Annotated, Any, Literal, override
 
 from pydantic import Field
-from pydantic.functional_validators import AfterValidator
+from pydantic.functional_validators import AfterValidator, field_validator
 
 from cyberdrop_dl.models import ConfigGroup, ConfigModel
 from cyberdrop_dl.models.types import FormatStr, HttpURL, NonEmptyStr
 from cyberdrop_dl.models.validators import remove_duplicates, strings
+
+
+class GoogleDriveFormats(ConfigModel):
+    docs: Literal["docx", "odt", "rtf", "txt", "epub", "pdf", "md", "zip"] = "docx"
+    "Default format for documents (can be overridden per URL with the 'format' query param)"
+
+    sheets: Literal["xslx", "ods", "html", "csv", "tsv"] = "xslx"
+    "Default format for spreedsheets (can be overridden per URL with the 'format' query param)"
+
+    slides: Literal["pptx", "odp"] = "pptx"
+    "Default format for presentations (can be overridden per URL with the 'format' query param)"
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _remove_dots(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.lstrip(".")
+        return value
+
+
+class GoogleDriveConfig(ConfigModel):
+    default_formats: GoogleDriveFormats = Field(default_factory=GoogleDriveFormats)
 
 
 class KemonoConfig(ConfigModel):
@@ -122,6 +144,16 @@ class ClonrConfig(ConfigModel):
             raise ValueError("'clonr.zip' and 'clonr.use_source' are mutually exclusive")
 
 
+class PornHubConfig(ConfigModel):
+    profile_paths: tuple[NonEmptyStr, ...] = "photos/public", "gifs/public", "videos", "videos/upload"
+    "Subpaths to scrape when an input URL is a profile's homepage"
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        super().model_post_init(context)
+        self.profile_paths = tuple(p.lstrip("/") for p in self.profile_paths)
+
+
 class GenericCrawlers(ConfigModel):
     wordpress_media: tuple[HttpURL, ...] = ()
     wordpress_html: tuple[HttpURL, ...] = ()
@@ -129,6 +161,7 @@ class GenericCrawlers(ConfigModel):
     chevereto: tuple[HttpURL, ...] = ()
     kvs: tuple[HttpURL, ...] = ()
     video: tuple[HttpURL, ...] = ()
+    peertube: tuple[HttpURL, ...] = ()
 
 
 class Crawlers(ConfigGroup, name=None):
@@ -136,12 +169,14 @@ class Crawlers(ConfigGroup, name=None):
     "Name of crawlers to disable for the current run"
 
     bandcamp: BandcampConfig = Field(default_factory=BandcampConfig)
+    clonr: ClonrConfig = Field(default_factory=ClonrConfig)
     clypit: ClypitConfig = Field(default_factory=ClypitConfig)
     generic: GenericCrawlers = Field(default_factory=GenericCrawlers)
+    google_drive: GoogleDriveConfig = Field(default_factory=GoogleDriveConfig)
+    octave_music: OctaveMusicConfig = Field(default_factory=OctaveMusicConfig)
     one_pace: OnePaceConfig = Field(default_factory=OnePaceConfig)
+    only_haven: KemonoConfig = Field(default_factory=KemonoConfig)
+    pawchive: KemonoConfig = Field(default_factory=KemonoConfig)
+    pornhub: PornHubConfig = Field(default_factory=PornHubConfig)
     tiktok: TikTokConfig = Field(default_factory=TikTokConfig)
     twitter: TwitterConfig = Field(default_factory=TwitterConfig)
-    pawchive: KemonoConfig = Field(default_factory=KemonoConfig)
-    only_haven: KemonoConfig = Field(default_factory=KemonoConfig)
-    octave_music: OctaveMusicConfig = Field(default_factory=OctaveMusicConfig)
-    clonr: ClonrConfig = Field(default_factory=ClonrConfig)

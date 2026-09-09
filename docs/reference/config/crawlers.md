@@ -101,6 +101,12 @@ crawlers:
 
 # Clyp.it
 
+```yaml
+crawlers:
+  clypit:
+    prefer_mp3: false
+```
+
 ## `prefer_mp3`
 
 | Type   | Default |
@@ -108,6 +114,43 @@ crawlers:
 | `Bool` | `false` |
 
 Download audios as `.mp3` files even if WAV (high quality) versions are available
+
+# Google Drive
+
+```yaml
+crawlers:
+  google_drive:
+    default_formats:
+      docs: docx
+      sheets: xslx
+      slides: pptx
+```
+
+## `default_formats`
+
+### `docs`
+
+| Type                                                      | Default |
+| --------------------------------------------------------- | ------- |
+| `docx`, `odt`, `rtf`, `txt`, `epub`, `pdf`, `md` or `zip` | `docx`  |
+
+Default format for documents (can be overridden per URL with the 'format' query param)
+
+### `sheets`
+
+| Type                                  | Default |
+| ------------------------------------- | ------- |
+| `xslx`, `ods`, `html`, `csv` or `tsv` | `xslx`  |
+
+Default format for spreedsheets (can be overridden per URL with the 'format' query param)
+
+### `slides`
+
+| Type            | Default |
+| --------------- | ------- |
+| `pptx` or `odp` | `pptx`  |
+
+Default format for presentations (can be overridden per URL with the 'format' query param)
 
 # OnePace
 
@@ -170,6 +213,26 @@ crawlers:
     embed: true
     file: true
 ```
+
+# PornHub
+
+```yaml
+crawlers:
+  pornhub:
+    profile_paths:
+      - "photos/public"
+      - "gifs/public"
+      - "videos"
+      - "videos/upload"
+```
+
+## `profile_paths`
+
+| Type                  | Default                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| list of `NonEmptyStr` | [`photos/public`, `gifs/public`, `videos`, `videos/upload`] |
+
+Subpaths to scrape when an input URL is a profile's homepage. ex: `https://www.pornhub.com/model/<model_name>`
 
 # Tiktok
 

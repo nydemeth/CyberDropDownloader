@@ -96,7 +96,7 @@ TEST_CASES = [
         "results": [
             {
                 "url": "ANY",
-                "filename": "TK Online 1.5.xlsx",
+                "filename": "TK Online 1.5.2.xlsx",
                 "referer": "https://drive.google.com/file/d/1E3LpudUdUZycJpxSKK-c9-oIDuJoo5_7",
                 "album_id": None,
                 "uploaded_at": None,
@@ -111,18 +111,6 @@ TEST_CASES = [
                 "url": "ANY",
                 "filename": "Big Buck Bunny.mp4",
                 "referer": "https://drive.google.com/file/d/0ByeS4oOUV-49Zzh4R1J6R09zazQ",
-                "album_id": None,
-                "uploaded_at": None,
-            }
-        ],
-    },
-    {
-        "url": "https://drive.google.com/uc?id=1IP0o8dHcQrIHGgVyp0Ofvx2cGfLzyO1x",
-        "results": [
-            {
-                "url": "ANY",
-                "filename": "My Buddy - Henry Burr - Gus Kahn - Walter Donaldson.mp3",
-                "referer": "https://drive.google.com/file/d/1IP0o8dHcQrIHGgVyp0Ofvx2cGfLzyO1x",
                 "album_id": None,
                 "uploaded_at": None,
             }

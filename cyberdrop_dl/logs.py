@@ -185,8 +185,13 @@ class LogHandler(RichHandler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             return super().emit(record)
-        except Exception:
-            logger.critical("Unable to log", exc_info=True)
+        except Exception as e:  # noqa: BLE001
+            self.handleError(record, e)
+
+    @override
+    def handleError(self, record: logging.LogRecord, e: Exception | None = None) -> None:
+        logger.critical("LOGGING ERROR. A record has been lost. Unable to log it", exc_info=e)
+        return super().handleError(record)
 
 
 class BareQueueHandler(QueueHandler):
@@ -352,7 +357,7 @@ def setup_file_logging(
 
     with (
         _setup_debug_logger() as debug_log_file,
-        file.open("w", encoding="utf8") as fp,
+        file.open("w", encoding="utf8", errors="backslashreplace") as fp,
         enter_context(MAIN_LOG_FILE, file),
         enter_context(mega.LOG_HTTP_TRAFFIC, log_http_traffic),
         enter_context(mega.LOG_FILE_PROGRESS, False),
@@ -407,7 +412,7 @@ def _setup_debug_logger() -> Generator[Path | None]:
     debug_log_file = debug_log_file.resolve().absolute()
 
     with (
-        debug_log_file.open("w", encoding="utf8") as fp,
+        debug_log_file.open("w", encoding="utf8", errors="backslashreplace") as fp,
         _threaded_logger(
             LogHandler(
                 level=logging.NOTSET + 1,

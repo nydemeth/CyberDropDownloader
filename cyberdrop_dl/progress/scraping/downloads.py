@@ -102,7 +102,7 @@ class AutoDownloadColumn(DownloadColumn):
 
         downloaded_bytes = _format_bytes(int(hls_task.completed), binary=self.binary_units)
         completed_segs = int(task.completed)
-        total_segs = "?" if task.total is None else f"{int(task.total):,}"
+        total_segs = "?" if not task.total else f"{int(task.total):,}"
         total_width = len(str(total_segs))
         download_status = f"{downloaded_bytes} ({completed_segs:>{total_width},}/{total_segs})"
         return Text(download_status, style="progress.download", justify="right")
@@ -160,7 +160,7 @@ class DownloadsPanel(OverFlowPanel):
 
     @contextlib.contextmanager
     def download_hls(
-        self, filename: str, /, domain: str, segments: float, *, url: AbsoluteHttpURL | None = None
+        self, filename: str, /, domain: str, segments: int, *, url: AbsoluteHttpURL | None = None
     ) -> Generator[None]:
         # For HLS downloads, we use 2 different tasks. One on a hidden progress to track the downloaded bytes
         # and one on the user facing progress to track the number of downloaded segments (with a known total)
@@ -172,7 +172,7 @@ class DownloadsPanel(OverFlowPanel):
         bytes_task = self._hls_progress[task_id]
         segments_task = self._add_task(
             _escape_filename(filename),
-            segments,
+            segments or None,
             fields={
                 _CustomField.DOMAIN: domain.upper(),
                 _CustomField.HLS: bytes_task,
@@ -188,13 +188,13 @@ class DownloadsPanel(OverFlowPanel):
                 self._hls_progress.remove_task(task_id)
 
     def download_file(
-        self, description: object, /, domain: str, total: float | None, *, url: AbsoluteHttpURL | None = None
+        self, description: object, /, domain: str, total: int | None, *, url: AbsoluteHttpURL | None = None
     ) -> ProgressHook:
 
         assert domain
         task = self._add_task(
             _escape_filename(str(description)),
-            total,
+            total or None,
             fields={
                 _CustomField.DOMAIN: domain.upper(),
                 _CustomField.URL: url,
@@ -330,8 +330,8 @@ def _select_bytes_units(size: int, *, binary: bool) -> tuple[int, str]:
 
 
 def _escape_filename(filename: str) -> str:
-    filename = str(filename).rsplit("/", 1)[-1]
-    return filename.encode().decode("ascii", errors="ignore")
+    filename = str(filename).rpartition("/")[-1]
+    return filename.encode("utf-8", errors="replace").decode("ascii", errors="ignore")
 
 
 def _task_speed(task: Task) -> float | None:

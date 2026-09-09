@@ -20,7 +20,7 @@ from cyberdrop_dl.clients import get_logger, wreq
 from cyberdrop_dl.clients.flaresolverr import Solution as FlaresolverrSolution
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import parse_url
+from cyberdrop_dl.utils import parse_url, truncated_preview
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -43,7 +43,11 @@ _ResponseT = TypeVar(
     default=Any,
 )
 
-EMPTY_CONTENT = StrEnum("ResponseContentPlaceHolder", [("EMPTY", "")]).EMPTY
+
+class ContentPlaceHolder(StrEnum):
+    EMPTY = ""
+    ERROR = "<ERROR DECODING CONTENT>"
+    PENDING = "<DID NOT AWAIT FOR CONTENT YET>"
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -78,7 +82,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     id: str = dataclasses.field(init=False, default="")
 
     _resp: _ResponseT
-    _text: str = EMPTY_CONTENT
+    _text: str = ContentPlaceHolder.EMPTY
     _cache: dict[str, Any] = dataclasses.field(init=False, compare=False, default_factory=dict)
     _lock: asyncio.Lock = dataclasses.field(init=False, compare=False, default_factory=asyncio.Lock)
     _serialized: bool = False
@@ -110,18 +114,18 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     @final
     @property
     def has_content_not_logged(self) -> bool:
-        return self._serialized and not self._fully_serialized and self._text is not EMPTY_CONTENT
+        return self._serialized and not self._fully_serialized and self._text is not ContentPlaceHolder.EMPTY
 
     def __json__(self) -> dict[str, Any]:
         try:
             content = self._get_content()
-        except ValueError:
-            logger.exception("Unable to decode content of response %s", self.id)
-            content = "<ERROR DECODING CONTENT>"
+        except ValueError as e:
+            logger.error("Unable to decode content of response %s: %s", self.id, truncated_preview(repr(e)))
+            content = ContentPlaceHolder.ERROR
 
         self._serialized = True
-        if content is EMPTY_CONTENT:
-            content = "<DID NOT AWAIT FOR CONTENT YET>"
+        if content is ContentPlaceHolder.EMPTY:
+            content = ContentPlaceHolder.PENDING
         else:
             self._fully_serialized = True
 
