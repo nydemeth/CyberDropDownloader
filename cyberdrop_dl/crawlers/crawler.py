@@ -573,7 +573,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         if metadata:
             media_item.metadata = metadata
 
-        check_path_traversal(self.config.download_folder, media_item.download_folder)
+        if not USE_RETRY_PATH.get():
+            check_path_traversal(self.config.download_folder, media_item.download_folder)
         check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
 
