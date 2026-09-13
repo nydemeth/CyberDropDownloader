@@ -15,7 +15,7 @@ from aiohttp import hdrs
 from cyberdrop_dl import aio, cookies, ddos_guard
 from cyberdrop_dl.clients import curl_cffi, flaresolverr, get_logger, tcp, wreq
 from cyberdrop_dl.clients.request import Request, RequestParams
-from cyberdrop_dl.clients.response import AbstractResponse
+from cyberdrop_dl.clients.response import AbstractResponse, FlareSolverrResponse
 from cyberdrop_dl.cookies import make_simple_cookie
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.signature import simple_repr
@@ -374,7 +374,7 @@ class HTTPClient:
         self,
         url: AbsoluteHttpURL,
         **params: Unpack[flaresolverr.RequestParams],
-    ) -> AbstractResponse[Any]:
+    ) -> FlareSolverrResponse:
         flare = self.flaresolverr
         if not flare:
             raise ScrapeError(
@@ -388,7 +388,7 @@ class HTTPClient:
         url: AbsoluteHttpURL,
         /,
         **params: Unpack[flaresolverr.RequestParams],
-    ) -> AbstractResponse[Any]:
+    ) -> FlareSolverrResponse:
         """Make a request with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page, even if flaresolverr fails to detect/solve a challenge"""
@@ -401,7 +401,7 @@ class HTTPClient:
         flaresolverr.verify_solution(self.config.network.user_agent, solution)
         self._use_flaresolverr_ua.add(url.host)
         self._flaresolverr_ua = flaresolverr.USER_AGENT.get()
-        return AbstractResponse.create(solution)
+        return FlareSolverrResponse.create(solution)
 
 
 async def _check_json(response: AbstractResponse[Any]) -> None:
@@ -462,7 +462,7 @@ class HTTPMixin(HTTPController, Protocol):
         self,
         url: AbsoluteHttpURL,
         **kwargs: Unpack[flaresolverr.RequestParams],
-    ) -> AbstractResponse[Any]:
+    ) -> FlareSolverrResponse:
         async with self.rate_limit_ctx():
             return await self.client.flaresolverr_request(url, **kwargs)
 
