@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 from http import HTTPStatus
@@ -338,9 +339,15 @@ class PornHubAPI(API):
 
     async def video(self, video_id: str) -> Video:
         page_url = self.PRIMARY_URL.joinpath("view_video.php").with_query(viewkey=video_id)
-        soup = await self.request_soup(page_url)
-        _check_video_is_available(soup)
-        flashvars = _extr_flashvars(soup)
+        async with self.request(page_url) as resp:
+            soup = await resp.soup()
+            html = await resp.text()
+
+        def get_flashvars():
+            _check_video_is_available(soup, html)
+            return _extr_flashvars(soup)
+
+        flashvars = await asyncio.to_thread(get_flashvars)
         if flashvars.get("video_unavailable_country", "false") != "false":
             raise ScrapeError(HTTPStatus.FORBIDDEN, "Video is geo restricted")
 
@@ -386,26 +393,25 @@ def _parse_formats(medias: Iterable[Media]) -> Generator[Format]:
         yield Format(url=media["videoUrl"], format=media["format"], resolution=res)
 
 
-def _check_video_is_available(soup: BeautifulSoup) -> None:
+def _check_video_is_available(soup: BeautifulSoup, html: str) -> None:
     if soup.select_one("section.noVideo"):
         raise ScrapeError(HTTPStatus.NOT_FOUND)
 
-    page_text = soup.text
     if (
         soup.select_one(".geoBlocked > h1:-soup-contains('page is not available')")
-        or "This content is unavailable in your country" in page_text
+        or "This content is unavailable in your country" in html
     ):
         raise ScrapeError(HTTPStatus.FORBIDDEN, "Video is geo restricted")
 
     if (
-        "Video has been flagged for verification in accordance with our trust and safety policy" in page_text
-        or "Video has been removed at the request of" in page_text
+        "Video has been flagged for verification in accordance with our trust and safety policy" in html
+        or "Video has been removed at the request of" in html
     ):
         raise ScrapeError(HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS)
 
     if (
         soup.select_one("div.removed")
-        or "This video has been removed" in page_text
-        or "This video is currently unavailable" in page_text
+        or "This video has been removed" in html
+        or "This video is currently unavailable" in html
     ):
         raise ScrapeError(HTTPStatus.GONE)

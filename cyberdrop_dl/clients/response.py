@@ -106,7 +106,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
             if "html" in self.content_type:
                 return css.soup(self._text).prettify(formatter="html")
 
-        if not ("json" in self.content_type or "html" in self.content_type):
+        if not any(cont in self.content_type for cont in ("json", "html", "text")):
             return f"<{self.content_type or 'application/octet-stream'} payload>"
 
         return self._text
