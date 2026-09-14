@@ -34,7 +34,7 @@ class TurboVidCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://turbo.cr")
     DOMAIN: ClassVar[str] = "turbovid"
-    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("turbovid.cr", "saint.to", "saint2.su", "saint2.cr")
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("turbovid.cr", "saint.to", "saint2.su", "saint2.cr", "beta.turbo.cr")
     FOLDER_DOMAIN: ClassVar[str] = "TurboVid"
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
 
