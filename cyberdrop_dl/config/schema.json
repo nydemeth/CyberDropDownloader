@@ -754,6 +754,11 @@
           "title": "Content Urls",
           "type": "boolean"
         },
+        "expand_posts": {
+          "default": false,
+          "title": "Expand Posts",
+          "type": "boolean"
+        },
         "embed": {
           "default": true,
           "title": "Embed",

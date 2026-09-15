@@ -126,13 +126,13 @@ class OnlyHavenCrawler(KemonoBaseCrawler[OnlyHavenAPI]):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["creators", service, creator_id, "post", post_id]:
-                return await self.post(scrape_item, service, creator_id, post_id)
+                await self.post(scrape_item, service, creator_id, post_id)
             case ["creators", service, creator_id, "dm", dm_id]:
-                return await self.dm(scrape_item, service, creator_id, dm_id)
+                await self.dm(scrape_item, service, creator_id, dm_id)
             case ["creators", service, creator_id]:
-                return await self.creator(scrape_item, service, creator_id)
+                await self.creator(scrape_item, service, creator_id)
             case ["posts"] if search_query := scrape_item.url.query.get("q"):
-                return await self.search(scrape_item, search_query)
+                await self.search(scrape_item, search_query)
             case _:
                 raise ValueError
 

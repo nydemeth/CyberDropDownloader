@@ -60,17 +60,17 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case [service, "user", creator_id, "post", post_id]:
-                return await self.post(scrape_item, service, creator_id, post_id)
+                await self.post(scrape_item, service, creator_id, post_id)
             case [service, "user", creator_id]:
-                return await self.creator(scrape_item, service, creator_id)
+                await self.creator(scrape_item, service, creator_id)
             case ["favorites"] if (type_ := scrape_item.url.query.get("type")) in ("post", "artist", None):
-                return await self.favorites(scrape_item, type_ or "artist")
+                await self.favorites(scrape_item, type_ or "artist")
             case ["account", "favorites", slug] if (type_ := slug.removesuffix("s")) in ("post", "artist"):
-                return await self.favorites(scrape_item, type_)
+                await self.favorites(scrape_item, type_)
             case ["posts"] if search_query := scrape_item.url.query.get("q"):
-                return await self.search(scrape_item, search_query)
+                await self.search(scrape_item, search_query)
             case ["thumbnail" | "thumbnails" | "data", _, *_]:
-                return await self._direct_file(scrape_item)
+                await self._direct_file(scrape_item)
             case _:
                 raise ValueError
 
@@ -188,10 +188,11 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
         for post in posts:
             self.__check_for_ads(post)
             new_item = scrape_item.create_child(self.parse_url(post.web_path_qs))
-            if post.content or not self.__kemono_config__.content_urls:
-                await self._user_post(new_item, post)
+            expand = self.__kemono_config__.expand_posts or (self.__kemono_config__.content_urls and not post.content)
+            if expand:
+                self.create_task(self.post(new_item, post.service, post.user_id, post.id))
             else:
-                self.create_task(self.run(new_item))
+                await self._user_post(new_item, post)
             scrape_item.add_children()
 
 

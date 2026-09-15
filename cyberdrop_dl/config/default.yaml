@@ -59,11 +59,13 @@ crawlers:
     attachments: true
     content_urls: true
     embed: true
+    expand_posts: false
     file: true
   pawchive:
     attachments: true
     content_urls: true
     embed: true
+    expand_posts: false
     file: true
   pornhub:
     profile_paths:
