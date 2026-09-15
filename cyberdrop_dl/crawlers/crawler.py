@@ -40,6 +40,7 @@ if TYPE_CHECKING:
         AsyncIterator,
         Awaitable,
         Callable,
+        Container,
         Coroutine,
         Generator,
         Iterable,
@@ -98,6 +99,15 @@ _DB_PATH_BUILDERS: MappingProxyType[str, URLHasher] = MappingProxyType(
         "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
     }
 )
+
+
+@frozen(order=False, kw_only=False)
+class ContainerChecker[T: Container, R]:
+    values: T
+    check: Callable[[R], bool]
+
+    def __contains__(self, obj: R) -> bool:
+        return self.check(obj)
 
 
 @frozen(order=True, kw_only=False)
@@ -719,6 +729,19 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     async def get_album_results(self, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
         return await self.database.history.query_album(self.DOMAIN, album_id)
+
+    @final
+    async def get_completed_by_album(self, album_id: str) -> ContainerChecker[set[str], AbsoluteHttpURL]:
+        completed = await self.database.history.query_completed_by_album(self.DOMAIN, album_id)
+
+        def check(url: AbsoluteHttpURL) -> bool:
+            if completed and self.__db_path__(url) in completed:
+                logger.info("Skipping %s as it has already been downloaded", url)
+                self.tui.files.stats.prev_completed += 1
+                return True
+            return False
+
+        return ContainerChecker(completed, check)
 
     @final
     def handle_external_links(self, scrape_item: ScrapeItem, *, reset: bool = True) -> None:
