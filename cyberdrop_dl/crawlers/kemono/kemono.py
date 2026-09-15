@@ -221,6 +221,7 @@ class FileFilterer:
     config: KemonoConfig
     log: logging.LoggerAdapter[logging.Logger] | logging.Logger
     skipped: int = dataclasses.field(init=False, default=0)
+    has_deferred_files: bool = dataclasses.field(init=False, default=False)
 
     def _files(self) -> Generator[tuple[File, str, bool]]:
         if not self.post.has_full:
@@ -235,9 +236,13 @@ class FileFilterer:
     def __iter__(self) -> Generator[File]:
         for file, kind, should_download in self._files():
             file_name = file.name or file.path
+            if file.deferred:
+                self.has_deferred_files = True
+
             if self.post.preview_state == "pending" or file.deferred or not file.path:
                 self.log.warning("Skipping file '%s' in post #%s [incomplete %s import]", file_name, self.post.id, kind)
                 self.skipped += 1
+
             elif not should_download:
                 self._report_skip_by_config(file_name, kind)
             else:
