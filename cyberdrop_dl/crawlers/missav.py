@@ -41,9 +41,9 @@ class MissAVCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case [*_, collection_type, name] if collection_type in _COLLECTION_TYPES:
-                return await self.collection(scrape_item, collection_type, name)
+                await self.collection(scrape_item, collection_type, name)
             case [*_, video_id]:
-                return await self.video(scrape_item, video_id)
+                await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
 

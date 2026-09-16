@@ -83,22 +83,22 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             return url / ""
         return url
 
-    async def fetch(self, scrape_item: ScrapeItem) -> None:  # noqa: PLR0911
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["categories" | "tags" as type_, name]:
-                return await self.collection(scrape_item, name, type_)
+                await self.collection(scrape_item, name, type_)
             case ["search", query]:
-                return await self.search(scrape_item, query)
+                await self.search(scrape_item, query)
             case ["members", member_id, "public_videos" | "favourite_videos" | "private_videos", *_]:
-                return await self.profile(scrape_item, member_id, entire_profile=False)
+                await self.profile(scrape_item, member_id, entire_profile=False)
             case ["members", member_id, *_]:
-                return await self.profile(scrape_item, member_id)
+                await self.profile(scrape_item, member_id)
             case ["videos" | "video", _, *_]:
-                return await self.video(scrape_item)
+                await self.video(scrape_item)
             case ["albums" | "album", _]:
-                return await self.album(scrape_item)
+                await self.album(scrape_item)
             case ["albums" | "album", _, _, *_]:
-                return await self.picture(scrape_item)
+                await self.picture(scrape_item)
             case _:
                 if query := scrape_item.url.query.get("q"):
                     return await self.search(scrape_item, query)

@@ -26,6 +26,11 @@ crawlers:
       - vorbis
       - aiff
       - alas
+  bluesky:
+    content_urls: true
+    external: true
+    reposts: false
+    threads: true
   clonr:
     use_source: false
     zip: false
@@ -54,11 +59,13 @@ crawlers:
     attachments: true
     content_urls: true
     embed: true
+    expand_posts: false
     file: true
   pawchive:
     attachments: true
     content_urls: true
     embed: true
+    expand_posts: false
     file: true
   pornhub:
     profile_paths:
@@ -148,6 +155,7 @@ logs:
   console_level: null
   expire_after: null
   files:
+    dedupe: dedupe.csv
     download_errors: download_errors.csv
     last_forum_post: last_forum_post.csv
     main: downloader.log

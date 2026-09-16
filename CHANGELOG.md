@@ -24,15 +24,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## UNRELEASED
 
+### Fixed
+
+- Downloads failing with "DDoS-Guard" errors when several links are scraped at once (Yandex Disk)
+
+## [10.9.1] - 2026-09-13
+
+### Changed
+
+- Allow downloads to go outside the current `--download-folder` when using a retry option with `--force-original-path`
+
+### Removed
+
+- OneManager support
+- Motherless support
+- Anontransfer support
+
+### Fixed
+
+- Downloads from users using the new profile layout (xHamster)
+
+## [10.9.0] - 2026-09-13
+
 ### Added
 
 - Support premium URLs (direct links)(GoFile)
+- BlueSky support
+- FileditchAlbums support
+- Support for shorts (Rumble)
+
+### Changed
+
+- Enable the `--force-original-path` option on retry commands
+- Ask the user if they want to use the original download path after choosing `retry failed downloads` (main menu)
+- Log a warning when a block comment in the input file is never closed and URLs after it are ignored
 
 ### Fixed
 
 - Pagination of some profiles stopping early (Twitter/x.com)
 - Pagination of some profiles never stopping (Twitter/x.com)
 - Some posts missing if a profile has 1k+ tweets (Twitter/x.com)
+- HLS segments not being deleted after a successful download
+- Malformed HLS `.ts` videos in an `.mp4` container
+- Downloads failing with 404 when the file name contains "&" or "'" (Bunkr)
+- Downloads of embeded videos and direct URLs (Imagepond)
+- Thumbnails downloads always failing with 404 (Cyberdrop)
+- Downloads failing with "DDoS-Guard" errors (Yandex Disk)
+- Corrupted file when resuming a partial download that was already 50% or more done
 
 ## [10.8.0] - 2026-09-06
 

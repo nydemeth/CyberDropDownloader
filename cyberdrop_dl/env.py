@@ -42,7 +42,7 @@ ENABLE_DEBUG_CRAWLERS = True
 
 APPDATA_FOLDER = _env("APPDATA_FOLDER")
 WRITE_JSON_UI = int(_env("WRITE_JSON_UI") or 0) or None
-FFMPEG_FIX_HLS = _cast_bool(_env("FFMPEG_FIX_HLS"))
+FFMPEG_FIX_HLS = _cast_bool(_val if (_val := _env("FFMPEG_FIX_HLS")) is not None else True)
 EDITOR = os.getenv("EDITOR")
 CI = _cast_bool(os.getenv("CI"))
 TERMUX = {
@@ -56,7 +56,7 @@ TERMUX = {
 
 FILEDITCH_WAIT = int(_env("FILEDITCH_WAIT") or 20)
 GOFILE_SALT = _env("GOFILE_SALT")
-TWITTER_MAX_EMPTY_PAGES = int(_env("TWITTER_MAX_EMPTY_PAGES") or 1)
+TWITTER_MAX_EMPTY_PAGES = int(_env("TWITTER_MAX_EMPTY_PAGES") or 10)
 
 ALL_VARS = dict(sorted(ALL_VARS.items()))  # pyright: ignore[reportConstantRedefinition]
 ALL_VARS_RESOLVED = dict(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import dataclasses
 import json
 from http import HTTPStatus
@@ -10,7 +12,7 @@ from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, extr_text, json_ld
+from cyberdrop_dl.utils import css, dates, extr_text, json_ld
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -27,6 +29,7 @@ class Selector:
     GIF = "div#js-gifToWebm"
     NEXT_PAGE = "li.page_next a"
     PHOTO = "div#photoImageSection img"
+    VIDEO_DATA = "script:-soup-contains-own('video_date_published')"
 
     @final
     class Playlist:
@@ -313,7 +316,7 @@ class Video:
     id: str
     title: str
     thumb: str | None
-    uploaded_at: float
+    uploaded_at: float | None
     formats: tuple[Format, ...]
     url: AbsoluteHttpURL
 
@@ -338,9 +341,15 @@ class PornHubAPI(API):
 
     async def video(self, video_id: str) -> Video:
         page_url = self.PRIMARY_URL.joinpath("view_video.php").with_query(viewkey=video_id)
-        soup = await self.request_soup(page_url)
-        _check_video_is_available(soup)
-        flashvars = _extr_flashvars(soup)
+        async with self.request(page_url) as resp:
+            soup = await resp.soup()
+            html = await resp.text()
+
+        def get_flashvars():
+            _check_video_is_available(soup, html)
+            return _extr_flashvars(soup)
+
+        flashvars = await asyncio.to_thread(get_flashvars)
         if flashvars.get("video_unavailable_country", "false") != "false":
             raise ScrapeError(HTTPStatus.FORBIDDEN, "Video is geo restricted")
 
@@ -349,7 +358,7 @@ class PornHubAPI(API):
             title=flashvars["video_title"],
             thumb=flashvars.get("image_url"),
             formats=tuple(_parse_formats(flashvars["mediaDefinitions"])),
-            uploaded_at=json_ld.upload_date(soup),
+            uploaded_at=_extr_upload_date(soup),
             url=page_url,
         )
 
@@ -364,6 +373,19 @@ def _extr_flashvars(soup: BeautifulSoup) -> dict[str, Any]:
     flashvars: str = css.select_text(soup, Selector.FLASHVARS)
     payload = extr_text(flashvars, "{", "};").strip()
     return json.loads("{" + payload + "}")
+
+
+def _extr_upload_date(soup: BeautifulSoup) -> float | None:
+    with contextlib.suppress(css.SelectorError):
+        return json_ld.upload_date(soup)
+
+    # Unlisted videos have no ld+json, but still have this date-only field
+    with contextlib.suppress(css.SelectorError, ValueError):
+        script = css.select_text(soup, Selector.VIDEO_DATA)
+        raw_date = extr_text(script, "'video_date_published' : '", "'")
+        return dates.parse_format(f"{raw_date}+0000", "%Y%m%d%z").timestamp()
+
+    return None
 
 
 def _parse_formats(medias: Iterable[Media]) -> Generator[Format]:
@@ -386,26 +408,25 @@ def _parse_formats(medias: Iterable[Media]) -> Generator[Format]:
         yield Format(url=media["videoUrl"], format=media["format"], resolution=res)
 
 
-def _check_video_is_available(soup: BeautifulSoup) -> None:
+def _check_video_is_available(soup: BeautifulSoup, html: str) -> None:
     if soup.select_one("section.noVideo"):
         raise ScrapeError(HTTPStatus.NOT_FOUND)
 
-    page_text = soup.text
     if (
         soup.select_one(".geoBlocked > h1:-soup-contains('page is not available')")
-        or "This content is unavailable in your country" in page_text
+        or "This content is unavailable in your country" in html
     ):
         raise ScrapeError(HTTPStatus.FORBIDDEN, "Video is geo restricted")
 
     if (
-        "Video has been flagged for verification in accordance with our trust and safety policy" in page_text
-        or "Video has been removed at the request of" in page_text
+        "Video has been flagged for verification in accordance with our trust and safety policy" in html
+        or "Video has been removed at the request of" in html
     ):
         raise ScrapeError(HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS)
 
     if (
         soup.select_one("div.removed")
-        or "This video has been removed" in page_text
-        or "This video is currently unavailable" in page_text
+        or "This video has been removed" in html
+        or "This video is currently unavailable" in html
     ):
         raise ScrapeError(HTTPStatus.GONE)

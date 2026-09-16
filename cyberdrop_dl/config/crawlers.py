@@ -38,7 +38,10 @@ class KemonoConfig(ConfigModel):
     "Download all attachments in a post (may or may not include `file`)"
 
     content_urls: bool = True
-    "Download any URL found inside the description (text) of a post (slower)"
+    "Download any URL found inside the description (text) of a post"
+
+    expand_posts: bool = False
+    "Make an additional API request for each post to get original filenames and the content/text (slower)"
 
     embed: bool = True
     "Download the embedded file from third party sites (if any)(mega.nz, pcloud, dropbox, etc..)"
@@ -59,7 +62,7 @@ class TwitterArticlesConfig(ConfigModel):
 
 class TwitterConfig(ConfigModel):
     cards: bool = True
-    "Parse and download cards in a post (embeds from thirdparty sites)"
+    "Parse and download cards in a post (embeds from third-party sites)"
 
     threads: bool = True
     "Downloads all posts in a thread (All direct replies from OP to their own tweet)"
@@ -76,6 +79,20 @@ class TwitterConfig(ConfigModel):
     image_size: Literal["orig", "4096x4096", "large", "medium", "small", "thumb"] = "orig"
     # `orig`` is original quality but it's not always available, same as "4096x4096"
     # "large", "medium", or "small" are always available
+
+
+class BlueSkyConfig(ConfigModel):
+    external: bool = True
+    "Parse and download embeds from third-party sites"
+
+    threads: bool = True
+    "Downloads all posts in a thread (All direct replies from OP to their own post)"
+
+    content_urls: bool = True
+    "Parse and try to download any URL found inside the text of a post"
+
+    reposts: bool = False
+    "Download media from reposts in the user's timeline"
 
 
 class OctaveMusicConfig(ConfigModel):
@@ -169,6 +186,7 @@ class Crawlers(ConfigGroup, name=None):
     "Name of crawlers to disable for the current run"
 
     bandcamp: BandcampConfig = Field(default_factory=BandcampConfig)
+    bluesky: BlueSkyConfig = Field(default_factory=BlueSkyConfig)
     clonr: ClonrConfig = Field(default_factory=ClonrConfig)
     clypit: ClypitConfig = Field(default_factory=ClypitConfig)
     generic: GenericCrawlers = Field(default_factory=GenericCrawlers)

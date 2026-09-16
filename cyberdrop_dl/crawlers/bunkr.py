@@ -94,15 +94,15 @@ class BunkrCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["file", file_id] if scrape_item.url.host == self.api.DL_ENDPOINT.host:
-                return await self.file_download(scrape_item, file_id)
+                await self.file_download(scrape_item, file_id)
             case ["a", album_id]:
-                return await self.album(scrape_item, album_id)
+                await self.album(scrape_item, album_id)
             case ["v" | "d" | "i", _]:
-                return await self.follow_redirect(scrape_item)
+                await self.follow_redirect(scrape_item)
             case ["f", _]:
-                return await self.file(scrape_item)
+                await self.file(scrape_item)
             case [_] if _is_stream_redirect(scrape_item.url.host):
-                return await self.follow_redirect(scrape_item)
+                await self.follow_redirect(scrape_item)
             case _:
                 raise ValueError
 
@@ -328,6 +328,12 @@ def _extract_js_vars(soup: BeautifulSoup) -> dict[str, str]:
 
 
 def _fix_encoding(val: str) -> str:
+    # Double-quoted page vars are JSON strings, so decode every escape, not just `\/`
+    if val.startswith('"'):
+        try:
+            return json.loads(val)
+        except ValueError:
+            pass
     return val.replace(r"\/", "/")
 
 

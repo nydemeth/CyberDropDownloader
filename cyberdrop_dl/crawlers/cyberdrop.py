@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, override
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
@@ -12,6 +12,7 @@ from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.constants import HttpMethod
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
@@ -36,6 +37,7 @@ class CyberdropCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://cyberdrop.cr/")
     DOMAIN: ClassVar[str] = "cyberdrop"
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("cyberdrop.me", "cyberdrop.to")
+    _THUMB_HTTP_METHOD: ClassVar[HttpMethod] = "GET"
 
     def __post_init__(self) -> None:
         self.api: CyberdropAPI = CyberdropAPI.from_crawler(self)
@@ -43,15 +45,23 @@ class CyberdropCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["a", album_id, *_]:
-                return await self.album(scrape_item, album_id)
-            case ["api", "file" | "proxy", "d" | "auth" | "thumb", file_id, *_]:
-                return await self.file(scrape_item, file_id)
-            case ["f" | "e", file_id]:
-                return await self.file(scrape_item, file_id)
+                await self.album(scrape_item, album_id)
+            case ["f", file_id]:
+                await self.file(scrape_item, file_id)
             case [_]:
-                return await self.follow_redirect(scrape_item)
+                await self.follow_redirect(scrape_item)
             case _:
                 raise ValueError
+
+    @classmethod
+    @override
+    def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        url = super().transform_url(url)
+        match url.parts[1:]:
+            case ["e", file_id] | ["api", "file" | "proxy", "d" | "auth" | "thumb", file_id, *_]:
+                return url.origin() / "f" / file_id
+            case _:
+                return url
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:

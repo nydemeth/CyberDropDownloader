@@ -39,10 +39,10 @@ class YouJizzCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["videos", "embed", video_id]:
-                return await self.video(scrape_item, video_id)
+                await self.video(scrape_item, video_id)
             case ["videos", video_name]:
                 video_id = video_name.rsplit("-", 1)[-1].removesuffix(".html")
-                return await self.video(scrape_item, video_id)
+                await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
 

@@ -70,15 +70,15 @@ class CheveretoCrawler(Crawler, is_generic=True):
 
         match scrape_item.url.parts[1:]:
             case ["a" | "album" | "category", album_slug]:
-                return await self.album(scrape_item, _id(album_slug))
+                await self.album(scrape_item, _id(album_slug))
             case ["img" | "image" | "video" | "videos", _]:
-                return await self.media(scrape_item)
+                await self.media(scrape_item)
             case ["images", _, *_]:
-                return await self.direct_file(scrape_item)
+                await self.direct_file(scrape_item)
             case [_, "albums"]:
-                return await self.profile(scrape_item, albums=True)
+                await self.profile(scrape_item, albums=True)
             case [_]:
-                return await self.profile(scrape_item)
+                await self.profile(scrape_item)
             case _:
                 raise ValueError
 
