@@ -85,13 +85,14 @@ class MediaFireCrawler(Crawler):
             and (quick_key := scrape_item.url.query_string)
             and not ("&" in quick_key or "=" in quick_key)
         ):
-            return await self.file(scrape_item, quick_key)
+            await self.file(scrape_item, quick_key)
+            return
 
         match scrape_item.url.parts[1:]:
             case ["folder", folder_key, *_]:
-                return await self.folder(scrape_item, folder_key)
+                await self.folder(scrape_item, folder_key)
             case ["file" | "file_premium", quick_key, *_]:
-                return await self.file(scrape_item, quick_key)
+                await self.file(scrape_item, quick_key)
             case _:
                 raise ValueError
 

@@ -92,11 +92,11 @@ class PkmncardsCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["card", _, *_]:
-                return await self.card(scrape_item)
+                await self.card(scrape_item)
             case ["set", slug, *_]:
-                return await self.card_set(scrape_item, slug)
+                await self.card_set(scrape_item, slug)
             case ["series", slug, *_]:
-                return await self.series(scrape_item, slug)
+                await self.series(scrape_item, slug)
             case _:
                 raise ValueError
 

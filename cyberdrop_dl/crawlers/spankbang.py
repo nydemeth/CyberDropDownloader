@@ -74,18 +74,19 @@ class SpankBangCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case [playlist_id, "playlist", _, _page]:
-                return await self.playlist(scrape_item, playlist_id)
+                await self.playlist(scrape_item, playlist_id)
             case [video_id, "video" | "embed" | "play", *_]:
-                return await self.video(scrape_item, video_id)
+                await self.video(scrape_item, video_id)
             case ["profile", user, "videos"]:
-                return await self.profile(scrape_item, user)
+                await self.profile(scrape_item, user)
             case ["s", query, *_]:
-                return await self.search(scrape_item, query)
+                await self.search(scrape_item, query)
             case [id_, "playlist", _]:
                 playlist_id, _, video_id = id_.partition("-")
                 if video_id:
-                    return await self.video(scrape_item, video_id)
-                return await self.playlist(scrape_item, playlist_id)
+                    await self.video(scrape_item, video_id)
+                    return
+                await self.playlist(scrape_item, playlist_id)
             case _:
                 raise ValueError
 

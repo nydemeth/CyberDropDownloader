@@ -69,7 +69,8 @@ class GoonBoxCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if self.is_subdomain(scrape_item.url):
-            return await self.direct_file(scrape_item)
+            await self.direct_file(scrape_item)
+            return
 
         match scrape_item.url.parts[1:]:
             case ["img", file_id]:

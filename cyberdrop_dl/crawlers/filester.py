@@ -45,9 +45,9 @@ class FilesterCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["d", slug]:
-                return await self.file(scrape_item, slug)
+                await self.file(scrape_item, slug)
             case ["f", slug]:
-                return await self.folder(scrape_item, slug)
+                await self.folder(scrape_item, slug)
             case _:
                 raise ValueError
 

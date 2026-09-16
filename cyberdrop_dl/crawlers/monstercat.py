@@ -26,7 +26,7 @@ class MonstercatCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["release", release_slug]:
-                return await self.release(scrape_item, release_slug)
+                await self.release(scrape_item, release_slug)
             case _:
                 raise ValueError
 
