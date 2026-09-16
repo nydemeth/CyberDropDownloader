@@ -95,9 +95,9 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
             self.log.warning("Post %s has defered files but `expand_posts` is disabled. Ignoring..", post.id)
             return
 
-        await self.defered_files(scrape_item, post)
+        await self._defered_files(scrape_item, post)
 
-    async def defered_files(self, scrape_item: ScrapeItem, post: PostModel) -> None:
+    async def _defered_files(self, scrape_item: ScrapeItem, post: PostModel) -> None:
         self.log.info("Trying to get temp download URLs for defered files in post %s", post.id)
         soup = await self.request_soup(scrape_item.url)
         files = await asyncio.to_thread(lambda: tuple(_extract_defered_files(soup)))

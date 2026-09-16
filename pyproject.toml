@@ -1,6 +1,6 @@
 [project]
 name = "cyberdrop-dl-patched"
-version = "10.9.1"
+version = "10.10.0dev0"
 authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -43,7 +43,7 @@ dependencies = [
     "typing-extensions>=4.16.0",
     "wassima>=2.1.3",
     "xxhash >=4.0.1",
-    "yarl >=1.24.5"
+    "yarl >=1.25.1"
 ]
 description = "Bulk downloader for multiple file hosts"
 keywords = ["asyncio", "bunkr", "cyberdrop", "downloader", "mega.nz"]
