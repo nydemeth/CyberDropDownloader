@@ -102,13 +102,13 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
         with self.new_task_id(scrape_item.url):
             self.log.info("Trying to get temp download URLs for defered files in post %s", post.id)
             soup = await self.request_soup(scrape_item.url)
-            files = await asyncio.to_thread(lambda: dict(_extract_defered_files(soup)))
+            files = await asyncio.to_thread(lambda: tuple(_extract_defered_files(soup)))
             if not files:
                 self.log.warning("Did not find any defered URL for post %", post.id)
                 return
 
             async with self.new_task_group() as tg:
-                for name, src in files.items():
+                for name, src in files:
                     self.log.info("Found temp defered file '%s' (%s)", name, src)
                     tg.create_task(self._temp_file(scrape_item, src, name))
 
@@ -148,12 +148,19 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
 
 def _extract_defered_files(soup: bs4.Tag) -> Iterable[tuple[str, AbsoluteHttpURL]]:
     body = css.select(soup, ".post__body")
-    for li in css.iselect(body, "li"):
+    defered_span = "span.post__relay-clock"
+    for li in css.iselect(body, "li:has(source)"):
         try:
-            summary = css.select(li, "summary:has(span.post__relay-clock)")
+            summary = css.select(li, f"summary:has({defered_span})")
         except css.SelectorError:
             continue
         else:
             name = css.text(summary)
             src = css.select(li, "source", "src")
             yield name, PawchiveCrawler.parse_url(src)
+
+    for li in css.iselect(body, f"li.post__attachment:has({defered_span})"):
+        attach = css.select(li, "a.post__attachment-link")
+        name = css.text(attach).removeprefix("Download ")
+        src = css.attr(attach, "href")
+        yield name, PawchiveCrawler.parse_url(src)
