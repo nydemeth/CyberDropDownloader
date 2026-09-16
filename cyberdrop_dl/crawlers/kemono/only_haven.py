@@ -159,21 +159,22 @@ class OnlyHavenCrawler(KemonoBaseCrawler[OnlyHavenAPI]):
         await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
 
     @override
-    def _post(self, scrape_item: ScrapeItem, post: UserPostModel) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def _post(self, scrape_item: ScrapeItem, post: UserPostModel) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         scrape_item.uploaded_at = post.timestamp
         self.create_eager_task(self.write_metadata(scrape_item, f"post_{post.id}", post))
         files = FileFilterer(post, self.__kemono_config__, self.log)
         try:
-            self._extract_post_files(scrape_item, files)
+            await self._extract_post_files(scrape_item, files)
         finally:
             self.tui.files.stats.skipped += files.skipped
         self._extract_urls_from_post_content(scrape_item, post)
 
     @override
-    def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
-        for url in unique(map(self._compose_file_url, post_files)):
-            self.create_eager_task(self._direct_file(scrape_item, url))
-            scrape_item.add_children()
+    async def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+        async with self.new_task_group() as tg:
+            for url in unique(map(self._compose_file_url, post_files)):
+                tg.create_task(self._direct_file(scrape_item, url))
+                scrape_item.add_children()
 
     @override
     def _compose_file_url(self, file: File) -> AbsoluteHttpURL:  # pyright: ignore[reportIncompatibleMethodOverride]

@@ -84,8 +84,8 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
         await self._user_post(scrape_item, post)
 
     @override
-    def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:
-        super()._extract_post_files(scrape_item, post_files)
+    async def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:
+        await super()._extract_post_files(scrape_item, post_files)
 
         if not post_files.has_deferred_files:
             return
@@ -95,22 +95,20 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
             self.log.warning("Post %s has defered files but `expand_posts` is disabled. Ignoring..", post.id)
             return
 
-        self.create_eager_task(self.defered_files(scrape_item, post))
+        await self.defered_files(scrape_item, post)
 
-    @error_handling_wrapper
     async def defered_files(self, scrape_item: ScrapeItem, post: PostModel) -> None:
-        with self.new_task_id(scrape_item.url):
-            self.log.info("Trying to get temp download URLs for defered files in post %s", post.id)
-            soup = await self.request_soup(scrape_item.url)
-            files = await asyncio.to_thread(lambda: tuple(_extract_defered_files(soup)))
-            if not files:
-                self.log.warning("Did not find any defered URL for post %", post.id)
-                return
+        self.log.info("Trying to get temp download URLs for defered files in post %s", post.id)
+        soup = await self.request_soup(scrape_item.url)
+        files = await asyncio.to_thread(lambda: tuple(_extract_defered_files(soup)))
+        if not files:
+            self.log.warning("Did not find any defered URL for post %", post.id)
+            return
 
-            async with self.new_task_group() as tg:
-                for name, src in files:
-                    self.log.info("Found temp defered file '%s' (%s)", name, src)
-                    tg.create_task(self._temp_file(scrape_item, src, name))
+        async with self.new_task_group() as tg:
+            for name, src in files:
+                self.log.info("Found temp defered file '%s' (%s)", name, src)
+                tg.create_task(self._temp_file(scrape_item, src, name))
 
     async def _temp_file(
         self, scrape_item: ScrapeItem, src: AbsoluteHttpURL | None = None, name: str | None = None

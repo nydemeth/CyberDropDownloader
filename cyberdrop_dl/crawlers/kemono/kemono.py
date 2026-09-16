@@ -135,22 +135,23 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
         scrape_item.setup_as_album(title, album_id=post.user_id)
         post_title = self.create_separate_post_title(post.title, post.id, post.timestamp)
         scrape_item.append_folders(post_title)
-        self._post(scrape_item, post)  # pyright: ignore[reportArgumentType]
+        await self._post(scrape_item, post)  # pyright: ignore[reportArgumentType]
 
-    def _post(self, scrape_item: ScrapeItem, post: PostModel) -> None:
+    async def _post(self, scrape_item: ScrapeItem, post: PostModel) -> None:
         scrape_item.uploaded_at = post.timestamp
         self.create_eager_task(self.write_metadata(scrape_item, f"post_{post.id}", post))
         files = FileFilterer(post, self.__kemono_config__, self.log)
         try:
-            self._extract_post_files(scrape_item, files)
+            await self._extract_post_files(scrape_item, files)
         finally:
             self.tui.files.stats.skipped += files.skipped
         self._extract_urls_from_post_content(scrape_item, post)
 
-    def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:
-        for url in unique(map(self._compose_file_url, post_files)):
-            self.create_eager_task(self._direct_file(scrape_item, url))
-            scrape_item.add_children()
+    async def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:
+        async with self.new_task_group() as tg:
+            for url in unique(map(self._compose_file_url, post_files)):
+                tg.create_task(self._direct_file(scrape_item, url))
+                scrape_item.add_children()
 
         if embed := post_files.embed():
             embed_url = self.parse_url(embed.url)
