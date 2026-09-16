@@ -64,6 +64,6 @@ TEST_CASES = [
     {
         "url": "https://turbovid.cr/library?q=mirror",
         "results": [],
-        "count": range(166, 200),
+        "count": range(368, 500),
     },
 ]
