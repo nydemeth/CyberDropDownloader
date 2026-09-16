@@ -138,7 +138,5 @@ def _extract_album(html: str) -> Album:
     return Album(
         id=extr_text(html, 'const ALBUM_ENC_ID = "', '"'),
         name=css.select_text(BeautifulSoup(html, "html.parser", parse_only=SoupStrainer("h1")), "h1"),
-        files=tuple(
-            fid.strip('"') for fid in TextExtractor(extr_text(html, "const FILES = [", "],")).repeat("id:", ", name")
-        ),
+        files=tuple(TextExtractor(extr_text(html, "const FILES = [", "],")).repeat('{ id:"', '"')),
     )
