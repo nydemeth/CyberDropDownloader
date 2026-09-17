@@ -4,9 +4,6 @@ import asyncio
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar, final, override
 
-from bs4 import BeautifulSoup
-from bs4.filter import SoupStrainer
-
 from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -137,6 +134,6 @@ class Album:
 def _extract_album(html: str) -> Album:
     return Album(
         id=extr_text(html, 'const ALBUM_ENC_ID = "', '"'),
-        name=css.select_text(BeautifulSoup(html, "html.parser", parse_only=SoupStrainer("h1")), "h1"),
+        name=css.select_tag_text(html, "h1"),
         files=tuple(TextExtractor(extr_text(html, "const FILES = [", "],")).repeat('{ id:"', '"')),
     )

@@ -6,6 +6,7 @@ import html
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
 
 from bs4 import BeautifulSoup
+from bs4.filter import SoupStrainer
 
 from cyberdrop_dl.exceptions import ScrapeError
 
@@ -66,6 +67,10 @@ def select_text(tag: Tag, selector: str, *, strip: bool = True, decompose: str |
         for trash in inner_tag.select(decompose):
             trash.decompose()
     return text(inner_tag, strip=strip)
+
+
+def select_tag_text(html: str, tag_name: str) -> str:
+    return select_text(soup(html, parse_only=tag_name), tag_name)
 
 
 def attr_or_none(tag: Tag, attribute: str) -> str | None:
@@ -199,12 +204,14 @@ def parse_form(form: Tag, /) -> HTMLForm:
     return HTMLForm(cast("HttpMethod", method), action, inputs)
 
 
-def soup(content: str) -> BeautifulSoup:
-    return BeautifulSoup(content, "html.parser")
+def soup(content: str, parse_only: tuple[str, ...] | str | None = None) -> BeautifulSoup:
+    return BeautifulSoup(
+        content, "html.parser", parse_only=SoupStrainer(parse_only) if parse_only is not None else None
+    )
 
 
-async def asoup(content: str) -> BeautifulSoup:
-    return await asyncio.to_thread(soup, content)
+async def asoup(content: str, parse_only: tuple[str, ...] | str | None = None) -> BeautifulSoup:
+    return await asyncio.to_thread(soup, content, parse_only)
 
 
 unescape = html.unescape
