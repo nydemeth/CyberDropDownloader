@@ -46,7 +46,7 @@ class PlaymateCrawler(Crawler):
             video.title,
             ext := ".mp4",
             m3u8=m3u8,
-            custom_filename=self.create_custom_filename(video.title, ext, resolution=info.resolution),
+            custom_filename=self.create_custom_filename(video.title, ext, file_id=video_id, resolution=info.resolution),
             thumbnail=video.thumb,
         )
 
