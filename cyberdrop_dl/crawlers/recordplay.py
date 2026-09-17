@@ -1,47 +1,39 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import API, Crawler, DownloadConfig, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, extr_text, js_unpacker
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    import bs4
+
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-@Crawler.db_path_builder("path_qs_frag")
-@DownloadConfig(slots=2)
-class VidaraCrawler(Crawler):
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
-        "stmix.io",
-        "streamix",
-        "thebesthosterv.com",
-        "vidara",
-        "viderea",
-        "vidmatrixa",
-        "vidvara",
-        "vidwara",
-        "viewdara",
-        "xca.cymru",
-    )
+class RecordPlayCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (
             "/e/<video_id>",
-            "/v/<video_id>",
+            "/d/<video_id>",
         ),
     }
-    DOMAIN: ClassVar[str] = "vidara"
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
+    DOMAIN: ClassVar[str] = "recordplay"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://recordplay.biz")
 
     def __post_init__(self) -> None:
-        self.api: VidaraAPI = VidaraAPI.from_crawler(self)
+        self.api: RecordPlayAPI = RecordPlayAPI.from_crawler(self)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["e" | "v", video_id]:
+            case ["e" | "d", video_id]:
                 await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
@@ -73,24 +65,29 @@ class Video:
     thumb: AbsoluteHttpURL
 
 
-class VidaraAPI(API):
+class RecordPlayAPI(API):
     async def video(self, video_id: str) -> Video:
-        resp = await self.request_json(
-            self.PRIMARY_URL / "api/stream",
-            method="POST",
-            json={
-                "device": "web",
-                "filecode": video_id,
-            },
-        )
-        title = resp.get("title")
-        if not title:
-            html = await self.request_text(self.PRIMARY_URL / "e" / video_id)
-            title = css.select_tag_text(html, "title")
+        soup = await self.request_soup(self.PRIMARY_URL / "e" / video_id)
+        src = await asyncio.to_thread(_extract_src, soup)
 
         return Video(
             id=video_id,
-            title=title,
-            m3u8=self.parse_url(resp["streaming_url"]),
-            thumb=self.parse_url(resp["thumbnail"]),
+            title=css.select_text(soup, "title"),
+            m3u8=self.parse_url(src),
+            thumb=self.parse_url(css.select(soup, "#vplayer img", "src")),
         )
+
+
+def _extract_src(soup: bs4.Tag) -> str:
+    player = js_unpacker.unpack(js_unpacker.find(soup))
+    sources = dict(sorted(_extract_sources(player), reverse=True))
+    if not sources:
+        raise ScrapeError(422, "No stream source found")
+
+    return next(iter(sources.values()))
+
+
+def _extract_sources(player: str) -> Generator[tuple[str, str]]:
+    for link in extr_text(player, "var links={", "};").split('","'):
+        name, _, src = link.partition(":")
+        yield name.strip('"'), src.strip('"')

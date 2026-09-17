@@ -3,45 +3,42 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import API, Crawler, DownloadConfig, SupportedDomains, SupportedPaths
+from cyberdrop_dl import aio
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import TextExtractor, css, js_unpacker
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-@Crawler.db_path_builder("path_qs_frag")
-@DownloadConfig(slots=2)
-class VidaraCrawler(Crawler):
+class LuluStreamCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
-        "stmix.io",
-        "streamix",
-        "thebesthosterv.com",
-        "vidara",
-        "viderea",
-        "vidmatrixa",
-        "vidvara",
-        "vidwara",
-        "viewdara",
-        "xca.cymru",
+        "lulustream",
+        "luluvdo.com",
+        "lulu.st",
+        "luluvid.com",
+        "cdn1.site",
+        "streamhihi.com",
+        "luluvdoo.com",
     )
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (
             "/e/<video_id>",
-            "/v/<video_id>",
+            "/d/<video_id>",
+            "/<video_id>",
         ),
     }
-    DOMAIN: ClassVar[str] = "vidara"
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
+    DOMAIN: ClassVar[str] = "lulustream"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://lulustream.com")
 
     def __post_init__(self) -> None:
-        self.api: VidaraAPI = VidaraAPI.from_crawler(self)
+        self.api: LuluStreamAPI = LuluStreamAPI.from_crawler(self)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["e" | "v", video_id]:
+            case ["e" | "d", video_id] | [video_id]:
                 await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
@@ -73,24 +70,18 @@ class Video:
     thumb: AbsoluteHttpURL
 
 
-class VidaraAPI(API):
+class LuluStreamAPI(API):
     async def video(self, video_id: str) -> Video:
-        resp = await self.request_json(
-            self.PRIMARY_URL / "api/stream",
-            method="POST",
-            json={
-                "device": "web",
-                "filecode": video_id,
-            },
+        embed, web = await aio.gather(
+            self.request_soup(self.origin / "e" / video_id),
+            self.request_soup(self.origin / "d" / video_id),
+            fail_fast=False,
         )
-        title = resp.get("title")
-        if not title:
-            html = await self.request_text(self.PRIMARY_URL / "e" / video_id)
-            title = css.select_tag_text(html, "title")
-
+        player = js_unpacker.unpack(js_unpacker.find(embed))
+        extr = TextExtractor(player)
         return Video(
             id=video_id,
-            title=title,
-            m3u8=self.parse_url(resp["streaming_url"]),
-            thumb=self.parse_url(resp["thumbnail"]),
+            title=css.select_text(web, "h1"),
+            m3u8=self.parse_url(extr('{sources:[{file:"', '"')),
+            thumb=self.parse_url(extr('image:"', '"')),
         )

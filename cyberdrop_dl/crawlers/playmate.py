@@ -3,52 +3,38 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import API, Crawler, DownloadConfig, SupportedDomains, SupportedPaths
+from cyberdrop_dl import aio
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-@Crawler.db_path_builder("path_qs_frag")
-@DownloadConfig(slots=2)
-class VidaraCrawler(Crawler):
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
-        "stmix.io",
-        "streamix",
-        "thebesthosterv.com",
-        "vidara",
-        "viderea",
-        "vidmatrixa",
-        "vidvara",
-        "vidwara",
-        "viewdara",
-        "xca.cymru",
-    )
+class PlaymateCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (
-            "/e/<video_id>",
-            "/v/<video_id>",
+            "/embed/<video_id>",
+            "/watch/<video_id>",
         ),
     }
-    DOMAIN: ClassVar[str] = "vidara"
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
+    DOMAIN: ClassVar[str] = "playmate"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://playmate.to")
 
     def __post_init__(self) -> None:
-        self.api: VidaraAPI = VidaraAPI.from_crawler(self)
+        self.api: PlaymateAPI = PlaymateAPI.from_crawler(self)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["e" | "v", video_id]:
+            case ["watch" | "embed", video_id]:
                 await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
-        embed_url = self.PRIMARY_URL / "e" / video_id
+        embed_url = self.PRIMARY_URL / "embed" / video_id
         if await self.check_complete(embed_url):
             return
 
@@ -73,24 +59,16 @@ class Video:
     thumb: AbsoluteHttpURL
 
 
-class VidaraAPI(API):
+class PlaymateAPI(API):
     async def video(self, video_id: str) -> Video:
-        resp = await self.request_json(
-            self.PRIMARY_URL / "api/stream",
-            method="POST",
-            json={
-                "device": "web",
-                "filecode": video_id,
-            },
+        stream, meta = await aio.gather(
+            self.request_json(self.PRIMARY_URL / "api/s", method="POST", json={"d": "web", "c": video_id}),
+            self.request_json((self.PRIMARY_URL / "api/video-meta").with_query(filecode=video_id)),
+            fail_fast=False,
         )
-        title = resp.get("title")
-        if not title:
-            html = await self.request_text(self.PRIMARY_URL / "e" / video_id)
-            title = css.select_tag_text(html, "title")
-
         return Video(
             id=video_id,
-            title=title,
-            m3u8=self.parse_url(resp["streaming_url"]),
-            thumb=self.parse_url(resp["thumbnail"]),
+            title=meta.get("title") or video_id,
+            m3u8=self.parse_url(stream["sx"]),
+            thumb=self.parse_url(stream["ix"]),
         )
