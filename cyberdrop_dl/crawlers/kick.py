@@ -171,7 +171,7 @@ class KickAPI(API):
 class VODEndpoint(API.Endpoint[KickAPI]):
     async def __call__(self, vod_uuid: str) -> Clip:
         creator_id, playback = await self.playback(vod_uuid)
-        meta = await self.metadata(vod_uuid, creator_id)
+        meta = await self.metadata(creator_id, vod_uuid)
         return Clip(
             id=meta.id,
             title=meta.title,
@@ -215,14 +215,13 @@ class VODEndpoint(API.Endpoint[KickAPI]):
             playback_url=playback,
         )
 
-    async def metadata(self, vod_uuid: str, creator_id: str) -> VODMetadata:
+    async def metadata(self, creator_id: str, vod_uuid: str) -> VODMetadata:
         url = self.api.V1 / "channels" / creator_id / "videos" / vod_uuid
         vod: dict[str, Any] = (await self.api.request_json(url))["data"]
         if vod.get("is_live"):
             raise ScrapeError(422, "Livestreams are not supported")
 
-        vod["thumbnail_url"] = css.best_from_srcset(vod["thumbnail"]["srcSet"])
-        return type_adapter(VODMetadata).validate_python(vod)
+        return VODMetadata.parse(vod)
 
 
 class ChannelEndpoint(API.Endpoint[KickAPI]):
@@ -242,6 +241,7 @@ class ChannelEndpoint(API.Endpoint[KickAPI]):
                 return self._channels[slug]
             except LookupError:
                 pass
+
             url = self.api.V2 / "channels" / slug
             resp = await self.api.request_json(url)
             resp["username"] = resp["user"]["username"]
@@ -293,8 +293,8 @@ class VODMetadata:
 @dataclasses.dataclass(kw_only=True, frozen=True, slots=True, order=True)
 class User:
     id: int
-    username: str
     slug: str
+    username: str
 
 
 def _filter_pag_query(query: Mapping[str, str]) -> dict[str, str]:
