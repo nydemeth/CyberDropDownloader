@@ -3,8 +3,9 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DownloadConfig, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, DownloadConfig, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -15,14 +16,16 @@ if TYPE_CHECKING:
 @DownloadConfig(slots=2)
 class VidaraCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
-        "xca.cymru",
-        "vidara.to",
-        "vidara.so",
-        "streamix.so",
-        "streamix.so",
-        "vidara",
         "stmix.io",
-        "vidvara.lol",
+        "streamix",
+        "thebesthosterv.com",
+        "vidara",
+        "viderea",
+        "vidmatrixa",
+        "vidvara",
+        "vidwara",
+        "viewdara",
+        "xca.cymru",
     )
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (
@@ -32,6 +35,9 @@ class VidaraCrawler(Crawler):
     }
     DOMAIN: ClassVar[str] = "vidara"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
+
+    def __post_init__(self) -> None:
+        self.api: VidaraAPI = VidaraAPI.from_crawler(self)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -46,7 +52,7 @@ class VidaraCrawler(Crawler):
         if await self.check_complete(embed_url):
             return
 
-        video = await self._request_stream(video_id)
+        video = await self.api.video(video_id)
         m3u8, info = await self.request_m3u8_playlist(video.m3u8)
         await self.handle_file(
             embed_url,
@@ -58,7 +64,17 @@ class VidaraCrawler(Crawler):
             thumbnail=video.thumb,
         )
 
-    async def _request_stream(self, video_id: str) -> Video:
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class Video:
+    id: str
+    title: str
+    m3u8: AbsoluteHttpURL
+    thumb: AbsoluteHttpURL
+
+
+class VidaraAPI(API):
+    async def video(self, video_id: str) -> Video:
         resp = await self.request_json(
             self.PRIMARY_URL / "api/stream",
             method="POST",
@@ -67,17 +83,14 @@ class VidaraCrawler(Crawler):
                 "filecode": video_id,
             },
         )
+        title = resp.get("title")
+        if not title:
+            html = await self.request_text(self.PRIMARY_URL / "e" / video_id)
+            title = css.select_tag_text(html, "title")
+
         return Video(
             id=video_id,
-            title=resp.get("title") or video_id,
+            title=title,
             m3u8=self.parse_url(resp["streaming_url"]),
             thumb=self.parse_url(resp["thumbnail"]),
         )
-
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class Video:
-    id: str
-    title: str
-    m3u8: AbsoluteHttpURL
-    thumb: AbsoluteHttpURL
