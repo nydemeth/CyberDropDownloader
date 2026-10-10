@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import dataclasses
 from typing import TYPE_CHECKING, ClassVar, override
 
 from cyberdrop_dl import env
@@ -8,7 +10,7 @@ from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DDOSGuardError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, extr_text
+from cyberdrop_dl.utils import b64_pad, css, extr_text
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -59,30 +61,57 @@ class FileditchCrawler(Crawler):
         url = super().transform_url(url)
         if url.name == "file.php" and (path := url.query.get("f")):
             return url.with_path(path)
-        return url
+        return url.without_query_params("fdrh")
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
             return
 
-        src, thumb = await self.request_download(scrape_item.url)
-        if src.path == _HOMEPAGE_CATCH_ALL:
+        file = await self.request_download(scrape_item.url)
+        if file.path == _HOMEPAGE_CATCH_ALL:
             raise ScrapeError(422)
 
-        filename, ext = self.get_filename_and_ext(src.name)
-        await self.handle_file(src, scrape_item, filename, ext, thumbnail=thumb)
+        scrape_item.uploaded_at = self.parse_iso_date(file.uploaded)
+        filename, ext = self.get_filename_and_ext(file.name)
+        await self.handle_file(
+            file.url,
+            scrape_item,
+            file.name,
+            ext,
+            debrid_link=file.src,
+            thumbnail=file.thumb,
+            custom_filename=filename,
+        )
 
-    async def request_download(self, url: AbsoluteHttpURL) -> tuple[AbsoluteHttpURL, str | None]:
+    async def request_download(self, url: AbsoluteHttpURL) -> File:
         resp = await self.flaresolverr_request(url, wait=env.FILEDITCH_WAIT)
         soup = await resp.soup()
+
         if soup.select_one(".gone-path"):
             raise ScrapeError(410)
         if soup.select_one("form#pow-form"):
             raise DDOSGuardError("Flaresolverr failed proof of work challenge")
+
         src = self.parse_url(css.select(soup, "a.btn[download]", "href"))
-        _check_url(src)
-        return src, _extr_thumb(soup)
+        return File(
+            name=src.name if src.query else url.name,
+            path=_file_path(src),
+            url=url,
+            src=src,
+            uploaded=css.select(soup, ".pathline .up", "title").replace("UTC", "Z"),
+            thumb=_extr_thumb(soup),
+        )
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class File:
+    name: str
+    path: str
+    url: AbsoluteHttpURL
+    src: AbsoluteHttpURL
+    uploaded: str
+    thumb: str | None
 
 
 @FileditchCrawler.__http_config__
@@ -120,8 +149,20 @@ def _extr_thumb(soup: bs4.Tag) -> str | None:
         pass
 
 
-def _check_url(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+def _file_path(url: AbsoluteHttpURL) -> str:
     for params in [("md5", "expires"), ("exp", "sig")]:
         if all(map(url.query.get, params)):
-            return url
+            return url.path
+
+    if not url.query and len(url.parts) == 2:
+        # https://<node>/<token>, token = urlsafe_b64("<expires>:<sig>:<n>/<path>") without padding
+        try:
+            token = base64.urlsafe_b64decode(b64_pad(url.name)).decode()
+            expires, sig, path = token.split(":", 2)
+        except ValueError:
+            pass
+        else:
+            if expires.isdecimal() and sig and "/" in path:
+                return "/" + path.partition("/")[-1]
+
     raise ScrapeError(422, f"Unable to extract a valid download URL. Found: {url}")
