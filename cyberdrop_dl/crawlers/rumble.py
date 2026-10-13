@@ -149,7 +149,6 @@ class RumbleCrawler(Crawler):
 
             # Fallback if we made the request with Flaresolverr. Video objects in the HTML are destroyed after JS loads
             for new_item in self.iter_children(scrape_item, soup, "rum-video-thumbnail a"):
-                continue
                 self.create_task(self.run(new_item))
                 scrape_item.add_children()
 
