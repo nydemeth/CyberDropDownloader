@@ -526,10 +526,14 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
 
     @error_handling_wrapper
     async def resolve_confirmation_link(self, link: AbsoluteHttpURL) -> AbsoluteHttpURL | None:
-        if url := link.query.get("url") or link.query.get("to"):
-            url = base64.urlsafe_b64decode(b64_pad(url)).decode("utf-8")
-            if url.startswith("https://"):
-                return self.parse_url(url)
+
+        if b64_url := link.query.get("url") or link.query.get("to"):
+            url = base64.urlsafe_b64decode(b64_pad(b64_url)).decode("utf-8")
+        else:
+            url = link.query.get("u")
+
+        if url and url.startswith("https://"):
+            return self.parse_url(url)
 
         soup = await self.request_soup(link)
         selector = self.SELECTORS.confirmation_button
@@ -639,9 +643,15 @@ def clean_link_str(link: str) -> str:
 
 
 def is_confirmation_link(link: AbsoluteHttpURL) -> bool:
-    return (
-        "masked" in link.parts or "link-confirmation" in link.path or ("redirect" in link.parts and "to" in link.query)
-    )
+    match link.parts[1:]:
+        case ["ads", "go", *_] if link.query.get("u"):
+            return True
+        case _:
+            return (
+                "masked" in link.parts
+                or "link-confirmation" in link.path
+                or ("redirect" in link.parts and "to" in link.query)
+            )
 
 
 def pre_process_child(link_str: str, *, embeds: bool = False) -> str | None:
