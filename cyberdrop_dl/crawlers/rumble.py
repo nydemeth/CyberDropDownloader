@@ -16,7 +16,7 @@ from cyberdrop_dl.utils._url import remove_query_params
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import AsyncGenerator, Generator, Iterable
 
     import yarl
     from bs4 import BeautifulSoup
@@ -85,7 +85,7 @@ class RumbleCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://rumble.com")
     DOMAIN: ClassVar[str] = "rumble"
-    NEXT_PAGE_SELECTOR: ClassVar[str] = "nav a[href*=page]:has(svg)"
+    NEXT_PAGE_SELECTOR: ClassVar[str] = "nav a[href*='page=']:has(svg)"
 
     def __post_init__(self) -> None:
         self.api: RumbleAPI = RumbleAPI.from_crawler(self)
@@ -136,7 +136,7 @@ class RumbleCrawler(Crawler):
         await self._iter_videos(scrape_item)
 
     async def _iter_videos(self, scrape_item: ScrapeItem) -> None:
-        async for soup in self.web_pager(scrape_item.url):
+        async for soup in self.pager(scrape_item.url):
             found_videos: bool = False
             for video in map(_parse_video_obj, _find_video_objs(soup)):
                 found_videos = True
@@ -149,8 +149,24 @@ class RumbleCrawler(Crawler):
 
             # Fallback if we made the request with Flaresolverr. Video objects in the HTML are destroyed after JS loads
             for new_item in self.iter_children(scrape_item, soup, "rum-video-thumbnail a"):
+                continue
                 self.create_task(self.run(new_item))
                 scrape_item.add_children()
+
+    async def pager(self, url: AbsoluteHttpURL) -> AsyncGenerator[BeautifulSoup]:
+        current_page = int(url.query.get("page", 1))
+        while True:
+            soup = await self.request_soup(url)
+            yield soup
+            pagination = tuple(soup.select(self.NEXT_PAGE_SELECTOR))
+            if not pagination:
+                return
+
+            url = self.parse_url(css.attr(pagination[-1], "href"))
+            new_page = int(url.query["page"])
+            if new_page <= current_page:
+                return
+            current_page = new_page
 
     @error_handling_wrapper
     async def short(self, scrape_item: ScrapeItem, short_id: str) -> None:
