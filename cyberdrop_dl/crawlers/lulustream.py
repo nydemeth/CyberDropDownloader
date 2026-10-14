@@ -16,7 +16,10 @@ if TYPE_CHECKING:
 class LuluStreamCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
         "lulustream",
-        "luluvdo.com",
+        "luluvdo",
+        "luluvido",
+        "luluvd",
+        "luluvid",
         "lulu.st",
         "luluvid.com",
         "cdn1.site",
