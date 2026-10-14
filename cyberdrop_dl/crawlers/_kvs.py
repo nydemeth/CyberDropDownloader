@@ -48,7 +48,6 @@ class Selector:
     class Videos:
         PUBLIC = "div#list_videos_public_videos_items"
         PRIVATE = "div#list_videos_private_videos_items"
-        FAVOURITE = "div#list_videos_favourite_videos_items"
         TITLE = "div#list_videos_common_videos_list h1"
 
 
@@ -62,6 +61,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         "Tags": "/tags/<name>",
         "Videos": "/videos/<slug>",
         "Members": "/members/<member_id>",
+        "Members favorites": "/members/<member_id>/favourite_videos",
     }
     NEXT_PAGE_SELECTOR: ClassVar[str] = "li.pagination-next > a"
     THUMBNAIL_SELECTOR: ClassVar[str] = Selector.THUMBNAILS
@@ -147,7 +147,6 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
 
         for selector, path in [
             (Selector.Videos.PUBLIC, "public_videos"),
-            (Selector.Videos.FAVOURITE, "favourite_videos"),
             (Selector.Videos.PRIVATE, "private_videos"),
         ]:
             if soup.select_one(selector):
