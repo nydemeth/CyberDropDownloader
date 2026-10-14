@@ -56,16 +56,20 @@ class HLSDecrypter(Protocol):
 @dataclasses.dataclass(slots=True, frozen=True)
 class AESHLSDecrypter(HLSDecrypter):
     client: HTTPClient
-    _lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
+    _locks: aio.WeakAsyncLocks[AbsoluteHttpURL] = dataclasses.field(default_factory=aio.WeakAsyncLocks)
     _cache: dict[AbsoluteHttpURL, bytes] = dataclasses.field(default_factory=dict)
 
     async def get_key(self, uri: AbsoluteHttpURL, headers: dict[str, str] | None = None) -> bytes:
-        if aes_key := self._cache.get(uri):
-            return aes_key
+        try:
+            return self._cache[uri]
+        except LookupError:
+            pass
 
-        async with self._lock:
-            if aes_key := self._cache.get(uri):
-                return aes_key
+        async with self._locks[uri]:
+            try:
+                return self._cache[uri]
+            except LookupError:
+                pass
 
             async with self.client.raw_request(uri, headers=headers or {}) as resp:
                 aes_key = self._cache[uri] = await resp.read()
@@ -85,7 +89,7 @@ def _create_segments(segments: Iterable[Segment | InitializationSection], count:
             idx=index - 1,
             name=f"{index:0{padding}d}{constants.TempExt.HLS}",
             url=parse_url(segment.absolute_uri, trim=False),
-            decrypt_info=HLSKey.parse(segment),
+            decrypt_info=HLSKey.parse(segment, idx=index - 1),
         )
 
 

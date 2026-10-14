@@ -3,16 +3,18 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import logging
+import struct
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, Self
 
 import m3u8.model
 from m3u8 import M3U8 as _M3U8
 from m3u8 import Media, Playlist
+from m3u8.mixins import BasePathMixin, GroupedBasePathMixin
 
 from cyberdrop_dl.exceptions import DownloadError
 from cyberdrop_dl.mediaprops import Codecs, Resolution
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import simple_repr, vars_repr
 from cyberdrop_dl.utils import parse_url
 from cyberdrop_dl.utils.dataclass import DictDataclass
 
@@ -23,6 +25,9 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 logger = logging.getLogger(__name__)
+
+
+BasePathMixin.__repr__ = GroupedBasePathMixin.__repr__ = vars_repr
 
 
 class MediaType(StrEnum):
@@ -186,14 +191,14 @@ class HLSKey:
             raise RuntimeError("Another key is already set")
 
     @classmethod
-    def parse(cls, seg: m3u8.model.Segment | m3u8.model.InitializationSection) -> Self | None:
+    def parse(cls, seg: m3u8.model.Segment | m3u8.model.InitializationSection, idx: int) -> Self | None:
         if isinstance(seg, m3u8.model.Segment) and seg.key and seg.key.method and seg.key.method != "NONE":
-            assert seg.key.iv
+            iv = bytes.fromhex(seg.key.iv.removeprefix("0x")) if seg.key.iv else struct.pack(">8xq", idx)
             assert seg.key.uri
             return cls(
                 method=Encryption(seg.key.method),
-                iv=bytes.fromhex(seg.key.iv.removeprefix("0x")),
-                uri=parse_url(seg.key.uri, trim=False),
+                iv=iv,
+                uri=parse_url(seg.key.absolute_uri, trim=False),
             )
 
 
@@ -207,10 +212,10 @@ def _validate_keys(stream: M3U8) -> None:
             raise DownloadError(
                 "Encrypted", f"M3U8 playlist {stream.source} has an unsupported encryption algorithm: \n{key!s}"
             )
-        if not key.iv or not key.uri:
+        if not key.uri:
             raise DownloadError(
                 "Encrypted",
-                f"M3U8 playlist {stream.source} is encrypted but we have no IV to decrypted it: \n{key!s}",
+                f"M3U8 playlist {stream.source} is encrypted but we have no URI to fetch to decrypted it: \n{key!s}",
             )
 
 

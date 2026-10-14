@@ -38,3 +38,8 @@ def simple_repr(*names: str) -> Callable[..., str]:
         return f"<{type(self).__name__}({', '.join(fields)}>"
 
     return repr_
+
+
+def vars_repr(self: object) -> str:
+    fields = (f"{name}={val!r}" for name, val in vars(self).items())
+    return f"<{type(self).__name__}({', '.join(fields)}>"
