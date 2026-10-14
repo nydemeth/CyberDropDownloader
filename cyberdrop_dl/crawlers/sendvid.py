@@ -7,7 +7,7 @@ from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 @final
 class Selector:
-    VIDEO = "#video_container"
     VIDEO_SRC = "video > source#video_source"
     TITLE = "p.video-title"
 
@@ -63,9 +62,8 @@ class SendVidCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        video = css.select(soup, Selector.VIDEO)
         title = css.select_text(soup, Selector.TITLE)
-        src = self.parse_url(css.select(video, Selector.VIDEO_SRC, "src"))
+        src = self.parse_url(css.select(soup, Selector.VIDEO_SRC, "src"))
 
         if not all(map(src.query.get, required := ("validfrom", "validto", "rate", "hash"))):
             msg = f"URL {src} is missing some of the required parameters: {required}"
@@ -79,5 +77,5 @@ class SendVidCrawler(Crawler):
             ext,
             debrid_link=src,
             custom_filename=self.create_custom_filename(title or filename, ext, file_id=video_id),
-            thumbnail=css.attr(video, "poster"),
+            thumbnail=open_graph.image(soup).removeprefix(str(self.PRIMARY_URL)),
         )
