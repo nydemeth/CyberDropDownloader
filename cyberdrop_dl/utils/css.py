@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import html
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
+from typing import TYPE_CHECKING, NamedTuple, cast, overload
 
 from bs4 import BeautifulSoup
 from bs4.filter import SoupStrainer
@@ -51,17 +51,6 @@ class HTMLForm:
     method: HttpMethod
     action: str
     inputs: dict[str, str | None]
-
-
-class JsonLD(dict[str, Any]):
-    @overload
-    def __getitem__(self, key: Literal["uploadDate"], /) -> str: ...  # pyright: ignore[reportNoOverloadImplementation]
-
-    @overload
-    def __getitem__(self, key: str, /) -> Any:
-        """Return self[key]."""
-
-    __getitem__ = dict.__getitem__
 
 
 def _select_one(tag: Tag, selector: str) -> Tag:

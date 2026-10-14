@@ -27,7 +27,8 @@ class GUploadCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Video": ("/data/e/<video_id>",)}
     DOMAIN: ClassVar[str] = "gupload"
     FOLDER_DOMAIN: ClassVar[str] = "GUpload"
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://gupload.xyz")
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://gupload.site")
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("gupload.xyz",)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
