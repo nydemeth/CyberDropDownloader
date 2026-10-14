@@ -608,11 +608,11 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
                     frag="thumbnail",
                 )
 
-    async def sniff_ext(self, thumbnail: AbsoluteHttpURL) -> str:
+    async def sniff_ext(self, thumbnail: AbsoluteHttpURL, headers: dict[str, str] | None = None) -> str:
         try:
             _, ext = self.get_filename_and_ext(thumbnail.name)
         except NoExtensionError:
-            async with self.request(thumbnail, self._THUMB_HTTP_METHOD) as resp:
+            async with self.request(thumbnail, self._THUMB_HTTP_METHOD, headers=headers or {}) as resp:
                 _, ext = self.get_filename_and_ext(thumbnail.name, mime_type=resp.content_type)
         return ext
 

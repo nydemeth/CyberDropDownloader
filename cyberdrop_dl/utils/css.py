@@ -74,8 +74,14 @@ def select_tag_text(html: str, tag_name: str) -> str:
     return select_text(soup(html, parse_only=tag_name), tag_name)
 
 
-def attr_or_none(tag: Tag, attribute: str) -> str | None:
+def attr_or_none(tag: Tag, *attributes: str) -> str | None:
     """Same as `tag.get(attribute)` but asserts the result is a single str"""
+    for attribute in attributes:
+        if result := _attr_or_none(tag, attribute):
+            return result
+
+
+def _attr_or_none(tag: Tag, attribute: str) -> str | None:
     attribute_ = attribute
     if attribute_ == "srcset":
         if (srcset := tag.get(attribute_)) and type(srcset) is str:
@@ -90,12 +96,11 @@ def attr_or_none(tag: Tag, attribute: str) -> str | None:
     return value
 
 
-def attr(tag: Tag, attribute: str) -> str:
+def attr(tag: Tag, *attributes: str) -> str:
     """Same as `tag.get(attribute)` but asserts the result is not `None` and is a single string"""
-    result = attr_or_none(tag, attribute)
-    if result is None:
-        raise SelectorError(f"{attribute = } not found")
-    return result
+    if result := attr_or_none(tag, *attributes):
+        return result
+    raise SelectorError(f"{attributes = } not found")
 
 
 def text(tag: Tag, *, strip: bool = True) -> str:
