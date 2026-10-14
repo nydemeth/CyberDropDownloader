@@ -14,38 +14,22 @@ _ETAGS: dict[str, ETag] = {}
 
 @dataclasses.dataclass(slots=True, frozen=True)
 class ETag:
-    domain: str
     value: str
     msg: str | None = None
     error: int | str = HTTPStatus.NOT_FOUND
 
-
-for domain, params in {
-    "Imgur": [("d835884373f4d6c8f24742ceabe74946", "Image has been removed")],
-    "SimpCity": [("65b7753c-528a", "SC Scrape Image")],
-    "PixHost": [("5c4fb843-ece", "PixHost Removed Image")],
-    "eFukt": [
-        ("637be5da-11d2b", "Video removed"),
-        ("63a05f27-11d2b", "Video removed"),
-        ("5a56b09d-1485eb", "Video removed"),
-    ],
-    "ImageVenue": [
-        ("19fdf2cd6-383c-5a4cd5b6710ed", "Image not found"),
-        ("383c-5a4cd5b6710ed", "Image not found"),
-    ],
-    "SendVid": [
-        ("6ab3d9ed-8fb5", "temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE),
-        ("6ab3db3e-3d0a", "thumbnail temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE),
-    ],
-}.items():
-    for param in params:
-        new_etag = ETag(domain, *param)
-        if old_tag := _ETAGS.get(new_etag.value):
-            raise RuntimeError(f"Duplicated etag: {old_tag = }, {new_etag = }")
-        _ETAGS[new_etag.value] = new_etag
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", self.value.strip('"'))
 
 
 def check(headers: Mapping[str, str]) -> None:
     e_tag_value = headers.get("ETag", "").strip('"')
     if e_tag := _ETAGS.get(e_tag_value):
         raise DownloadError(e_tag.error, e_tag.msg)
+
+
+def register(*etags: ETag) -> None:
+    for new_etag in etags:
+        if old_tag := _ETAGS.get(new_etag.value):
+            raise RuntimeError(f"Duplicated etag: {old_tag = }, {new_etag = }")
+        _ETAGS[new_etag.value] = new_etag

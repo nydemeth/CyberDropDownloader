@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, final
+from http import HTTPStatus
+from typing import TYPE_CHECKING, ClassVar, final, override
 
+from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -17,6 +19,12 @@ class Selector:
     VIDEO = "#video_container"
     VIDEO_SRC = "video > source#video_source"
     TITLE = "p.video-title"
+
+
+etag.register(
+    etag.ETag("6ab3d9ed-8fb5", "temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE),
+    etag.ETag("6ab3db3e-3d0a", "thumbnail temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE),
+)
 
 
 class SendVidCrawler(Crawler):
@@ -37,6 +45,7 @@ class SendVidCrawler(Crawler):
                 raise ValueError
 
     @classmethod
+    @override
     def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         url = super().transform_url(url)
         match url.parts[1:]:

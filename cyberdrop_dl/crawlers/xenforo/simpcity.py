@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from cyberdrop_dl.clients import etag
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 from .xenforo import XenforoCrawler
+
+etag.register(etag.ETag("65b7753c-528a", "SC Scrape Image"))
 
 
 @HTTPConfig(rate_limit=(1, 20))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, final
 
+from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -17,6 +18,9 @@ class Selector:
     GALLERY_TITLE = "a.link h2"
     GALLERY_IMAGES = "div.images a img"
     IMAGE = "img.image-img"
+
+
+etag.register(etag.ETag("5c4fb843-ece", "PixHost Removed Image"))
 
 
 @Registry.database.fix_referer

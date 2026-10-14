@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
@@ -11,6 +12,12 @@ if TYPE_CHECKING:
     from bs4 import Tag
 
     from cyberdrop_dl.url_objects import ScrapeItem
+
+
+etag.register(
+    etag.ETag("19fdf2cd6-383c-5a4cd5b6710ed", "Image not found"),
+    etag.ETag("383c-5a4cd5b6710ed", "Image not found"),
+)
 
 
 class ImageVenueCrawler(Crawler):

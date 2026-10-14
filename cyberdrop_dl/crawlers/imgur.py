@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.cache import disk_cached_method
+from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -14,6 +15,9 @@ if TYPE_CHECKING:
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.imgur.com/3/")
 _IMAGE_CDN = AbsoluteHttpURL("https://i.imgur.com")
+
+
+etag.register(etag.ETag("d835884373f4d6c8f24742ceabe74946", "Image has been removed"))
 
 
 class ImgurCrawler(Crawler):
