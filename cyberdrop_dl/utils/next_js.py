@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import dataclasses
+import logging
 import re
 from collections.abc import Generator
 from enum import IntEnum, StrEnum
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Mapping
 
     from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 type _ChunkID = str
 FlightData = NewType("FlightData", str)
@@ -91,8 +94,21 @@ def _extract_raw_pushes(soup: BeautifulSoup) -> Generator[str]:
             yield _dedent_push(content[start : content.rindex(")")])
 
 
+def _unquote(string: str) -> str:
+    if len(string) > 1:
+        for char in ("'", '"'):
+            if string.startswith(char) and string.endswith(char):
+                string = string[1:-1]
+    return string
+
+
 def _decode_push(raw_push: str) -> _Push:
-    push: list[Any] = json.loads(raw_push)  # pyright: ignore[reportAny]
+    try:
+        push: list[Any] = json.loads(raw_push)  # pyright: ignore[reportAny]
+    except ValueError:
+        f_type, _, data = raw_push.strip().partition(",")
+        push = [int(f_type[1:]), _unquote(data[:-1])]
+
     match push:
         case [_FlightType.BOOTSTRAP]:
             return _FlightType.BOOTSTRAP, _Magic.INIT
@@ -119,11 +135,14 @@ def _extract_flight_data(raw_pushes: Iterable[str]) -> Generator[str]:
 
 
 def _parse_raw_chunks(flight_data: FlightData) -> Generator[_FlightChunk]:
-    for line in flight_data.splitlines():
+    for idx, line in enumerate(flight_data.splitlines(), 1):
         if line.startswith(":HL"):
             continue
         m = re.match("^([0-9a-f]+):(T[0-9A-Fa-f]+,|[A-SU-Z]{0,1})", line)
-        assert m
+        if not m:
+            logger.warning(f"not match for line {idx}: {line}")
+            continue
+
         chunk_id, marker = m.groups()
         marker = marker or None
         data = line[m.end() :].strip()
@@ -160,7 +179,7 @@ def _revive_str(value: str) -> str | int | LazyChunk | None:  # noqa: PLR0911
             return value[1:]
 
 
-def _revive(value: object, /, chunks: Mapping[_ChunkID, _FlightChunk]) -> Any:  # noqa: PLR0911
+def _revive(value: object, /, chunks: Mapping[_ChunkID, _FlightChunk]) -> Any:  # noqa: C901, PLR0911
     if not value:
         return value
 
@@ -168,7 +187,12 @@ def _revive(value: object, /, chunks: Mapping[_ChunkID, _FlightChunk]) -> Any:  
         case str():
             obj = _revive_str(value)
             if type(obj) is LazyChunk:
-                return _revive(chunks[obj.reference], chunks)
+                try:
+                    ref = chunks[obj.reference]
+                except LookupError:
+                    return _Magic.ERROR
+                else:
+                    return _revive(ref, chunks)
             return obj
 
         case list():
@@ -210,7 +234,10 @@ def _hidrate_chunks(raw_chunks: Iterable[_FlightChunk]) -> Generator[_FlightChun
 
 
 def extract_flight_data(soup: BeautifulSoup) -> FlightData:
-    return FlightData("".join(_extract_flight_data(_extract_raw_pushes(soup))).replace('"$undefined"', "null"))
+    data = "".join(_extract_flight_data(_extract_raw_pushes(soup))).replace('"$undefined"', "null")
+    esc = ">>>>>ESCAPED_NEW_LINE>>>>>>"
+    data = data.replace(r"\\n", esc).replace("\\n", "\n").replace(esc, r"\\n")
+    return FlightData(data)
 
 
 def ifind(next_flight: NextJSFlight, attr: str, *attrs: str) -> Generator[dict[str, Any]]:
