@@ -44,7 +44,8 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
 
     @classmethod
     def is_attachment(cls, link: AbsoluteHttpURL | str) -> bool:
-        return "uploads" in AbsoluteHttpURL(link).parts
+        url = AbsoluteHttpURL(link)
+        return cls.is_subdomain(url) or "uploads" in url.parts or "original" in url.parts
 
     @error_handling_wrapper
     async def handle_internal_link(self, scrape_item: ScrapeItem, link: AbsoluteHttpURL | None = None) -> None:
@@ -56,10 +57,10 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["uploads", _, *rest]:
-                return await self.handle_internal_link(scrape_item)
+                await self.handle_internal_link(scrape_item)
             case ["t", _, topic_id, *rest]:
                 post_number = int(rest[0]) if rest else None
-                return await self.topic_from_id(scrape_item, int(topic_id), post_number)
+                await self.topic_from_id(scrape_item, int(topic_id), post_number)
             case _:
                 raise ValueError
 

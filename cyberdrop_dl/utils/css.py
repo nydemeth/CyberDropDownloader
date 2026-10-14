@@ -167,7 +167,7 @@ def parse_srcset(srcset: str) -> Generator[tuple[str, str]]:
 
 def best_from_srcset(srcset: str) -> str:
     options = dict(parse_srcset(srcset))
-    best = max(options, key=lambda decriptor: int(decriptor.rstrip("wx")))
+    best = max(options, key=lambda decriptor: float(decriptor.rstrip("wx")))
     return options[best]
 
 
