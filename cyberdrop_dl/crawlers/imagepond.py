@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, ClassVar, Self, final
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import Crawler, URLConfig
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -25,6 +26,7 @@ class Selector:
     ARCHIVE = "[x-data='archiveViewer()']"
     DIRECT_DL = "#embed-direct"
     EMBED = ".embed-link a[href]"
+    EXPIRED = "h1:-soup-contains-own('Content Expired')"
 
 
 @dataclasses.dataclass(slots=True)
@@ -119,6 +121,13 @@ class ImagePondCrawler(Crawler):
                     return
 
             soup = await resp.soup()
+
+        if soup.select_one(Selector.EXPIRED):
+            redirect = await self.request_redirect(resp.url / "thumb/300")
+            if "thumb" in redirect.parts or redirect.name.startswith("thumb_") or not self.is_subdomain(redirect):
+                raise ScrapeError(404, "Content Expired")
+            await self.direct_file(scrape_item, redirect)
+            return
 
         try:
             file = File.parse(soup)
