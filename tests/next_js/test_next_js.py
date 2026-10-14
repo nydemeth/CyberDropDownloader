@@ -50,8 +50,9 @@ def test_parse() -> None:
     flight_data = next_js.extract_flight_data(TEST_SOUP)
     chunks = next_js.parse(flight_data)
     assert len(chunks) == 111
-    for value in chunks.values():
-        assert value != next_js._Magic.ERROR
+    errors = sum(1 for v in chunks.values() if v is next_js._Magic.ERROR)
+    assert errors == 1
+    assert chunks["1c"] is next_js._Magic.ERROR
 
 
 @pytest.mark.xfail(reason="IP blocked in CI")
