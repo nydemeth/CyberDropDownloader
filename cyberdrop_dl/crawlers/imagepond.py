@@ -125,7 +125,7 @@ class ImagePondCrawler(Crawler):
         if soup.select_one(Selector.EXPIRED):
             redirect = await self.request_redirect(resp.url / "thumb/300")
             if "thumb" in redirect.parts or redirect.name.startswith("thumb_") or not self.is_subdomain(redirect):
-                raise ScrapeError(404, "Content Expired")
+                raise ScrapeError(410, "Content Expired")
             await self.direct_file(scrape_item, redirect)
             return
 

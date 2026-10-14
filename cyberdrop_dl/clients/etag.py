@@ -33,6 +33,10 @@ for domain, params in {
         ("19fdf2cd6-383c-5a4cd5b6710ed", "Image not found"),
         ("383c-5a4cd5b6710ed", "Image not found"),
     ],
+    "SendVid": [
+        ("6ab3d9ed-8fb5", "temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE),
+        ("6ab3db3e-3d0a", "thumbnail temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE),
+    ],
 }.items():
     for param in params:
         new_etag = ETag(domain, *param)
