@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, Se
 
 from aiohttp import hdrs
 
-from cyberdrop_dl import aio, env
+from cyberdrop_dl import aio
 from cyberdrop_dl.cache import TTLCacheAdapter
 from cyberdrop_dl.clients.downloads import IGNORE_CONTENT_TYPE
 from cyberdrop_dl.clients.http import HTTPClient, HTTPConfig, HTTPContext, HTTPMixin
@@ -317,7 +317,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         cls.SUPPORTED_PATHS = paths  # pyright: ignore[reportConstantRedefinition, reportAttributeAccessIssue]
         cls.IS_ABC: bool = is_abc
 
-        add_to_registry = bool(not is_debug or (is_debug and env.ENABLE_DEBUG_CRAWLERS))
+        add_to_registry = not is_debug
 
         if cls.IS_GENERIC:
             cls.INFO: CrawlerInfo = CrawlerInfo.abstract("GENERIC", cls.NAME, paths)
