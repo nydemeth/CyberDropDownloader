@@ -48,7 +48,7 @@ DEFAULT_XF_SELECTORS = MessageBoardSelectors(
 
 class XenforoCrawler(HTMLMessageBoardCrawler, is_abc=True):
     ATTACHMENT_URL_PARTS: ClassVar[tuple[str, ...]] = "attachments", "data", "uploads"
-    THREAD_PART_NAMES: ClassVar[Sequence[str]] = "thread", "topic", "tema", "threads", "topics", "temas"
+    THREAD_PART_NAMES: ClassVar[Sequence[str]] = "thread", "topic", "tema", "threads", "topics", "temas", "themen"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Attachments": f"/{'|'.join(ATTACHMENT_URL_PARTS)}/...",
         "Threads": (
