@@ -1,6 +1,6 @@
 [project]
 name = "cyberdrop-dl-patched"
-version = "10.12.0dev0"
+version = "10.12.0dev1"
 authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -35,7 +35,7 @@ dependencies = [
     "propcache>=0.5.4",
     "psutil >=7.2.1; sys_platform != 'android'",
     "pycparser >= 3.11.0",
-    "pycryptodome >=3.24.1",
+    "pycryptodome >=4.0.0",
     "pydantic == 2.14.1",
     "pyyaml >=6.0.3",
     "questionary>=2.1.1",
@@ -49,7 +49,7 @@ dependencies = [
     "xxhash >=4.0.1"
 ]
 description = "Bulk downloader for multiple file hosts"
-keywords = ["asyncio", "bunkr", "cyberdrop", "downloader", "mega.nz"]
+keywords = ["asyncio", "bunkr", "cyberdrop", "downloader", "dropbox", "gofile", "google-drive", "mediafire", "mega.nz", "onedrive", "patreon", "pixeldrain", "twitch", "twitter"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 maintainers = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
