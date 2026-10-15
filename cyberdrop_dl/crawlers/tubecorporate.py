@@ -4,12 +4,13 @@ import base64
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar, Final
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 _FORMATS: Final = "_sd.mp4", "_hq.mp4", "_hd.mp4", "_fhd.mp4"
 
@@ -41,7 +42,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["videos" | "video" | "embed", video_id, *_]:
-                return await self.video(scrape_item, video_id)
+                await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
 
@@ -146,3 +147,88 @@ def _decode_url(url: str) -> str:
             )
         )
     ).decode()
+
+
+class FuXXXCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "fuxxx"
+    FOLDER_DOMAIN: ClassVar[str] = "FuXXX"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://fuxxx.com")
+
+
+class HClipsCrawler(TubeCorporateCrawler):
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ("privatehomeclips.com",)
+    DOMAIN: ClassVar[str] = "hclips"
+    FOLDER_DOMAIN: ClassVar[str] = "HClips"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://hclips.com")
+
+
+class HDZogCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "hdzog"
+    FOLDER_DOMAIN: ClassVar[str] = "HDZog"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://hdzog.com")
+
+
+class HotMovsCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "hotmovs"
+    FOLDER_DOMAIN: ClassVar[str] = "HotMovs"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://hotmovs.com")
+
+
+class InPornCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "inporn"
+    FOLDER_DOMAIN: ClassVar[str] = "InPorn"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://inporn.com")
+
+
+class TubePornClassicCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "tubepornclassic"
+    FOLDER_DOMAIN: ClassVar[str] = "TubePornClassic"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://tubepornclassic.com")
+
+
+class TXXXCrawler(TubeCorporateCrawler):
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("videotxxx.com",)
+    DOMAIN: ClassVar[str] = "txxx"
+    FOLDER_DOMAIN: ClassVar[str] = "TXXX"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://txxx.com")
+
+
+class UPorniaCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "upornia"
+    FOLDER_DOMAIN: ClassVar[str] = "UPornia"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://upornia.com")
+
+
+class VJavCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "vjav"
+    FOLDER_DOMAIN: ClassVar[str] = "VJav"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vjav.com")
+
+
+class VoyeurHitCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "voyeurhit"
+    FOLDER_DOMAIN: ClassVar[str] = "VoyeurHit"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://voyeurhit.com")
+
+
+class VXXXCrawler(TubeCorporateCrawler):
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
+        "Video": "/video-<video-id>",
+    }
+    DOMAIN: ClassVar[str] = "vxxx"
+    FOLDER_DOMAIN: ClassVar[str] = "VXXX"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vxxx.com")
+
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
+        match scrape_item.url.parts[1:]:
+            case [video_path] if video_path.startswith("video-"):
+                video_id = video_path.partition("-")[-1]
+                await self.video(scrape_item, video_id)
+            case _:
+                raise ValueError
+
+
+class XMilfCrawler(TubeCorporateCrawler):
+    DOMAIN: ClassVar[str] = "xmilf"
+    FOLDER_DOMAIN: ClassVar[str] = "XMilf"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://xmilf.com")
