@@ -13,6 +13,8 @@ import re
 import time
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, Self, TypeGuard
 
+from cyberdrop_dl.utils import b64_pad
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
@@ -188,12 +190,12 @@ class JSONWebToken:
         if not looks_like_jwt(jwt):
             raise ValueError("Not a valid JSON Web Token", jwt)
         b64_headers, b64_payload, b64_signature = jwt.split(".")
-        headers = cls._decode(b64_headers)
-        return cls(headers["alg"], headers, cls._decode(b64_payload), b64_signature, jwt)
+        headers = cls.decode_payload(b64_headers)
+        return cls(headers["alg"], headers, cls.decode_payload(b64_payload), b64_signature, jwt)
 
     @classmethod
-    def _decode(cls, payload: str, /) -> dict[str, Any]:
-        return loads(base64.urlsafe_b64decode(f"{payload}==="))
+    def decode_payload(cls, payload: str, /) -> dict[str, Any]:
+        return loads(base64.urlsafe_b64decode(b64_pad(payload)))
 
     def is_expired(self, threshold: int = 0) -> bool:
         """Checks if the token has expired or is about to expire.
