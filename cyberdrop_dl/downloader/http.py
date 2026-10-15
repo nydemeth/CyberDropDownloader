@@ -205,7 +205,7 @@ class Downloader:
             self.capacity.waiting -= 1
             yield
 
-    async def __download_file(self, media_item: MediaItem) -> bool | None:
+    async def __download_file(self, media_item: MediaItem) -> bool | None:  # noqa: C901
         _check_url(media_item)
         media_item.attempts += 1
         try:
@@ -222,11 +222,13 @@ class Downloader:
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
             raise
 
+        except TimeoutError:
+            raise DownloadError(status=999, message="Download timeout reached, retrying", retry=True) from None
+
         except (
             ConnectionResetError,
             FileNotFoundError,
             PermissionError,
-            TimeoutError,
             ClientError,
             ClientConnectorError,
         ) as e:
@@ -236,7 +238,6 @@ class Downloader:
                     raise DownloadError(ui_message, message=f"{self.log_prefix} failed", retry=True) from None
 
                 self._current_attempt_filesize[media_item.filename] = size
-                raise DownloadError(status=999, message="Download timeout reached, retrying", retry=True) from None
 
             raise DownloadError(ui_message, str(e), retry=True) from e
 
