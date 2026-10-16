@@ -21,6 +21,16 @@ from cyberdrop_dl.mediaprops import Codecs
         ("fLaC", Codecs(None, "flac")),
         ("theora, vorbis", Codecs("theora", "vorbis")),
         ("random_vcodec, random_acodec", Codecs("random_vcodec", "random_acodec")),
+        ("avc1.4d401f,mp4a.40.2", Codecs("avc1.4d401f", "mp4a.40.2")),
+        ("hvc1.1.6.L93.B0,mp4a.40.2", Codecs("hvc1.1.6.L93.B0", "mp4a.40.2")),
+        ("hevc1.1.6.L93.B0,mp4a.40.2", Codecs("hevc1.1.6.L93.B0", "mp4a.40.2")),
+        ("vp09.00.10.08,opus", Codecs("vp09.00.10.08", "opus")),
+        ("vp10.00.10.08,opus", Codecs("vp10.00.10.08", "opus")),
+        ("vp9.00.10.08,opus", Codecs("vp9.00.10.08", "opus")),
+        ("av01.0.04M.08,opus", Codecs("av01.0.04M.08", "opus")),
+        ("avc1.4d401f,ac-3", Codecs("avc1.4d401f", "ac-3")),
+        ("avc01.4d401f,ec-3", Codecs("avc01.4d401f", "ec-3")),
+        ("avc1.4d401f", Codecs("avc1.4d401f", None)),
     ],
 )
 def test_parse_codecs(codecs: str, expected: Codecs) -> None:

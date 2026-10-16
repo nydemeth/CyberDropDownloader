@@ -27,9 +27,11 @@ VIDEO_CODECS = (
     "dvhe",
     "h263",
     "h264",
+    "hevc",
+    "hevc1",
+    "hevc2",
     "hev1",
     "hev2",
-    "hevc",
     "hvc1",
     "hvc2",
     "mp4v",
@@ -84,6 +86,18 @@ class Codecs:
                 yield re.sub(r"^([^.]+)", lambda c: c.group(1).lower(), codec)
 
     @staticmethod
+    def normalize(codec: str) -> str:
+        return re.sub(r"0+(?=\d)", "", codec)
+
+    @staticmethod
+    def pretty_name(codec: str) -> str:
+        name = Codecs.normalize(codec).partition(".")[0]
+        for pf in ("hevc1", "hev1", "hvc1", "hevc", "hev", "hvc"):
+            if name.startswith(pf):
+                return name.replace(pf, "hevc")
+        return name
+
+    @staticmethod
     def parse(codecs: str) -> Codecs:
         codecs = codecs.strip()
         if not codecs:
@@ -92,7 +106,7 @@ class Codecs:
         v_codec = a_codec = s_codec = hdr = None
         codecs_tuple = tuple(Codecs.split(codecs))
         for codec in codecs_tuple:
-            parts = re.sub(r"0+(?=\d)", "", codec).split(".")
+            parts = Codecs.normalize(codec).split(".")
             name = parts[0]
             if name in AUDIO_CODECS:
                 a_codec = a_codec or codec
@@ -104,9 +118,6 @@ class Codecs:
                 s_codec = s_codec or codec
             else:
                 logger.warning("Unknown RFC6381 codec: %s", codec)
-
-        if v_codec and v_codec.startswith(("hev", "hvc")):
-            v_codec = "hevc"
 
         if v_codec or a_codec or s_codec:
             return Codecs(v_codec, a_codec, s_codec, hdr)

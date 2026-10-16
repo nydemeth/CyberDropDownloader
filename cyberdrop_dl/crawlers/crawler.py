@@ -24,7 +24,7 @@ from cyberdrop_dl.crawlers._hls import HLSMixin
 from cyberdrop_dl.downloader.http import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.filepath import check_dangerous_filename, check_path_traversal, compose_filename, get_filename_and_ext
-from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
+from cyberdrop_dl.mediaprops import Codecs, ISO639Subtitle, Resolution
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, MuxVideo, ScrapeItem, is_absolute_http_url
 from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, parse_url, unique
@@ -1006,9 +1006,9 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             if _include.file_id and file_id:
                 yield file_id
             if _include.video_codec and video_codec:
-                yield video_codec
+                yield Codecs.pretty_name(video_codec)
             if _include.audio_codec and audio_codec:
-                yield audio_codec
+                yield Codecs.pretty_name(audio_codec)
 
             if _include.resolution and resolution and resolution not in {Resolution.highest(), Resolution.unknown()}:
                 res = resolution if type(resolution) is Resolution else Resolution.parse(resolution)

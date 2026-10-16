@@ -278,8 +278,10 @@ class VariantM3U8Parser:
         if isinstance(only, str):
             only = (only,)
 
+        only = tuple(map(Codecs.pretty_name, only))
+        exclude = tuple(map(Codecs.pretty_name, exclude))
         for group in self.groups:
-            if codec := group.codecs.video:
+            if codec := Codecs.pretty_name(group.codecs.video or ""):
                 if only and codec not in only:
                     continue
                 if codec in exclude:

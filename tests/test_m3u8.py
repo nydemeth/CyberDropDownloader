@@ -3,7 +3,7 @@ from typing import LiteralString
 
 import pytest
 
-from cyberdrop_dl.mediaprops import Resolution
+from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import m3u8
 
@@ -109,25 +109,6 @@ def test_get_resolution_from_url_invalid_url(url: str, exception: type[Exception
         m3u8.get_resolution_from_url(url)
 
 
-@pytest.mark.parametrize(
-    ("codecs", "result"),
-    [
-        ("avc1.4d401f,mp4a.40.2", ("avc1", "mp4a")),
-        ("hvc1.1.6.L93.B0,mp4a.40.2", ("hevc", "mp4a")),
-        ("hevc1.1.6.L93.B0,mp4a.40.2", ("hevc", "mp4a")),
-        ("vp09.00.10.08,opus", ("vp9", "opus")),
-        ("vp10.00.10.08,opus", ("vp10", "opus")),
-        ("vp9.00.10.08,opus", ("vp9", "opus")),
-        ("av01.0.04M.08,opus", ("av1", "opus")),
-        ("avc1.4d401f,ac-3", ("avc1", "ac-3")),
-        ("avc01.4d401f,ec-3", ("avc1", "ec-3")),
-        ("avc1.4d401f", ("avc1", None)),
-    ],
-)
-def test_codecs_parse(codecs: str, result: m3u8.Codecs) -> None:
-    assert m3u8.Codecs.parse(codecs) == result
-
-
 def test_m3u8(m3u8_content: str) -> None:
     m3u8_obj = m3u8.M3U8(m3u8_content)
     assert m3u8_obj.total_duration == dt.timedelta(seconds=28.5)
@@ -144,7 +125,7 @@ def test_m3u8_master(m3u8_master_content: str) -> None:
     assert best.urls.audio is None
     assert best.urls.subtitle is None
     assert best.resolution == (1920, 1080)
-    assert best.codecs == ("avc1", "mp4a")
+    assert best.codecs == Codecs("avc1.4d402j", "mp4a.40.2")
 
 
 def test_m3u8_master_exclude_codec(m3u8_master_content: str) -> None:
@@ -162,20 +143,21 @@ def test_m3u8_master2(m3u8_master_content2: str) -> None:
     variant = _variant_parser(m3u8_master_content2)
     assert len(variant.groups) == 10
     best = variant.get_best_group()
-    assert best.urls.video == AbsoluteHttpURL("https://example.com/4b4ef277/vp9_1080p/video.m3u8")
+    assert best.urls.video == AbsoluteHttpURL("https://example.com/4b4ef277/1080p/video.m3u8")
     assert best.urls.audio == AbsoluteHttpURL("https://example.com/4b4ef277/audio/audio.m3u8")
     assert best.urls.subtitle is None
     assert best.resolution == (1080, 1920)
-    assert best.codecs == ("vp9", "mp4a")
+    assert best.codecs == Codecs("avc1.64002a", "mp4a.40.2")
 
 
 def test_m3u8_master2_exclude_codec(m3u8_master_content2: str) -> None:
     variant = _variant_parser(m3u8_master_content2)
     best = variant.get_best_group(exclude="vp9")
-    assert best.codecs.video == "avc1"
+    assert best.codecs.video == "avc1.64002a"
     assert best.urls.video == AbsoluteHttpURL("https://example.com/4b4ef277/1080p/video.m3u8")
     best = variant.get_best_group(only="vp9")
-    assert best.codecs.video == "vp9"
+    assert best.codecs.video
+    assert Codecs.pretty_name(best.codecs.video) == "vp9"
     with pytest.raises(StopIteration):
         best = variant.get_best_group(exclude=["vp9", "avc1"])
     with pytest.raises(StopIteration):
@@ -210,7 +192,7 @@ def test_m3u8_master_w_no_codecs_should_not_raise_an_error() -> None:
     groups = _variant_parser(content).groups
     assert len(groups) == 2
     for group in groups:
-        assert group.codecs == (None, None)
+        assert group.codecs is Codecs.UNKNOWN
 
 
 def test_m3u8_selection_of_streams_w_no_resolution() -> None:
