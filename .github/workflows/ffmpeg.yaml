@@ -40,4 +40,4 @@ jobs:
       - name: Run pytest
         timeout-minutes: 10
         run: |
-          uv run pytest tests/test_ffmpeg.py -v --cov
+          uv run pytest tests/test_ffmpeg.py -v

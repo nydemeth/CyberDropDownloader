@@ -9,7 +9,6 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, is_absolute_http_url
-from cyberdrop_dl.utils import remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -30,6 +29,8 @@ def create_crawlers[CrawlerT: Crawler](
 
 
 def _create_subclass[CrawlerT: Crawler](url: AbsoluteHttpURL | str, base_class: type[CrawlerT]) -> type[CrawlerT]:
+    from cyberdrop_dl.utils._url import remove_trailing_slash
+
     url = AbsoluteHttpURL(url)
     assert is_absolute_http_url(url)
     primary_url = remove_trailing_slash(url)
@@ -59,10 +60,10 @@ type DBFix = Callable[[str], str]
 
 
 class Registry:
-    abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    concrete: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    generic: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    _db_fixes: weakref.WeakKeyDictionary[type[Crawler], DBFix | None] = weakref.WeakKeyDictionary()
+    abc: ClassVar[weakref.WeakSet[type[Crawler]]] = weakref.WeakSet()
+    concrete: ClassVar[weakref.WeakSet[type[Crawler]]] = weakref.WeakSet()
+    generic: ClassVar[weakref.WeakSet[type[Crawler]]] = weakref.WeakSet()
+    _db_fixes: ClassVar[weakref.WeakKeyDictionary[type[Crawler], DBFix | None]] = weakref.WeakKeyDictionary()
     names: ClassVar[set[str]] = set()
     # generics are concrete crawlers that are not bound to any specific site
     # They can be mapped to a site by just subclassing and setting a PRIMARY URL. ex: Chevereto
