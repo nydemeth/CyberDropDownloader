@@ -141,7 +141,7 @@ class RenditionDetails:
 
         stream_info = StreamInfo(**vars(playlist.stream_info))
         resolution = _parse_stream_resolution(stream_info, video_url)
-        codecs = Codecs.parse(playlist.stream_info.codecs)
+        codecs = Codecs.parse(playlist.stream_info.codecs or "")
         media = MediaList(playlist.media)
 
         if audio_group_id := playlist.stream_info.audio:
@@ -154,7 +154,7 @@ class RenditionDetails:
 
         media_urls = MediaURLs(video_url, audio_url, subtitle_url)
 
-        return RenditionDetails(resolution, codecs, stream_info, media, media_urls)
+        return RenditionDetails(resolution, stream_info, codecs, media, media_urls)
 
 
 def _parse_stream_resolution(stream_info: StreamInfo, video_url: AbsoluteHttpURL) -> Resolution:
