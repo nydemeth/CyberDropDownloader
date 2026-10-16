@@ -22,6 +22,48 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## UNRELEASED
+
+### Added
+
+- BunnyCDN support
+- Pixabay support
+- Archve support
+- Tiktikstream support
+- Smotrim support
+- Findr support
+- X-minus support
+- Betterome support
+- Area51 support
+- Support '/ads/go' redirect (Xenforo)
+- Support nested folders (YandexDisk)
+- Support 'themen' threads (Celebforum)
+- Embeds support (Fileditch)
+
+### Changed
+
+- Prefer H.265 over H.264 streams of the same resolution (m3u8)
+- Enable simpcity support
+- Try to download expired content (Imagepond)
+
+### Deprecated
+
+- Support for database schemas older that v10.2.1
+- Support for python 3.12
+
+### Removed
+
+- YTboob support
+
+### Fixed
+
+- Infinite pagination (Rumble)
+- Do not download placeholder "unavailable" videos (SendVid)
+- Download of encrypted (AES-128) segments with no IV (HLS)
+- Attachments detection (Discourse)
+- Some download errors always being reported as `TimeoutError`
+- Challenge detection (Fileditch)
+
 ## [10.11.1] - 2026-10-11
 
 ### Fixed
