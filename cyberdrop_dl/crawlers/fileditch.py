@@ -27,7 +27,7 @@ _HOMEPAGE_CATCH_ALL = "/s21/FHVZKQyAZlIsrneDAsp.jpeg"
 class FileditchCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "theditch.st", "fileditch"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "File": (
+        "File / Embed": (
             "/file.php?f=<file_id>",
             "/beta123/<file_id>/<name>",
             "/temp/<file_id>/<name>",
@@ -35,7 +35,8 @@ class FileditchCrawler(Crawler):
         ),
         "Short URL": "https://theditch.st/<short_id>",
     }
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://fileditchfiles.me/")
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://fileditchfiles.me")
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("embedditch.st",)
     DOMAIN: ClassVar[str] = "fileditch"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -87,13 +88,7 @@ class FileditchCrawler(Crawler):
     async def request_download(self, url: AbsoluteHttpURL) -> File:
         resp = await self.flaresolverr_request(url, wait=env.FILEDITCH_WAIT)
         soup = await resp.soup()
-
-        if soup.select_one(".gone-path"):
-            raise ScrapeError(410)
-        if soup.select_one("form#pow-form"):
-            raise DDOSGuardError("Flaresolverr failed proof of work challenge")
-
-        src = self.parse_url(css.select(soup, "a.btn[download]", "href"))
+        src = _extract_dl_url(soup)
         return File(
             name=src.name if src.query else url.name,
             path=_file_path(src),
@@ -166,3 +161,16 @@ def _file_path(url: AbsoluteHttpURL) -> str:
                 return "/" + path.partition("/")[-1]
 
     raise ScrapeError(422, f"Unable to extract a valid download URL. Found: {url}")
+
+
+def _extract_dl_url(soup: bs4.Tag) -> AbsoluteHttpURL:
+    if soup.select_one(".gone-path"):
+        raise ScrapeError(410)
+
+    for form in css.iselect(soup, "form:has(input[type='hidden'])"):
+        if form.select_one("button.lang"):  # language form
+            continue
+
+        raise DDOSGuardError("Flaresolverr failed proof of work challenge")
+
+    return FileditchCrawler.parse_url(css.select(soup, "a.btn[download]", "href"))
