@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, ClassVar, override
 
 from cyberdrop_dl import env
 from cyberdrop_dl.clients.http import HTTPConfig
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.crawlers import Registry
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.exceptions import DDOSGuardError, ScrapeError
+from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import b64_pad, css, extr_text
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -86,7 +87,15 @@ class FileditchCrawler(Crawler):
         )
 
     async def request_download(self, url: AbsoluteHttpURL) -> File:
-        resp = await self.flaresolverr_request(url, wait=env.FILEDITCH_WAIT)
+        resp = None
+        if url.suffix.lower() in FileExt.VIDEO:
+            # Try embeds first, they have no CF turnstile
+            try:
+                resp = await self.flaresolverr_request(url.with_host("embedditch.st"), wait=env.FILEDITCH_WAIT)
+            except (DDOSGuardError, DownloadError):
+                pass
+
+        resp = resp or await self.flaresolverr_request(url, wait=env.FILEDITCH_WAIT)
         soup = await resp.soup()
         src = _extract_dl_url(soup)
         return File(
