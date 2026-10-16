@@ -121,8 +121,8 @@ class StreamInfo:
 @dataclasses.dataclass(frozen=True, slots=True, order=True)
 class RenditionDetails:
     resolution: Resolution
-    codecs: Codecs
     stream_info: StreamInfo
+    codecs: Codecs
     media: MediaList
     urls: MediaURLs
 

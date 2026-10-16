@@ -1,52 +1,123 @@
 from __future__ import annotations
 
+import dataclasses
+import logging
 import re
 from fractions import Fraction
-from typing import TYPE_CHECKING, Final, NamedTuple, final
+from typing import TYPE_CHECKING, ClassVar, Final, NamedTuple, final
 
 from cyberdrop_dl.exceptions import ScrapeError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Generator
 
     import yarl
 
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
+logger = logging.getLogger(__name__)
 
-VIDEO_CODECS = "avc1", "avc2", "avc3", "avc4", "av1", "hevc", "hev1", "hev2", "hvc1", "hvc2", "vp8", "vp9", "vp10"
-AUDIO_CODECS = "ac-3", "ec-3", "mp3", "mp4a", "opus", "vorbis"
+VIDEO_CODECS = (
+    "av1",
+    "avc1",
+    "avc2",
+    "avc3",
+    "avc4",
+    "dvh1",
+    "dvhe",
+    "h263",
+    "h264",
+    "hev1",
+    "hev2",
+    "hevc",
+    "hvc1",
+    "hvc2",
+    "mp4v",
+    "theora",
+    "vp8",
+    "vp9",
+    "vp10",
+)
+AUDIO_CODECS = (
+    "aac",
+    "ac-3",
+    "ac-4",
+    "dtsc",
+    "dtse",
+    "dtsh",
+    "dtsl",
+    "eac3",
+    "ec-3",
+    "flac",
+    "mp3",
+    "mp4a",
+    "opus",
+    "vorbis",
+)
+SUB_CODECS = "stpp", "wvtt"
 
 
-class Codecs(NamedTuple):
-    video: str | None
-    audio: str | None
+@final
+@dataclasses.dataclass(slots=True, frozen=True)
+class Codecs:
+    video: str | None = None
+    audio: str | None = None
+    subs: str | None = None
+    hdr: str | None = None
+
+    UNKNOWN: ClassVar[Codecs]
 
     @staticmethod
-    def parse(codecs: str | None) -> Codecs:
+    def _parse_hdr(v_codec_parts: list[str]) -> str | None:
+        match v_codec_parts:
+            case ["av1", _, _, "10", *_] | ["vp9", "2", *_]:
+                return "HDR10"
+            case [name, *_] if name in ("dvh1", "dvhe"):
+                return "DV"
+            case _:
+                return None
+
+    @staticmethod
+    def split(codecs: str) -> Generator[str]:
+        for codec in map(str.strip, codecs.strip().strip(",").split(",")):
+            if codec:
+                yield re.sub(r"^([^.]+)", lambda c: c.group(1).lower(), codec)
+
+    @staticmethod
+    def parse(codecs: str) -> Codecs:
+        codecs = codecs.strip()
         if not codecs:
-            return Codecs(None, None)
-        video_codec = audio_codec = None
+            return Codecs.UNKNOWN
 
-        def match_codec(codec: str, lookup_array: Iterable[str]) -> str | None:
-            codec, *_ = codec.split(".")
-            clean_codec = codec[:-1].replace("0", "") + codec[-1]
-            return next((key for key in lookup_array if clean_codec.startswith(key)), None)
+        v_codec = a_codec = s_codec = hdr = None
+        codecs_tuple = tuple(Codecs.split(codecs))
+        for codec in codecs_tuple:
+            parts = re.sub(r"0+(?=\d)", "", codec).split(".")
+            name = parts[0]
+            if name in AUDIO_CODECS:
+                a_codec = a_codec or codec
+            elif name in VIDEO_CODECS:
+                if not v_codec:
+                    v_codec = codec
+                    hdr = Codecs._parse_hdr(parts)
+            elif name in SUB_CODECS:
+                s_codec = s_codec or codec
+            else:
+                logger.warning("Unknown RFC6381 codec: %s", codec)
 
-        for codec in codecs.split(","):
-            if not video_codec and (found := match_codec(codec, VIDEO_CODECS)):
-                video_codec = found
-            elif not audio_codec and (found := match_codec(codec, AUDIO_CODECS)):
-                audio_codec = found
-            if video_codec and audio_codec:
-                break
+        if v_codec and v_codec.startswith(("hev", "hvc")):
+            v_codec = "hevc"
 
-        assert video_codec
-        if "avc" in video_codec:
-            video_codec = "avc1"
-        elif "hev" in video_codec or "hvc" in video_codec:
-            video_codec = "hevc"
-        return Codecs(video_codec, audio_codec)
+        if v_codec or a_codec or s_codec:
+            return Codecs(v_codec, a_codec, s_codec, hdr)
+
+        if len(codecs_tuple) == 2:
+            return Codecs(*codecs_tuple)
+
+        return Codecs.UNKNOWN
+
+
+Codecs.UNKNOWN = Codecs()
 
 
 @final
