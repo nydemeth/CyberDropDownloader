@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -18,34 +17,36 @@ class Selector:
     CONTENT = "div[id=list_videos_common_videos_list_items] div a"
 
 
+@URLConfig(trim=False)
 class NudoStarTVCrawler(Crawler):
-    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Model": "/models/..."}
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
+        "Model": "/models/<name>",
+        "Image": "/models/<name>/<img_id>",
+    }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://nudostar.tv")
     NEXT_PAGE_SELECTOR: ClassVar[str] = "li[class=next] a"
     DOMAIN: ClassVar[str] = "nudostar.tv"
     FOLDER_DOMAIN: ClassVar[str] = "NudoStarTV"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if "models" not in scrape_item.url.parts:
-            raise ValueError
-        if scrape_item.url.name:
-            scrape_item.url /= ""
-        if len(scrape_item.url.parts) > 4:
-            return await self.image(scrape_item)
-        await self.model(scrape_item)
+        match scrape_item.url.parts[1:]:
+            case ["models", _, _, *rest]:
+                if rest:
+                    await self.image(scrape_item)
+                else:
+                    await self.model(scrape_item)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def model(self, scrape_item: ScrapeItem) -> None:
         soup, pages = await aio.peek_first(self.web_pager(scrape_item.url))
-        title = self.create_title(css.select(soup, "title").get_text().split("/")[0])
-        scrape_item.setup_as_album(title)
+        scrape_item.setup_as_album("")
 
-        if "Last OnlyFans Updates" in title or not soup.select_one(Selector.CONTENT):
-            raise ScrapeError(404)
-
-        async for soup in pages:
-            for new_scrape_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
-                self.create_task(self.run(new_scrape_item))
+        async with self.new_task_group() as tg:
+            async for soup in pages:
+                for new_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
+                    tg.create_task(self.image(new_item))
 
     @error_handling_wrapper
     async def image(self, scrape_item: ScrapeItem) -> None:
@@ -53,7 +54,6 @@ class NudoStarTVCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        link_str = css.select(soup, Selector.IMAGE, "src")
-        link = self.parse_url(link_str)
-        filename, ext = self.get_filename_and_ext(link.name)
-        await self.handle_file(link, scrape_item, filename, ext)
+        scrape_item.setup_as_album(self.create_title(css.select_text(soup, ".headline").partition("/")[0]))
+        src = self.parse_url(css.select(soup, Selector.IMAGE, "src"))
+        await self.direct_file(scrape_item, src)

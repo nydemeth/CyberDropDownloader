@@ -63,8 +63,9 @@ class TwimgCrawler(Crawler):
         if "amplify_video_thumb" in scrape_item.url.parts or scrape_item.url.suffix == ".m3u8":
             raise ValueError
         if "video" in scrape_item.url.host:
-            return await self.direct_file(scrape_item)
-        await self.photo(scrape_item)
+            await self.direct_file(scrape_item)
+        else:
+            await self.photo(scrape_item)
 
     @error_handling_wrapper
     async def photo(self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None) -> None:

@@ -25,7 +25,8 @@ class PostImgCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if "i.postimg.cc" in scrape_item.url.host:
-            return await self.direct_file(scrape_item)
+            await self.direct_file(scrape_item)
+            return
 
         match scrape_item.url.parts[1:]:
             case ["gallery", album_id, *_]:
