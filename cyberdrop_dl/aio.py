@@ -120,10 +120,6 @@ class _AsyncChain:
             async for value in a_iterable:
                 yield value
 
-    @staticmethod
-    async def yield_this[T](obj: T) -> AsyncGenerator[T]:
-        yield obj
-
 
 chain = _AsyncChain()
 
@@ -139,7 +135,12 @@ async def peek_first[T](async_iterable: AsyncIterable[T], /) -> tuple[T, AsyncGe
     async_iterator = aiter(async_iterable)
     first = await next(async_iterator)
 
-    return first, chain(chain.yield_this(first), async_iterator)
+    async def replay_gen():
+        yield first
+        async for item in async_iterator:
+            yield item
+
+    return first, replay_gen()
 
 
 @dataclasses.dataclass(frozen=True, slots=True, eq=False)

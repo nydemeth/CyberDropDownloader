@@ -520,18 +520,6 @@ class HTTPMixin(HTTPController, Protocol):
 
 
 @final
-class HTTPControllerProxy[T: HTTPMixin]:
-    def __init__(self, http: T) -> None:
-        self.controller = http
-        self.__call__ = http.request
-        self.json = http.request_json
-        self.soup = http.request_soup
-        self.text = http.request_text
-        self.redirect = http.request_redirect
-        self.location = http.request_location
-
-
-@final
 @frozen
 class HTTPConfig(ConfigDataclass):
     __attr_name__: ClassVar[str] = "__http_config__"
