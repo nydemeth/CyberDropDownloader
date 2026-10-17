@@ -16,6 +16,7 @@ from cyberdrop_dl.clients.http import JSON_CHECK, check_http_status
 from cyberdrop_dl.constants import USE_RETRY_PATH, FileExt
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.url_objects import ByteRange
 from cyberdrop_dl.utils import dates, enter_context
 
 if TYPE_CHECKING:
@@ -76,11 +77,25 @@ class DownloadClient:
             media_item.download_folder = resolve_download_dir(media_item.download_folder, self.config)
             media_item.partial_file = media_item.download_folder / f"{name}{constants.TempExt.PART}"
 
-        resume_point = 0
+        bytes_downloaded = 0
         media_item.headers.pop(hdrs.RANGE, None)  # Delete ranges from previous attempts
-        if self.SUPPORTS_RANGES and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
-            resume_point = size
-            media_item.headers[hdrs.RANGE] = f"bytes={size}-"
+        byte_range: ByteRange | None = media_item.extra_info.get("byte_range")
+
+        if self.SUPPORTS_RANGES:
+            if media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
+                bytes_downloaded = size
+                try:
+                    byte_range = (byte_range or ByteRange(0)) + size
+                except ValueError:
+                    logger.warning("Deleting partial file '%s'. BYTE-RANGE is unsatisfiable", media_item.partial_file)
+                    await aio.unlink(media_item.partial_file)
+                    bytes_downloaded = 0
+
+        elif byte_range:
+            raise DownloadError(422, f"{hdrs.RANGE} header required but downloader does not supports it: {byte_range}")
+
+        if byte_range:
+            media_item.headers[hdrs.RANGE] = str(byte_range)
 
         await asyncio.sleep(self.config.downloads.total_delay)
 
@@ -91,7 +106,7 @@ class DownloadClient:
                 headers=media_item.headers,
                 impersonate=media_item.extra_info.get("impersonate"),
             ) as resp:
-                return await self._process_response(media_item, domain, resume_point, resp)
+                return await self._process_response(media_item, domain, bytes_downloaded, resp)
 
     async def _predownload_skip(self, media_item: MediaItem, domain: str) -> bool | None:
         should_download, should_skip = await self.get_final_file_info(media_item, domain)

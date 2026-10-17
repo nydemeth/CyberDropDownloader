@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol
 
 from cyberdrop_dl import aio, constants, ffmpeg
 from cyberdrop_dl.exceptions import DownloadError
+from cyberdrop_dl.url_objects import ByteRange
 from cyberdrop_dl.utils import parse_url
 from cyberdrop_dl.utils.cleanup import rm_partial_files
 from cyberdrop_dl.utils.crypto import aes_cbc_decrypt, aes_unpad
@@ -47,6 +48,7 @@ class HLSSegment(NamedTuple):
     name: str
     url: AbsoluteHttpURL
     decrypt_info: HLSKey | None = None
+    byte_range: ByteRange | None = None
 
 
 class HLSDecrypter(Protocol):
@@ -83,13 +85,22 @@ class AESHLSDecrypter(HLSDecrypter):
 
 def _create_segments(segments: Iterable[Segment | InitializationSection], count: int) -> Generator[HLSSegment]:
     padding = max(5, len(str(count)))
+    byte_range_offset = 0
     for index, segment in enumerate(segments, 1):
         assert segment.uri
+        byte_range = None
+        if segment.byterange:
+            length, _, offset = segment.byterange.partition("@")
+            start = int(offset or byte_range_offset)
+            byte_range_offset = start + int(length)
+            byte_range = ByteRange(start, byte_range_offset)
+
         yield HLSSegment(
             idx=index - 1,
             name=f"{index:0{padding}d}{constants.TempExt.HLS}",
             url=parse_url(segment.absolute_uri, trim=False),
             decrypt_info=HLSKey.parse(segment, idx=index - 1),
+            byte_range=byte_range,
         )
 
 
@@ -101,6 +112,8 @@ def _create_media_segment(media_item: MediaItem, segment: HLSSegment, download_f
     new_item.download_folder = download_folder
     if segment.decrypt_info:
         segment.decrypt_info(new_item.extra_info)
+    if segment.byte_range:
+        new_item.extra_info["byte_range"] = segment.byte_range
 
     return new_item
 

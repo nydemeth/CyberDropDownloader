@@ -121,6 +121,22 @@ logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
+class ByteRange:
+    start: int
+    end: int | None = None
+
+    def __add__(self, offset: int) -> Self:
+        start = self.start + offset
+        if self.end and self.end >= start:
+            raise ValueError(f"Unsatisfiable BYTE RANGE {offset = } current_range = {self}")
+
+        return type(self)(start, self.end)
+
+    def __str__(self) -> str:
+        return f"bytes={self.start}-{self.end - 1 if self.end else ''}"
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
 class MuxVideo:
     video: AbsoluteHttpURL
     audio: AbsoluteHttpURL
