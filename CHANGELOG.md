@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extract URLs from iframes hidden inside a `spoiler` tag (Xenforo)
 - '401 Unauthorized' on all downloads (SendVid)
 - Do not download placeholder "unavailable" videos (SendVid)
+- Do not download placeholder "unavailable" images (ImgBox)
 - Download of encrypted (AES-128) segments with no IV (HLS)
 - Respect 'EXT-X-BYTERANGE' for HTTP requests (HLS)
 - Attachments detection (Discourse)

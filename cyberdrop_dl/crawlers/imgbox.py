@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from http import HTTPStatus
+from typing import ClassVar, final, override
 
+from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -9,48 +11,61 @@ from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 
+@final
 class Selector:
-    IMAGES = "div#gallery-view-content img"
-    IMAGE = "img#img"
+    IMAGE = "#img"
+    IMAGES = "#gallery-view-content img"
     ALBUM_TITLE = "div#gallery-view h1"
+    NOT_FOUND = "h2:-soup-contains-own('The specified gallery could not be found')"
+    UNAVAILABLE = ".notice:-soup-contains('In the meantime, please visit our sponsor')"
+
+
+etag.register(etag.ETag("6a748841-1f9b", "Image temporarily unavailable", HTTPStatus.SERVICE_UNAVAILABLE))
 
 
 class ImgBoxCrawler(Crawler):
-    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Album": "/g/...", "Image": "/...", "Direct links": ""}
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
+        "Album": "/g/<gallery_id>",
+        "Image": (
+            "/<img_id>",
+            "thumbs.imgbox.com/../../<img_id>.<ext>",
+            "images.imgbox.com/../../<img_id>.<ext>",
+        ),
+    }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://imgbox.com")
     DOMAIN: ClassVar[str] = "imgbox"
     FOLDER_DOMAIN: ClassVar[str] = "ImgBox"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if "t" in scrape_item.url.host or "_" in scrape_item.url.name:
-            scrape_item.url = self.PRIMARY_URL / scrape_item.url.name.split("_")[0]
+        match scrape_item.url.parts[1:]:
+            case ["g", gallery_id]:
+                await self.album(scrape_item, gallery_id)
+            case [_]:
+                await self.image(scrape_item)
+            case _:
+                raise ValueError
 
-        elif "gallery/edit" in scrape_item.url.path:
-            scrape_item.url = self.PRIMARY_URL / "g" / scrape_item.url.parts[-2]
-
-        if "g" in scrape_item.url.parts:
-            return await self.album(scrape_item)
-
-        await self.image(scrape_item)
+    @classmethod
+    @override
+    def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        url = super().transform_url(url)
+        if cls.is_subdomain(url) or "_" in url.name:
+            return cls.PRIMARY_URL / url.name.partition("_")[0].partition(".")[0]
+        return url
 
     @error_handling_wrapper
-    async def album(self, scrape_item: ScrapeItem) -> None:
+    async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
         soup = await self.request_soup(scrape_item.url)
-
-        if "The specified gallery could not be found" in soup.get_text():
+        if soup.select_one(Selector.NOT_FOUND):
             raise ScrapeError(404)
 
-        album_id = scrape_item.url.parts[2]
-        title = css.select_text(soup, Selector.ALBUM_TITLE).rsplit(" - ", 1)[0]
-        title = self.create_title(title, album_id)
-        scrape_item.setup_as_album(title, album_id=album_id)
+        name = css.select_text(soup, Selector.ALBUM_TITLE).rsplit(" - ", 1)[0]
+        scrape_item.setup_as_album(self.create_title(name, album_id), album_id=album_id)
 
-        for link in soup.select(Selector.IMAGES):
-            link_str: str = css.attr(link, "src").replace("thumbs", "images").replace("_b", "_o")
-            link = self.parse_url(link_str)
-            filename, ext = self.get_filename_and_ext(link.name)
-            await self.handle_file(link, scrape_item, filename, ext)
-            scrape_item.add_children()
+        async with self.new_task_group() as tg:
+            for src in map(_thumb_to_src, self.iter_urls(soup, Selector.IMAGES, "src")):
+                tg.create_task(self.direct_file(scrape_item, src))
+                scrape_item.add_children()
 
     @error_handling_wrapper
     async def image(self, scrape_item: ScrapeItem) -> None:
@@ -58,8 +73,12 @@ class ImgBoxCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
+        if soup.select_one(Selector.UNAVAILABLE):
+            raise ScrapeError(HTTPStatus.SERVICE_UNAVAILABLE)
 
-        link_str: str = css.select(soup, Selector.IMAGE, "src")
-        link = self.parse_url(link_str)
-        filename, ext = self.get_filename_and_ext(link.name)
-        await self.handle_file(link, scrape_item, filename, ext)
+        src = _thumb_to_src(self.parse_url(css.select(soup, Selector.IMAGE, "src")))
+        await self.direct_file(scrape_item, src)
+
+
+def _thumb_to_src(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+    return url.with_host(url.host.replace("thumbs", "images")).with_name(url.name.replace("_b", "_o"))
