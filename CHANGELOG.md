@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Attachments detection (Discourse)
 - Some download errors always being reported as `TimeoutError`
 - Challenge detection (Fileditch)
+- Download of albums with 45+ items (Fileditch)
 
 ## [10.11.1] - 2026-10-11
 
