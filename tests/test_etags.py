@@ -19,10 +19,13 @@ def test_unknown_etag() -> None:
 
 
 def test_known_etag() -> None:
+    from cyberdrop_dl.crawlers import Registry
+
+    Registry.import_all()
     value = "d835884373f4d6c8f24742ceabe74946"
     with pytest.raises(DownloadError) as exc_info:
         check({"ETag": f"{value}"})
-    assert exc_info.value.status == HTTPStatus.NOT_FOUND
+    assert exc_info.value.status == HTTPStatus.GONE
     assert exc_info.value.message == "Image has been removed"
 
 

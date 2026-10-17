@@ -12,6 +12,8 @@ from __future__ import annotations
 import base64
 import dataclasses
 import datetime as dt
+import itertools
+import json
 import re
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, final
@@ -427,7 +429,24 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             if post_url and post_url != thread.url:
                 self.manager.scrape_mapper.logs.write_last_forum_post(post_url)
 
+    @classmethod
+    def _resolve_spoiler_iframes(cls, soup: BeautifulSoup) -> None:
+        for name in ("data-s9e-mediaembed",):
+            attr = f"{name}-iframe"
+            for span_iframe in soup.select(f"span[{name}]"):
+                try:
+                    data = json.loads(css.select(span_iframe, f"span[{attr}]", attr))
+                except (css.SelectorError, ValueError):
+                    continue
+
+                if type(data) is not list or len(data) % 2 != 0:
+                    cls.get_logger().warning("Unable to resolve iframe attributes: %s", data)
+                    continue
+
+                span_iframe.replace_with(soup.new_tag("iframe", attrs=dict(itertools.batched(data, 2))))
+
     def _iter_posts(self, thread: ThreadProtocol, soup: BeautifulSoup) -> Generator[ForumPost]:
+        self._resolve_spoiler_iframes(soup)
         for article in soup.select(self.SELECTORS.posts.article):
             post = ForumPost.new(article, self.SELECTORS.posts)
             if thread.post_id and post.id < thread.post_id:

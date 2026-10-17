@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Infinite pagination (Rumble)
+- Extract URLs from iframes hidden inside a `spoiler` tag (Xenforo)
 - '401 Unauthorized' on all downloads (SendVid)
 - Do not download placeholder "unavailable" videos (SendVid)
 - Download of encrypted (AES-128) segments with no IV (HLS)

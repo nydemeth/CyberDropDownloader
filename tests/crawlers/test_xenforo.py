@@ -340,6 +340,20 @@ def test_lazy_load_embeds() -> None:
     assert result[0] == "//redgifs.com/ifr/downrightcluelesswirm"
 
 
+def test_resolve_lazy_iframes() -> None:
+    content = r"""
+    <div class="bbCodeSpoiler-content">
+		<div class="bbCodeBlock bbCodeBlock--spoiler">
+			<div class="bbCodeBlock-content"><span data-s9e-mediaembed="vimeo"><span><span data-s9e-mediaembed-iframe='["allowfullscreen","","scrolling","no","src","\/\/player.vimeo.com\/video\/57187455"]'></span></span></span></div>
+		</div>
+	</div>"""
+
+    assert tuple(CelebForumCrawler._embeds(_post(content))) == ()
+    soup = css.soup(_html(content))
+    CelebForumCrawler._resolve_spoiler_iframes(soup)
+    assert tuple(CelebForumCrawler._embeds(_post(str(soup)))) == (r"//player.vimeo.com/video/57187455",)
+
+
 @pytest.mark.parametrize(
     ("crawler", "post_content", "expected_result"),
     [
