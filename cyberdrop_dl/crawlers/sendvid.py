@@ -65,7 +65,7 @@ class SendVidCrawler(Crawler):
         title = css.select_text(soup, Selector.TITLE)
         src = self.parse_url(css.select(soup, Selector.VIDEO_SRC, "src"))
 
-        if not all(map(src.query.get, required := ("validfrom", "validto", "rate", "hash"))):
+        if not all(map(src.query.get, required := ("validfrom", "validto", "hash"))):
             msg = f"URL {src} is missing some of the required parameters: {required}"
             raise ScrapeError(401, msg)
 
