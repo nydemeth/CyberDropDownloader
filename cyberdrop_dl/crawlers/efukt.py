@@ -32,9 +32,10 @@ class Selector:
 
 
 etag.register(
-    etag.ETag("637be5da-11d2b", "Video removed", HTTPStatus.GONE),
-    etag.ETag("63a05f27-11d2b", "Video removed", HTTPStatus.GONE),
-    etag.ETag("5a56b09d-1485eb", "Video removed", HTTPStatus.GONE),
+    *(
+        etag.ETag(tag, "Video removed", HTTPStatus.GONE)
+        for tag in ("637be5da-11d2b", "63a05f27-11d2b", "5a56b09d-1485eb")
+    )
 )
 
 

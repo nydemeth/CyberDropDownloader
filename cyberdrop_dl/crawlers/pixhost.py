@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING, ClassVar, final
 
 from cyberdrop_dl.clients import etag
@@ -20,7 +21,7 @@ class Selector:
     IMAGE = "img.image-img"
 
 
-etag.register(etag.ETag("5c4fb843-ece", "PixHost Removed Image"))
+etag.register(etag.ETag("5c4fb843-ece", "PixHost Removed Image", HTTPStatus.GONE))
 
 
 @Registry.database.fix_referer
