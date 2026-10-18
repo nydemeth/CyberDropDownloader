@@ -152,13 +152,11 @@ def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:
     if line.startswith("#"):
         return
 
-    http_urls = (url.group().replace(".md.", ".") for url in re.finditer(_REGEX_LINKS, line))
-    for link in http_urls:
+    for url in (url.group() for url in re.finditer(_REGEX_LINKS, line)):
         try:
-            encoded = "%" in link
-            yield AbsoluteHttpURL(link, encoded=encoded)
+            yield AbsoluteHttpURL(url, encoded="%" in url)
         except Exception as e:  # noqa: BLE001
-            logger.error(f"Unable to parse URL from input file: {link} {e:!r}")
+            logger.error(f"Unable to parse URL from input file: {url} {e!r}")
 
 
 async def load_items_from_db(
