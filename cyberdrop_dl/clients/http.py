@@ -138,7 +138,9 @@ class HTTPClient:
             jar = self._wreq_session.cookie_jar
             assert jar is not None
             for (domain, path), cookie in self.cookies.cookies.items():
-                jar.add(cookie.output(), f"https://{domain}{path}")
+                for morsel in cookie.values():
+                    jar.add(str(morsel), f"https://{domain}{path}")
+
         return self._wreq_session
 
     @property
@@ -210,6 +212,14 @@ class HTTPClient:
     def _create_curl_session(self) -> AsyncSession[CurlResponse]:
         session = curl_cffi.create_session(self.config)
         session.cookies = {cookie.key: cookie.value for cookie in self.cookies}
+        for (domain, path), cookie in self.cookies.cookies.items():
+            for morsel in cookie.values():
+                session.cookies.set(
+                    morsel.key,
+                    morsel.value,
+                    domain=morsel["domain"] or domain,
+                    path=morsel["path"] or path or "/",
+                )
         return session
 
     def create_aiohttp_session(self) -> aiohttp.ClientSession:
