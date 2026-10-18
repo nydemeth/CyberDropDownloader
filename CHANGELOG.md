@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Do not crash if an input file has invalid URLs
-- Scraping being limited to 1 concurrent URL when a site's scrape queue exceeds its limit even after the queue shrinks back bellow it
+- Scraping being limited to 1 concurrent URL when a site's scrape queue exceeds its limit even after the queue shrinks back below it
 - `--hashing.post-download` never hashing any files
 - Thread URLs found within a another thread always being skipping even if ` --max-thread-depth` is greater than 0
 

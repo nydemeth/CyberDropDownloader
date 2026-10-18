@@ -70,41 +70,43 @@ async def _exclusive_lock(media_item: MediaItem) -> AsyncGenerator[None]:
 
 @dataclasses.dataclass(slots=True)
 class Capacity:
-    limit: int | None = None
+    domain: str
     waiting: int = 0
+    limit: int = 50
     condition: asyncio.Condition = dataclasses.field(default_factory=asyncio.Condition)
-    _should_warn: bool = True
+    _was_overloaded: bool = False
 
-    @property
-    def overloaded(self) -> bool:
-        if self.limit is None:
-            return False
-        return self.waiting > max((self.limit * 1.2), self.limit + 10)
+    def __post_init__(self) -> None:
+        assert self.limit >= 1
+
+    def is_overloaded(self) -> bool:
+        return self.waiting > max(self.limit * 1.2, self.limit + 10)
 
     def has_capacity(self) -> bool:
-        return self.limit is None or self.waiting <= self.limit
+        return self.waiting < self.limit
 
-    async def _wait(self) -> None:
-        if self.has_capacity():
-            return
-
+    async def wait(self) -> None:
         async with self.condition:
+            if not self._was_overloaded and self.is_overloaded():
+                self._was_overloaded = True
+                logger.warning(
+                    "[%s] Too many downloads queued (%s+). All scraping has been temporarily paused",
+                    self.domain,
+                    self.limit,
+                )
+
+            if not self._was_overloaded:
+                return
+
             await self.condition.wait_for(self.has_capacity)
 
-    async def wait(self, domain: str) -> None:
-        overloaded = self.overloaded
-        if overloaded and self._should_warn:
-            logger.warning(
-                "[%s] Too many downloads queued (%s+). All scraping has been temporarily paused",
-                domain,
-                self.limit,
-            )
-            self._should_warn = False
+            if self._was_overloaded:
+                self._was_overloaded = False
+                logger.debug("[%s] Resuming scraping", self.domain)
 
-        await self._wait()
-        if overloaded and not self.overloaded:
-            logger.debug("[%s] Resuming scraping", domain)
-            self._should_warn = True
+    async def notify(self) -> None:
+        async with self.condition:
+            self.condition.notify_all()
 
 
 class Downloader:
@@ -114,10 +116,12 @@ class Downloader:
     log_prefix: str = "Download"
 
     @final
-    def __init__(self, manager: Manager, slots: int | None = None, *, use_server_lock: bool = False) -> None:
+    def __init__(
+        self, manager: Manager, slots: int | None = None, *, use_server_lock: bool = False, domain: str
+    ) -> None:
         self.manager: Manager = manager
         self.use_server_lock: bool = use_server_lock
-        self.capacity: Capacity = Capacity()
+        self.capacity: Capacity = Capacity(domain)
         self.config: Config = self.manager.config
         self._processed_items: set[str] = set()
         self._current_attempt_filesize: dict[str, int] = {}
@@ -204,8 +208,7 @@ class Downloader:
         async with self.lock(media_item.real_url):
             self._processed_items.add(media_item.db_path)
             self.capacity.waiting -= 1
-            async with self.capacity.condition:
-                self.capacity.condition.notify_all()
+            await self.capacity.notify()
             yield
 
     async def __download_file(self, media_item: MediaItem) -> bool | None:  # noqa: C901

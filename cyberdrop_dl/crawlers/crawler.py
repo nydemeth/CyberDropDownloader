@@ -256,6 +256,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             manager,
             use_server_lock=self.__dl_config__.server_lock,
             slots=self.__dl_config__.slots,
+            domain=self.FOLDER_DOMAIN,
         )
 
         self.__http_ctx__: HTTPContext = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
@@ -353,7 +354,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     async def __throttle(self) -> None:
         if _CHECK_DL_CAPACITY.get():
-            await self.downloader.capacity.wait(self.FOLDER_DOMAIN)
+            await self.downloader.capacity.wait()
 
     def __json_resp_check__(self, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
         """Custom check for JSON responses.

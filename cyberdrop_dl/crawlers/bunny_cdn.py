@@ -38,7 +38,7 @@ class BunnyCDNCrawler(Crawler):
     downloader: BunnyCDNDownloader
 
     def __post_init__(self) -> None:
-        self.downloader = BunnyCDNDownloader(self.manager)  # pyright: ignore[reportIncompatibleVariableOverride]
+        self.downloader = BunnyCDNDownloader(self.manager, domain=self.FOLDER_DOMAIN)  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     @override
