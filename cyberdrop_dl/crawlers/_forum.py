@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
-LINK_TRASH_MAPPING = {".th.": ".", ".md.": ".", "ifr": "watch"}
+LINK_TRASH_MAPPING = {".th.": ".", ".md.": ".", "/ifr/": "watch/"}
 HTTP_REGEX_LINKS = re.compile(
     r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
 )
@@ -289,7 +289,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
             if n_parents > self.max_thread_depth:
                 return True
 
-            return self.SUPPORTS_THREAD_RECURSION and bool(self.max_thread_depth)
+            return not (self.SUPPORTS_THREAD_RECURSION and self.max_thread_depth)
 
         return False
 
