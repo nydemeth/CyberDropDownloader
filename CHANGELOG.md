@@ -22,6 +22,15 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## UNRELEASED
+
+### Fixed
+
+- Do not crash if an input file has invalid URLs
+- Scraping being limited to 1 concurrent URL when a site's scrape queue exceeds its limit even after the queue shrinks back bellow it
+- `--hashing.post-download` never hashing any files
+- Thread URLs found within a another thread always being skipping even if ` --max-thread-depth` is greater than 0
+
 ## [10.12.0] - 2026-10-17
 
 ### Added
