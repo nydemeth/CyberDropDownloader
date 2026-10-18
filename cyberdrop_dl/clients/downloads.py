@@ -349,7 +349,7 @@ def _check_filesize_limits(media: MediaItem, config: Config) -> bool:
     if media.ext in FileExt.VIDEO:
         return not limits.video or media.size in limits.video
     if media.ext in FileExt.AUDIO:
-        return not limits.image or media.size in limits.image
+        return not limits.audio or media.size in limits.audio
 
     return not limits.non_media or media.size in limits.non_media
 
