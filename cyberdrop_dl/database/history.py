@@ -85,7 +85,7 @@ class HistoryTable(Table, name="media"):
             return False
 
         if domain is None:
-            query = "SELECT 1 FROM media WHERE referer = ? AND completed != 0) LIMIT 1"
+            query = "SELECT 1 FROM media WHERE referer = ? AND completed != 0 LIMIT 1"
             params = (str(referer),)
         else:
             query = "SELECT 1 FROM media WHERE domain = ? AND referer = ? AND completed != 0 LIMIT 1"
