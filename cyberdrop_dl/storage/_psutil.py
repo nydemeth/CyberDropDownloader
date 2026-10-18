@@ -197,7 +197,7 @@ def _get_disk_partitions() -> Generator[DiskPartition]:
 async def _check_nt_network_drive(folder: Path) -> None:
     """Checks is the drive of this folder is a Windows network drive (UNC or unknown mapped drive) and exists.
 
-    See: https://github.com/jbsparrow/CyberDropMediaItemer/issues/860
+    See: https://github.com/Cyberdrop-DL/cyberdrop-dl/issues/860
     """
     if not psutil.WINDOWS:
         return

@@ -16,7 +16,7 @@ layout:
 
 # Welcome!
 
-`cyberdrop-dl` is an open source asynchronous downloader maintained by [jbsparrow](https://github.com/jbsparrow). It's a bulk downloader for various sites you will find around the web.
+`cyberdrop-dl` is an open source bulk asynchronous downloader for various sites you will find around the web.
 
 {% content-ref url="reference/supported-websites.md" %}
 [supported-websites.md](reference/supported-websites.md)

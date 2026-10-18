@@ -17,7 +17,6 @@ body:
       placeholder: Add any other context or links here.
     id: additional-context
 description: Suggest an idea for this project
-labels: [ "enhancement" ]
-assignees: [ jbsparrow ]
+labels: ["enhancement"]
 title: "[FEATURE] <enter a title for your feature here>"
 name: Feature Request

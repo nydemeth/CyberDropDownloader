@@ -66,6 +66,5 @@ body:
     type: textarea
 description: File a bug report
 labels: ["bug"]
-assignees: [jbsparrow]
 title: "[BUG] <enter a bug description here>"
 name: Bug Report
