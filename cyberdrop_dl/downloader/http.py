@@ -81,12 +81,15 @@ class Capacity:
             return False
         return self.waiting > max((self.limit * 1.2), self.limit + 10)
 
+    def has_capacity(self) -> bool:
+        return self.limit is None or self.waiting <= self.limit
+
     async def _wait(self) -> None:
-        if self.limit is None or self.waiting <= self.limit:
+        if self.has_capacity():
             return
 
         async with self.condition:
-            await self.condition.wait()
+            await self.condition.wait_for(self.has_capacity)
 
     async def wait(self, domain: str) -> None:
         overloaded = self.overloaded
@@ -200,9 +203,9 @@ class Downloader:
         self.capacity.waiting += 1
         async with self.lock(media_item.real_url):
             self._processed_items.add(media_item.db_path)
-            async with self.capacity.condition:
-                self.capacity.condition.notify()
             self.capacity.waiting -= 1
+            async with self.capacity.condition:
+                self.capacity.condition.notify_all()
             yield
 
     async def __download_file(self, media_item: MediaItem) -> bool | None:  # noqa: C901
@@ -293,6 +296,7 @@ class Downloader:
 
         if media_item.downloaded:
             await self._compute_hashes(media_item)
+            self.manager.add_completed(media_item)
 
     async def _file(self, media_item: MediaItem) -> None:
         if not await self._download(media_item):
@@ -354,8 +358,6 @@ class Downloader:
             await compute_in_place_hash(self.manager.hasher, media_item)
         except Exception:
             logger.exception("Unable to compute hashes of '%s'", media_item.path)
-        finally:
-            self.manager.add_completed(media_item)
 
 
 async def _merge_streams(media_item: MediaItem, streams: hls.Streams) -> None:
