@@ -15,13 +15,13 @@ if TYPE_CHECKING:
 
 
 def test_downloader_creation(manager: Manager) -> None:
-    downloader = Downloader(manager)
+    downloader = Downloader(manager, domain="no_crawler")
     assert type(downloader.slots) is int
     assert downloader.slots > 0
 
 
 def test_changing_downloader_limit(manager: Manager) -> None:
-    downloader = Downloader(manager)
+    downloader = Downloader(manager, domain="no_crawler")
     assert downloader.slots == 5
     assert downloader._semaphore._value == 5
     downloader.slots = 3
@@ -30,7 +30,7 @@ def test_changing_downloader_limit(manager: Manager) -> None:
 
 
 async def test_changing_downloader_limit_after_usage_raises_error(manager: Manager) -> None:
-    downloader = Downloader(manager)
+    downloader = Downloader(manager, domain="no_crawler")
     await downloader._semaphore.acquire()
     with pytest.raises(RuntimeError, match="Downloader is already in use"):
         downloader.slots = 3
