@@ -8,7 +8,7 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any, Self, final
 
-from cyberdrop_dl import __version__, aio, dependencies, env, ffmpeg, stats
+from cyberdrop_dl import __version__, aio, constants, dependencies, env, ffmpeg, stats
 from cyberdrop_dl.cache import cache_context
 from cyberdrop_dl.clients.downloads import DownloadClient
 from cyberdrop_dl.clients.http import HTTPClient
@@ -136,8 +136,15 @@ class Manager:
 
     def __print_stats(self, scrape_stats: ScrapeStats) -> None:
 
-        elapsed = dt.timedelta(seconds=int(time.monotonic() - scrape_stats.start_time))
-        total_data_written = bytesize_to_str(self.scrape_mapper.tui.downloads.bytes_downloaded)
+        scrape_time = time.monotonic() - scrape_stats.start_time
+        startup_time = scrape_stats.start_time - constants.START_TIME
+
+        def format_td(seconds: float) -> str:
+            seconds, millis = divmod(seconds, 1)
+            formatted = str(dt.timedelta(seconds=seconds))
+            if millis:
+                formatted += f"{str(millis)[1:5]}"
+            return formatted
 
         logger.info("Run Stats:", extra={"color": "cyan"})
         logger.info(f"  Config file: {self.config.source}")
@@ -145,8 +152,10 @@ class Manager:
         logger.info(f"  URLs: {scrape_stats.count:,}")
         logger.info(f"  URL groups: {len(scrape_stats.unique_groups):,}")
         logger.info(f"  Logs folder: {self.config.logs.effective_log_folder}")
-        logger.info(f"  Total runtime: {elapsed}")
-        logger.info(f"  Total downloaded data: {total_data_written}")
+        logger.info(
+            f"  Total runtime: {format_td(scrape_time + startup_time)} (startup: {startup_time:.03f}s, scrape: {format_td(scrape_time)})",
+        )
+        logger.info("  Total downloaded data: %s", bytesize_to_str(self.scrape_mapper.tui.downloads.bytes_downloaded))
 
         if scrape_stats.domain_stats:
             log_spacer()
