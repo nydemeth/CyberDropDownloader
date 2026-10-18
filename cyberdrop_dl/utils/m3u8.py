@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import logging
-import struct
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, Self
 
@@ -193,8 +192,13 @@ class HLSKey:
     @classmethod
     def parse(cls, seg: m3u8.model.Segment | m3u8.model.InitializationSection, idx: int) -> Self | None:
         if isinstance(seg, m3u8.model.Segment) and seg.key and seg.key.method and seg.key.method != "NONE":
-            iv = bytes.fromhex(seg.key.iv.removeprefix("0x")) if seg.key.iv else struct.pack(">8xq", idx)
             assert seg.key.uri
+            if seg.key.iv:
+                iv = bytes.fromhex(seg.key.iv.removeprefix("0x"))
+            else:
+                media_sequence = seg.media_sequence if seg.media_sequence is not None else idx
+                iv = media_sequence.to_bytes(16, "big")
+
             return cls(
                 method=Encryption(seg.key.method),
                 iv=iv,
