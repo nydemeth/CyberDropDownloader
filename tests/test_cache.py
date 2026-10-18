@@ -38,7 +38,7 @@ def test_cache_file_is_saved_in_ctx(tmp_path: Path) -> None:
         assert cache_file.is_file()
 
     assert cache_file.is_file()
-    assert json.loads(cache_file.read_text()) == {"test": 1, "version": __version__}
+    assert json.loads(cache_file.read_text(encoding="utf8")) == {"test": 1, "version": __version__}
 
 
 def test_ttl_cache_creation() -> None:

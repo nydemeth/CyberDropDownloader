@@ -26,6 +26,7 @@
     ],
     "env": {
       "PYTHONASYNCIODEBUG": "1",
+      "PYTHONWARNDEFAULTENCODING": "1",
       "CDL_ENABLE_TWITTER": "true",
     },
   },
@@ -52,6 +53,7 @@
     ],
     "env": {
       "PYTHONASYNCIODEBUG": "1",
+      "PYTHONWARNDEFAULTENCODING": "1",
       "CDL_ENABLE_TWITTER": "true",
     },
   },

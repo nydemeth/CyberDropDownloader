@@ -43,7 +43,7 @@ class Files:
     def update() -> None:
         import json
 
-        Files.SCHEMA.write_text(json.dumps(Config.model_json_schema(), indent=2, ensure_ascii=False))
+        Files.SCHEMA.write_text(json.dumps(Config.model_json_schema(), indent=2, ensure_ascii=False), encoding="utf8")
         Config().save_to(Files.DEFAULT)
 
 
@@ -211,7 +211,7 @@ def _load_yaml(file: Path) -> dict[str, Any]:
     import yaml
 
     try:
-        return yaml.safe_load(file.read_text()) or {}
+        return yaml.safe_load(file.read_text(encoding="utf8")) or {}
     except yaml.YAMLError as e:
         raise CDLConfigRuntimeErrorsGroup("Invalid YAML file", (InvalidYamlError(file, e),)) from None
 

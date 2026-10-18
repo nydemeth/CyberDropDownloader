@@ -162,7 +162,7 @@ async def test_only_partial_files_are_discarded(tmp_path: Path) -> None:
     folder = tmp_path / "video"
     folder.mkdir()
     (folder / "00001.cdl_hls").write_bytes(b"segment")
-    (folder / "notes.txt").write_text("not ours")
+    (folder / "notes.txt").write_text("not ours", encoding="utf8")
     await hls._discard_stale_segments(folder, "playlist-a")
     assert not (folder / "00001.cdl_hls").exists()
-    assert (folder / "notes.txt").read_text() == "not ours"
+    assert (folder / "notes.txt").read_text(encoding="utf8") == "not ours"

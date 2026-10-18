@@ -40,7 +40,7 @@ def _stat_raises(target: Path, error: OSError) -> Generator[None]:
 
 async def _add_file(database: Database, file: Path) -> None:
     file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(file.name)
+    file.write_text(file.name, encoding="utf8")
     await database.hash.insert_or_update_hash_db(_HASH, "md5", file, file.name, _REFERER)
 
 
@@ -66,7 +66,7 @@ async def database(running_manager: Manager) -> Database:
 @pytest.fixture
 def txt_file(tmp_cwd: Path) -> Path:
     file = tmp_cwd / "text_file.txt"
-    file.write_text("12345")
+    file.write_text("12345", encoding="utf8")
     return file
 
 

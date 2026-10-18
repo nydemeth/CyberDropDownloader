@@ -286,7 +286,7 @@ def test_config_from_file(tmp_cwd: Path) -> None:
 @pytest.mark.skipif(os.name == "nt", reason="pydantic can't generate schema w pathlib.WindowsPath defaults")
 def test_schema_has_not_changed() -> None:
     schema = Config.model_json_schema()
-    expected_schema = json.loads(Files.SCHEMA.read_text())
+    expected_schema = json.loads(Files.SCHEMA.read_text(encoding="utf8"))
     assert schema == expected_schema, "Validation schema changed"
 
 
@@ -301,7 +301,7 @@ def test_round_trip_parsed_the_same_config() -> None:
 @pytest.mark.skipif(os.name == "nt", reason="OS separators make paths different on Windows")
 def test_config_default_has_not_changed() -> None:
     config = Config().model_dump(mode="json")
-    expected = yaml.safe_load(Files.DEFAULT.read_text())
+    expected = yaml.safe_load(Files.DEFAULT.read_text(encoding="utf8"))
     assert config == expected, "Config serialization changed"
 
 

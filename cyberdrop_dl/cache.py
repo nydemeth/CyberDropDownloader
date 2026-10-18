@@ -48,14 +48,14 @@ def _load_cache(content: str) -> dict[str, Any]:
 
 def _dump_cache(cache_file: Path, cache: dict[str, Any]):
     cache["version"] = __version__
-    cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True))
+    cache_file.write_text(json.dumps(cache, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf8")
 
 
 @contextlib.contextmanager
 def cache_context(cache_file: Path, cache: dict[str, Any]) -> Generator[None]:
     # TODO: Add a background task to dump cache to disk every 5 minutes
     try:
-        content = cache_file.read_text()
+        content = cache_file.read_text(encoding="utf8")
     except FileNotFoundError:
         cache_file.parent.mkdir(exist_ok=True, parents=True)
         cache_file.touch()

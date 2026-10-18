@@ -141,7 +141,7 @@ async def _discard_stale_segments(folder: Path, playlist_id: str) -> None:
     were part of this one"""
     marker = folder / _PLAYLIST_FILE
     try:
-        previous_id = await aio.read_text(marker)
+        previous_id = await aio.read_text(marker, encoding="utf8")
     except FileNotFoundError:
         previous_id = None
 
@@ -153,7 +153,7 @@ async def _discard_stale_segments(folder: Path, playlist_id: str) -> None:
         await asyncio.to_thread(rm_partial_files, folder)
 
     await aio.mkdir(folder, parents=True, exist_ok=True)
-    await aio.write_text(marker, playlist_id)
+    await aio.write_text(marker, playlist_id, encoding="utf8")
 
 
 def _check_segments(m3u8: M3U8) -> None:

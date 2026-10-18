@@ -19,7 +19,7 @@ _HASH = "a5aec63d0fef8660b00570f23be727e9"
 @pytest.fixture
 def txt_file(tmp_path: Path) -> Path:
     file = tmp_path / "text_file.txt"
-    file.write_text("12345")
+    file.write_text("12345", encoding="utf8")
     return file
 
 
@@ -131,7 +131,7 @@ async def _seed_duplicates(manager: Manager, base_dir: Path, *names: str) -> tup
     for name in names:
         file = base_dir / name
         file.parent.mkdir(parents=True, exist_ok=True)
-        _ = file.write_text("same content")
+        _ = file.write_text("same content", encoding="utf8")
         await manager.database.hash.insert_or_update_hash_db(_HASH, "xxh128", file, None, None)
         files.append(file)
 
@@ -176,7 +176,7 @@ class TestDedupeRun:
 
     async def test_writes_the_csv_log(self, case: _DedupeCase) -> None:
         await case.run()
-        assert case.csv_file.read_text("utf8").splitlines() == [
+        assert case.csv_file.read_text(encoding="utf8").splitlines() == [
             '"duplicate","original","hash"',
             f'"{case.duplicate}","{case.original}","xxh128:{_HASH}"',
         ]
@@ -190,7 +190,7 @@ class TestDedupeRun:
         await deduper.run(file_hashes)
 
         original, *duplicates = files
-        header, *rows = deduper.csv_files.dedupe.read_text("utf8").splitlines()
+        header, *rows = deduper.csv_files.dedupe.read_text(encoding="utf8").splitlines()
         assert header == '"duplicate","original","hash"'
         assert sorted(rows) == sorted(f'"{dupe}","{original}","xxh128:{_HASH}"' for dupe in duplicates)
 

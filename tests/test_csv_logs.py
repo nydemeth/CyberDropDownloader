@@ -39,7 +39,7 @@ async def test_delete_old_logs_removes_a_stale_dedupe_log(tmp_cwd: Path) -> None
     config.logs.resolve_filenames(tmp_cwd)
     stale_log = config.logs.files.dedupe
     stale_log.parent.mkdir(parents=True, exist_ok=True)
-    _ = stale_log.write_text("from a previous run")
+    _ = stale_log.write_text("from a previous run", encoding="utf8")
 
     async with asyncio.TaskGroup() as task_group:
         CSVLogsManager(CSVFiles.from_config(config), task_group).delete_old_logs()
@@ -66,10 +66,10 @@ class TestWriteToCsv:
         file = tmp_path / "subfolder" / "errors.csv"
         file.parent.mkdir()
         header = "<<TEST_HEADER>>"
-        file.write_text(header + "\n")
+        file.write_text(header + "\n", encoding="utf8")
         _write_to_csv(file, row, write_headers=False)
 
-        lines = file.read_text().splitlines()
+        lines = file.read_text(encoding="utf8").splitlines()
         assert len(lines) == 2
         assert lines[0] == header
         assert lines[1] == '"https://example.com","URLs.txt"'
@@ -77,12 +77,12 @@ class TestWriteToCsv:
     def test_write_headers_true(self, tmp_path: Path, row: dict[str, object]) -> None:
         file = tmp_path / "subfolder" / "errors.csv"
         _write_to_csv(file, row, write_headers=True)
-        assert file.read_text().splitlines()[0] == '"url","origin"'
+        assert file.read_text(encoding="utf8").splitlines()[0] == '"url","origin"'
 
     def test_write_headers_false(self, tmp_path: Path, row: dict[str, object]) -> None:
         file = tmp_path / "errors.csv"
         _write_to_csv(file, row, write_headers=False)
-        assert file.read_text().splitlines()[0] == '"https://example.com","URLs.txt"'
+        assert file.read_text(encoding="utf8").splitlines()[0] == '"https://example.com","URLs.txt"'
 
     def test_row_w_various_data_types(self, tmp_path: Path) -> None:
         file = tmp_path / "subfolder" / "errors.csv"

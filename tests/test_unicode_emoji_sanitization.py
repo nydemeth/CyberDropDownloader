@@ -27,10 +27,10 @@ def test_sanitization_must_keep_other_languages_chars(name: str) -> None:
 @pytest.mark.xfail
 def test_unicode9_filename_raise_os_error(tmp_path: Path) -> None:
     with pytest.raises(OSError):
-        tmp_path.joinpath(INVALID_UNICODE9_STRING).with_suffix(".txt").write_text("OK")
+        tmp_path.joinpath(INVALID_UNICODE9_STRING).with_suffix(".txt").write_text("OK", encoding="utf8")
 
 
 @pytest.mark.parametrize("name", [INVALID_UNICODE9_STRING, *FOREIGN_LENGUAGE_STRINGS])
 def test_sanitized_filename_do_not_raise_os_errors(name: str, tmp_path: Path) -> None:
     filename = sanitize_filename(name)
-    tmp_path.joinpath(filename).with_suffix(".txt").write_text("OK")
+    tmp_path.joinpath(filename).with_suffix(".txt").write_text("OK", encoding="utf8")

@@ -6,7 +6,7 @@ import pytest
 
 from cyberdrop_dl.utils import css, next_js
 
-TEST_HTML = (Path(__file__).parent / "nextjsv13.html").read_text()
+TEST_HTML = (Path(__file__).parent / "nextjsv13.html").read_text(encoding="utf8")
 TEST_SOUP = css.soup(TEST_HTML)
 
 

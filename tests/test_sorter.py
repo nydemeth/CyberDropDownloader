@@ -79,31 +79,31 @@ class TestHaveSameContent:
 class TestMoveFile:
     def test_same_file_returns_immediately(self, tmp_path: Path) -> None:
         foo = tmp_path / "foo.txt"
-        foo.write_text("x")
+        foo.write_text("x", encoding="utf8")
         assert _move_file(foo, foo) == foo
         assert foo.exists()
 
     def test_simple_move(self, tmp_path: Path) -> None:
         src = tmp_path / "foo.txt"
-        src.write_text("data")
+        src.write_text("data", encoding="utf8")
         dst = tmp_path / "sub" / "bar.txt"
         out = _move_file(src, dst)
         assert out == dst
         assert not src.exists()
-        assert dst.read_text() == "data"
+        assert dst.read_text(encoding="utf8") == "data"
 
     def test_name_collision_same_size_diferent_content(self, tmp_path: Path) -> None:
         src = tmp_path / "foo.txt"
-        src.write_text("abc")
+        src.write_text("abc", encoding="utf8")
         dst = tmp_path / "bar.txt"
-        dst.write_text("123")
+        dst.write_text("123", encoding="utf8")
         out = _move_file(src, dst)
 
         assert out
         assert out != dst
         assert not src.exists()
-        assert dst.read_text() == "123"
-        assert out.read_text() == "abc"
+        assert dst.read_text(encoding="utf8") == "123"
+        assert out.read_text(encoding="utf8") == "abc"
 
     def test_name_collision_different_size(self, tmp_path: Path) -> None:
         src = tmp_path / "foo.jpg"
@@ -118,17 +118,17 @@ class TestMoveFile:
 
     def test_custom_incrementer_format(self, tmp_path: Path) -> None:
         src = tmp_path / "foo.log"
-        src.write_text("a")
+        src.write_text("a", encoding="utf8")
         dest = tmp_path / "bar.log"
-        dest.write_text("x")
+        dest.write_text("x", encoding="utf8")
         for i in range(1, 4):
-            (tmp_path / f"bar_{i}.log").write_text("x")
+            (tmp_path / f"bar_{i}.log").write_text("x", encoding="utf8")
         out = _move_file(src, dest, incrementer_format="_{i}")
         assert out == tmp_path / "bar_4.log"
 
     def test_max_retries_exceeded(self, tmp_path: Path) -> None:
         src = tmp_path / "foo.txt"
-        src.write_text("x")
+        src.write_text("x", encoding="utf8")
         dest = tmp_path / "bar.txt"
         dest.touch()
         for i in range(1, 12):
@@ -139,7 +139,7 @@ class TestMoveFile:
 
     def test_os_error_during_move_cancels_it(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         src = tmp_path / "foo.txt"
-        src.write_text("x")
+        src.write_text("x", encoding="utf8")
         dst = tmp_path / "bar.txt"
 
         def boom(*_: object, **_k: object) -> Never:
@@ -184,7 +184,7 @@ async def test_sorter(tmp_path: Path) -> None:
     for idx, file in enumerate(Files.ALL):
         path = input_dir / file
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(str(idx))
+        path.write_text(str(idx), encoding="utf8")
 
     await sorter.run(disable_tui=True)
     stats = sorter.stats

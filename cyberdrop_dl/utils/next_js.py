@@ -281,8 +281,8 @@ if __name__ == "__main__":
     from pathlib import Path
 
     file = Path(sys.argv[1])
-    soup = css.soup(file.read_text())
+    soup = css.soup(file.read_text(encoding="utf8"))
     flight_data = extract_flight_data(soup)
-    Path("flight_data.txt").write_text(flight_data)
+    Path("flight_data.txt").write_text(flight_data, encoding="utf8")
     decoded = parse(flight_data)
-    Path("flight_data_decoded.json").write_text(json.dumps(decoded, indent=2, ensure_ascii=False))
+    Path("flight_data_decoded.json").write_text(json.dumps(decoded, indent=2, ensure_ascii=False), encoding="utf8")

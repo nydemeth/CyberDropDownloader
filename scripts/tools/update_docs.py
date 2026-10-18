@@ -58,7 +58,7 @@ def _get_help_message() -> str:
 
 def _update_file(file: Path, new_content: str, *, marker: str) -> None:
     new_content = _replace_content(
-        old_content := file.read_text(),
+        old_content := file.read_text(encoding="utf8"),
         marker=marker,
         new_content=new_content,
     )
