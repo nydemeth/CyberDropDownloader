@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import itertools
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import aio
@@ -72,8 +73,17 @@ class FindrCrawler(Crawler):
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
         scrape_item.setup_as_profile("")
         album = await self.api.album(album_id)
-        self.handle_external_links(scrape_item.create_child(self.parse_url(album.original_url)))
-        scrape_item.add_children()
+
+        if album.provider in self.api.COLLECTION_PROVIDERS:
+            children = aio.chain(
+                self.api.collections(album_id), (f.source_link async for f in self.api.album_files(album_id))
+            )
+        else:
+            children = aio.chain.yield_this(album.original_url)
+
+        async for child in children:
+            self.handle_external_links(scrape_item.create_child(self.parse_url(child)))
+            scrape_item.add_children()
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -102,10 +112,26 @@ class FindrAPI(API):
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://findr.to/api")
     COMMON_QUERY_PARAMS: ClassVar[tuple[str, ...]] = "q", "page", "limit", "sort", "mode"
     FILES_QUERY_PARAMS: ClassVar[tuple[str, ...]] = *COMMON_QUERY_PARAMS, "ext"
+    COLLECTION_PROVIDERS: ClassVar[tuple[str, ...]] = ("simpcity",)
 
     async def album(self, album_id: str) -> Album:
         resp = await self.request_json(self.ENTRYPOINT / "albums" / album_id)
         return deserialize(Album, resp)
+
+    async def collections(self, album_id: str) -> AsyncGenerator[AbsoluteHttpURL]:
+        soup = await self.request_soup(self.PRIMARY_URL / "albums" / album_id)
+        for album in FindrCrawler.iter_urls(soup, "[id^='album-'] a[href^='/albums/']"):
+            yield album
+
+    async def album_files(self, album_id: str) -> AsyncGenerator[File]:
+        url = (self.ENTRYPOINT / "albums" / album_id).with_query(limit=100)
+        for page in itertools.count(1):
+            resp = await self.request_json(url.update_query(page=page))
+            for file in resp["files"]:
+                yield deserialize(File, file)
+
+            if resp["total_pages"] <= page:
+                break
 
     async def search_files(self, query: Mapping[str, str]) -> AsyncGenerator[File]:
         query = _filter_query(

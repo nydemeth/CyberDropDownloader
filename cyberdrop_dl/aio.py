@@ -120,6 +120,11 @@ class _AsyncChain:
             async for value in a_iterable:
                 yield value
 
+    @staticmethod
+    async def yield_this[T](*items: T) -> AsyncGenerator[T]:
+        for item in items:
+            yield item
+
 
 chain = _AsyncChain()
 
