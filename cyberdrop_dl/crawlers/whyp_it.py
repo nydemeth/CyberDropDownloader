@@ -53,7 +53,7 @@ class WhypItCrawler(Crawler):
     @error_handling_wrapper
     async def user(self, scrape_item: ScrapeItem, user_id: str) -> None:
         pages = self.api.user_tracks(user_id)
-        tracks = tuple(await aio.next(pages))
+        tracks = tuple(await aio.async_next(pages))
         title = self.create_title(tracks[0].user)
         scrape_item.setup_as_profile(title)
         self._iter_tracks(scrape_item, tracks)

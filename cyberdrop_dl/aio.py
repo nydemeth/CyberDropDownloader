@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import builtins
 import contextlib
 import dataclasses
 import sys
@@ -121,24 +120,28 @@ class _AsyncChain:
                 yield value
 
     @staticmethod
-    async def yield_this[T](*items: T) -> AsyncGenerator[T]:
-        for item in items:
-            yield item
+    def yield_this[T](*items: T) -> AsyncGenerator[T]:
+        return to_async_iterable(items)
+
+
+async def to_async_iterable[T](items: Iterable[T]) -> AsyncGenerator[T]:
+    for item in items:
+        yield item
 
 
 chain = _AsyncChain()
 
 
-async def next[T](async_iterator: AsyncIterator[T]) -> T:
+async def async_next[T](async_iterator: AsyncIterator[T]) -> T:
     try:
-        return await builtins.anext(async_iterator)
+        return await anext(async_iterator)
     except StopAsyncIteration as e:
         raise e.__cause__ or e from None
 
 
 async def peek_first[T](async_iterable: AsyncIterable[T], /) -> tuple[T, AsyncGenerator[T, None]]:
     async_iterator = aiter(async_iterable)
-    first = await next(async_iterator)
+    first = await async_next(async_iterator)
 
     async def replay_gen():
         yield first
@@ -237,7 +240,7 @@ class AsyncIteratorWrapper[T]:
     async def __anext__(self) -> T:
         if self._iterator is None:
             self._iterator = iter(await self._coro)
-        value = await asyncio.to_thread(builtins.next, self._iterator, MISSING)
+        value = await asyncio.to_thread(next, self._iterator, MISSING)
         if value is MISSING:
             raise StopAsyncIteration from None
 
@@ -423,7 +426,7 @@ async def map_tuples[*Ts, R](
         while True:
             await semaphore.acquire()
             try:
-                idx, params = builtins.next(pending)
+                idx, params = next(pending)
             except StopIteration:
                 semaphore.release()
                 break
@@ -454,7 +457,7 @@ async def as_completed[*Ts, R](
     async def worker() -> None:
         while not shutdown.is_set():
             try:
-                args = builtins.next(params)
+                args = next(params)
             except StopIteration:
                 return
 
