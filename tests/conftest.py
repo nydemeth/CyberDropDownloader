@@ -10,7 +10,6 @@ from cyberdrop_dl.manager import Manager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
-    from pathlib import Path
 
 if TYPE_CHECKING:
 
@@ -51,6 +50,19 @@ def pytest_collection_modifyitems(config: PyTestConfig, items: list[pytest.Item]
     if deselected_tests:
         config.hook.pytest_deselected(items=deselected_tests)
         items[:] = selected_tests
+
+
+def pytest_sessionstart(session: object) -> None:  # noqa: ARG001
+    import shutil
+    import tempfile
+
+    tmp_root = Path(tempfile.gettempdir())
+    free = shutil.disk_usage(tmp_root).free
+
+    required = 1e9
+    if tmp_root == Path("/tmp") and free < required:  # noqa: S108
+        print(f"\n  Warning: Only {free // required}MB free in {tmp_root}")
+        print("Consider running with: TMPDIR=/var/tmp/pytest\n")
 
 
 @pytest.fixture(autouse=True)

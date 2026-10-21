@@ -199,7 +199,7 @@ class TestPruneCommand:
 
         return aio.run(read())
 
-    def test_removes_rows_of_deleted_files(self, capsys: pytest.CaptureFixture[str], tmp_cwd: Path) -> None:
+    def test_removes_rows_of_deleted_files(self, logs: pytest.LogCaptureFixture, tmp_cwd: Path) -> None:
         db_file, kept, gone = tmp_cwd / "test.db", tmp_cwd / "kept.txt", tmp_cwd / "gone.txt"
         self._seed(db_file, kept, gone)
         gone.unlink()
@@ -207,7 +207,7 @@ class TestPruneCommand:
         exit_code = run_cdl(["database", "prune", "hashes", "--database-file", str(db_file)])
 
         assert exit_code == 0
-        assert "Deleted: 1 hash entries" in capsys.readouterr().out
+        assert "Deleted: 1 hash entries" in set(map(str.strip, logs.messages))
         assert self._read(db_file, "files") == {"kept.txt"}
         assert self._read(db_file, "hash") == {"kept.txt"}
 

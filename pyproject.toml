@@ -1,6 +1,6 @@
 [project]
 name = "cyberdrop-dl-patched"
-version = "10.12.1"
+version = "10.13.0dev0"
 authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -86,7 +86,7 @@ requires = ["uv_build>=0.13.0,<0.14.0"]
 
 [dependency-groups]
 dev = [
-    "prek>=0.5.5",
+    "prek>=0.5.7",
     "pytest-asyncio>=1.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.1,<0.18.0"
@@ -135,6 +135,8 @@ markers = [
 minversion = "9.1.1"
 strict_config = true
 strict_markers = true
+tmp_path_retention_count = "0"
+tmp_path_retention_policy = "failed"
 
 [tool.ruff]
 line-length = 120
