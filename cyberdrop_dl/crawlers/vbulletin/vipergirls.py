@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @HTTPConfig(rate_limit=(4, 1))
 class ViperGirlsCrawler(vBulletinCrawler):
-    login_required: ClassVar[bool] = False
+    login_required: ClassVar[bool | None] = False
     LOGIN_USER_COOKIE_NAME: ClassVar[str] = "vg_password"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vipergirls.to")
     DOMAIN: ClassVar[str] = "vipergirls.to"

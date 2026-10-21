@@ -165,7 +165,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
 
     THREAD_PART_NAMES: ClassVar[Sequence[str]] = "thread", "topic", "tema", "threads", "topics", "temas"
     ATTACHMENT_URL_PARTS: ClassVar[tuple[str, ...]] = "attachments", "data", "uploads"
-    ATTACHMENT_HOSTS: ClassVar[Sequence[str]] = ()
+    ATTACHMENT_HOSTS: ClassVar[tuple[str, ...]] = ()
     SUPPORTS_THREAD_RECURSION: ClassVar[bool] = False
     LOGIN_USER_COOKIE_NAME: ClassVar[str] = ""
 

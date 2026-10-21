@@ -405,8 +405,8 @@ def test_resolve_lazy_iframes() -> None:
                 </a>
             </div>""",
             [
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0002b2b2fa9a5390f521.md.jpg",
-                "https://simp6.jpg5.su/images3/issfanfan-20250129-0001ef763780833ed714.md.jpg",
+                "https://jpg5.su/img/aqDYT6c",
+                "https://jpg5.su/img/aqDYZAt",
             ],
         ),
     ],
