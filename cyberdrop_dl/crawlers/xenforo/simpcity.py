@@ -17,6 +17,6 @@ class SimpCityCrawler(XenforoCrawler):
     DOMAIN: ClassVar[str] = "simpcity"
     FOLDER_DOMAIN: ClassVar[str] = "SimpCity"
     LOGIN_USER_COOKIE_NAME: ClassVar[str] = "ogaddgmetaprof_user"
-    login_required: bool = False
-    IGNORE_EMBEDED_IMAGES_SRC: ClassVar[bool] = False
+    login_required: ClassVar[bool | None] = False
+    IGNORE_EMBEDED_IMAGES_SRC: ClassVar[bool] = True
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("simpcity.su",)
