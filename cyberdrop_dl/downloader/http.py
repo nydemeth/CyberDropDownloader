@@ -165,7 +165,7 @@ class Downloader:
     async def __download_w_retries(self, media_item: MediaItem) -> bool:
         while True:
             try:
-                return bool(await self.__download_file(media_item))
+                return bool(await self._download_file(media_item))
 
             except DownloadError as e:
                 if not self.SUPPORTS_RETRIES or not e.retry or media_item.attempts >= self.config.downloads.attempts:
@@ -211,7 +211,7 @@ class Downloader:
             await self.capacity.notify()
             yield
 
-    async def __download_file(self, media_item: MediaItem) -> bool | None:  # noqa: C901
+    async def _download_file(self, media_item: MediaItem) -> bool | None:  # noqa: C901
         _check_url(media_item)
         media_item.attempts += 1
         try:

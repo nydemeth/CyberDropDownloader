@@ -239,6 +239,15 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     def check_host_match(cls, host: str) -> bool:
         return bool(host)
 
+    def _build_downloader[T: Downloader](self, cls: type[T] = Downloader) -> T:
+        assert self.__dl_config__.server_lock is not None
+        return cls(
+            self.manager,
+            use_server_lock=self.__dl_config__.server_lock,
+            slots=self.__dl_config__.slots,
+            domain=self.FOLDER_DOMAIN,
+        )
+
     @final
     def __init__(self, manager: Manager, task_mng: aio.TaskManager, tui: ScrapingUI) -> None:
         self.manager: Manager = manager
@@ -251,13 +260,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
         self.config: Config = manager.config
         self.client: HTTPClient = manager.http_client
         _CHECK_DL_CAPACITY.set(self.config.downloads.back_pressure)
-        assert self.__dl_config__.server_lock is not None
-        self.downloader: Downloader = Downloader(
-            manager,
-            use_server_lock=self.__dl_config__.server_lock,
-            slots=self.__dl_config__.slots,
-            domain=self.FOLDER_DOMAIN,
-        )
+
+        self.downloader: Downloader = self._build_downloader()
 
         self.__http_ctx__: HTTPContext = HTTPContext.build(self.DOMAIN, self.__http_config__, self.__throttle)
         try:
