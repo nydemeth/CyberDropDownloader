@@ -25,13 +25,28 @@ def merge(main_db: SQLiteFile, /, attach_db: SQLiteFile) -> None:
     try:
         cursor.execute("PRAGMA foreign_keys = OFF;")
         cursor.execute('ATTACH DATABASE ? AS "b";', (str(attach_db),))
+
         with conn:
             for table in ("media", "files", "hash"):
-                cursor.execute(f"INSERT OR IGNORE INTO {table} SELECT * FROM b.{table};")  # noqa: S608
+                cursor.execute(f'PRAGMA b.table_info("{table}");')
+                attach_columns = {row[1] for row in cursor.fetchall()}
+
+                cursor.execute(f'PRAGMA main.table_info("{table}");')
+                columns = [col for row in cursor.fetchall() if (col := row[1]) in attach_columns]
+
+                if not columns:
+                    continue
+
+                column_list = ", ".join('"' + column.replace('"', '""') + '"' for column in columns)
+
+                cursor.execute(
+                    f'INSERT OR IGNORE INTO main."{table}" ({column_list}) SELECT {column_list} FROM b."{table}";'  # noqa: S608
+                )
 
         conn.commit()
         cursor.execute("PRAGMA foreign_keys = ON;")
-        logger.info("Running 'VACUMM' on main_db ('%s')", main_db)
+
+        logger.info("Running 'VACUUM' on main_db ('%s')", main_db)
         conn.execute("VACUUM;")
         logger.info("DONE")
     finally:
