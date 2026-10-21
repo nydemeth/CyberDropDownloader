@@ -101,7 +101,7 @@ def _extract_video(soup: BeautifulSoup) -> Video:
     return Video(
         title=title,
         dvd_code=dvd_code,
-        release_date=open_graph.get("video_release_date", soup) or css.select(soup, Selector.DATE, "datetime"),
+        release_date=open_graph.get_video_release_date(soup) or css.select(soup, Selector.DATE, "datetime"),
         m3u8_uuid=_extract_uuid(soup),
     )
 

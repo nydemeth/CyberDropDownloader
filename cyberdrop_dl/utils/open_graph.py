@@ -14,11 +14,15 @@ if TYPE_CHECKING:
 _REQUIRED_ATTRS: Final = ("title", "type", "image", "url", "description")
 
 
-def _make_selector(name: str) -> str:
-    return f'meta[property^="og:{name}"][content], meta[name^="og:{name}"][content]'
+def _og_selector(name: str) -> str:
+    return _meta_selector(f"og:{name}")
 
 
-_ALL = _make_selector("")
+def _meta_selector(name: str) -> str:
+    return f'meta[property^="{name}"][content], meta[name^="{name}"][content]'
+
+
+_OG_SELECTOR = _og_selector("")
 
 
 class OpenGraphError(ScrapeError):
@@ -45,10 +49,10 @@ class OpenGraph(dict[str, str | None]):
         return all(self.get(attr) for attr in _REQUIRED_ATTRS)
 
 
-def parse(soup: bs4.BeautifulSoup) -> OpenGraph:
+def parse(soup: bs4.Tag) -> OpenGraph:
     """Extracts Open Graph (og) properties from soup."""
     og_props = OpenGraph()
-    for meta in soup.select(_ALL):
+    for meta in soup.select(_OG_SELECTOR):
         if value := _get_attr(meta, "content"):
             try:
                 name = _get_attr(meta, "property")
@@ -64,8 +68,13 @@ def parse(soup: bs4.BeautifulSoup) -> OpenGraph:
     return og_props
 
 
-def get(name: str, /, soup: bs4.BeautifulSoup) -> str | None:
-    if meta := soup.select_one(_make_selector(name)):
+def get(name: str, /, soup: bs4.Tag) -> str | None:
+    if meta := soup.select_one(_og_selector(name)):
+        return _get_attr(meta, "content")
+
+
+def meta_get(name: str, /, soup: bs4.Tag) -> str | None:
+    if meta := soup.select_one(_meta_selector(name)):
         return _get_attr(meta, "content")
 
 
@@ -75,11 +84,11 @@ def _get_attr(meta: bs4.Tag, name: str) -> str:
     return value.strip()
 
 
-def _make_parsers(name: str) -> tuple[Callable[[bs4.BeautifulSoup], str], Callable[[bs4.BeautifulSoup], str | None]]:
-    def get_value(soup: bs4.BeautifulSoup) -> str | None:
+def _make_parsers(name: str) -> tuple[Callable[[bs4.Tag], str], Callable[[bs4.Tag], str | None]]:
+    def get_value(soup: bs4.Tag) -> str | None:
         return get(name, soup)
 
-    def _value(soup: bs4.BeautifulSoup) -> str:
+    def _value(soup: bs4.Tag) -> str:
         value = get_value(soup)
         if not value:
             raise OpenGraphError(name)
@@ -92,3 +101,14 @@ video, get_video = _make_parsers("video")
 image, get_image = _make_parsers("image")
 title, get_title = _make_parsers("title")
 description, get_description = _make_parsers("description")
+
+
+def get_video_release_date(soup: bs4.Tag) -> str | None:
+    return get("video:release_date", soup) or meta_get("video:release_date", soup)
+
+
+def video_release_date(soup: bs4.Tag) -> str:
+    value = get_video_release_date(soup)
+    if not value:
+        raise OpenGraphError("video:release_date")
+    return value

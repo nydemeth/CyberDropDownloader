@@ -263,18 +263,12 @@ def extract_kvs_video(cls: Crawler, soup: BeautifulSoup) -> KVSVideo:
 
 
 def _extract_upload_date(soup: BeautifulSoup) -> str | None:
-
     try:
-        return open_graph.get("video:release_date", soup) or css.select(
-            soup, "meta[property='video:release_date']", "content"
-        )
-    except css.SelectorError:
-        try:
-            return json_ld.find_attr(soup, "uploadDate")
-        except (LookupError, ValueError, css.SelectorError):
-            # Human date parsing was removed from parse_date. This fallback
-            # no longer supports relative strings like "2 hours ago".
-            return None
+        return open_graph.get_video_release_date(soup) or json_ld.find_attr(soup, "uploadDate")
+    except (LookupError, ValueError, css.SelectorError):
+        # Human date parsing was removed from parse_date. This fallback
+        # no longer supports relative strings like "2 hours ago".
+        return None
 
 
 # URL de-obfuscation code for kvs, adapted from yt-dlp
