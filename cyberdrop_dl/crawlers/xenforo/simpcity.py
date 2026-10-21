@@ -11,7 +11,7 @@ from .xenforo import XenforoCrawler
 etag.register(etag.ETag("65b7753c-528a", "SC Scrape Image"))
 
 
-@HTTPConfig(rate_limit=(1, 2))
+@HTTPConfig(rate_limit=(1, 20))
 class SimpCityCrawler(XenforoCrawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://simpcity.cr")
     DOMAIN: ClassVar[str] = "simpcity"
