@@ -117,15 +117,17 @@ class Downloader:
 
     @final
     def __init__(
-        self, manager: Manager, slots: int | None = None, *, use_server_lock: bool = False, domain: str
+        self, manager: Manager, slots: int | None = None, *, use_server_lock: bool | int = False, domain: str
     ) -> None:
         self.manager: Manager = manager
-        self.use_server_lock: bool = use_server_lock
+        self.server_slots: int | bool = use_server_lock
         self.capacity: Capacity = Capacity(domain)
         self.config: Config = self.manager.config
         self._processed_items: set[str] = set()
         self._current_attempt_filesize: dict[str, int] = {}
         self._server_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
+
+        self._server_sems: dict[str, asyncio.BoundedSemaphore] = {}
         self._slots: int | None = slots
         self._semaphore: asyncio.Semaphore
         self._set_capacity_limit(slots)
@@ -133,7 +135,7 @@ class Downloader:
 
     def __post_init__(self) -> None: ...
 
-    __repr__ = simple_repr("slots", "use_server_lock", "log_prefix", "capacity", "_semaphore")
+    __repr__ = simple_repr("slots", "server_slots", "log_prefix", "capacity", "_semaphore")
 
     @property
     def tui(self) -> ScrapingUI:
@@ -254,7 +256,16 @@ class Downloader:
 
     @contextlib.asynccontextmanager
     async def lock(self, url: AbsoluteHttpURL) -> AsyncGenerator[None]:
-        server_lock = self._server_locks[url.host] if self.use_server_lock else _NULL_CONTEXT
+        if self.server_slots is True:
+            server_lock = self._server_locks[url.host]
+        elif self.server_slots:
+            try:
+                server_lock = self._server_sems[url.host]
+            except LookupError:
+                server_lock = self._server_sems.setdefault(url.host, asyncio.BoundedSemaphore(self.server_slots))
+        else:
+            server_lock = _NULL_CONTEXT
+
         async with (
             server_lock,
             self._semaphore,

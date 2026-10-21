@@ -185,7 +185,7 @@ class URLConfig(ConfigDataclass):
 class DownloadConfig(ConfigDataclass):
     __attr_name__: ClassVar[str] = "__dl_config__"
     slots: int | None = None
-    server_lock: bool | None = None
+    server_lock: int | bool | None = None
     ignore_content_type: bool | None = None
     impersonate: str | bool | None = None
     delay: float = 0.0
