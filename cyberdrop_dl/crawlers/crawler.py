@@ -188,6 +188,7 @@ class DownloadConfig(ConfigDataclass):
     server_lock: bool | None = None
     ignore_content_type: bool | None = None
     impersonate: str | bool | None = None
+    delay: float = 0.0
 
 
 @URLConfig(trim=True, allow_empty_path=False, ignore_fragment=True)
@@ -633,6 +634,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     ) -> None:
         if self.__dl_config__.impersonate is not None:
             media_item.extra_info["impersonate"] = self.__dl_config__.impersonate
+        if self.__dl_config__.delay:
+            media_item.extra_info["delay"] = self.__dl_config__.delay
 
         try:
             if skip or SKIP_DOWNLOAD.get():

@@ -43,7 +43,7 @@ class Selector:
 
 
 @HTTPConfig(rate_limit=(5, 1))
-@DownloadConfig(server_lock=True)
+@DownloadConfig(server_lock=True, delay=2)
 class BunkrCrawler(Crawler):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ("bunkr",)
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {

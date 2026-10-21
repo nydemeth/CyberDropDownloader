@@ -35,7 +35,7 @@ class PawchiveAPI(KemonoAPI[UserPostModel]):
 
 
 @HTTPConfig(rate_limit=(3, 1), headers={"User-Agent": CDL_USER_AGENT})
-@DownloadConfig(slots=5)
+@DownloadConfig(slots=5, delay=4)
 class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = KemonoBaseCrawler.SUPPORTED_PATHS | {
         "Revision": "/<service>/user/<user_id>/post/<post_id>/revision/<revision_id>",

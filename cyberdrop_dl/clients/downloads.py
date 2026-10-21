@@ -97,7 +97,11 @@ class DownloadClient:
         if byte_range:
             media_item.headers[hdrs.RANGE] = str(byte_range)
 
-        await asyncio.sleep(self.config.downloads.total_delay)
+        delay = self.config.downloads.total_delay
+        if not media_item.is_segment:
+            delay += media_item.extra_info.get("delay", 0)
+
+        await asyncio.sleep(delay)
 
         download_url = await media_item.resolve()
         with enter_context(JSON_CHECK, media_item.json_check):
