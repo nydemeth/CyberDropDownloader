@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from cyberdrop_dl.config.appdata import AppData, AppDirs
-from cyberdrop_dl.crawlers import _forum
 from cyberdrop_dl.crawlers import xenforo as crawlers
 from cyberdrop_dl.crawlers.xenforo import xenforo
 from cyberdrop_dl.crawlers.xenforo.celebforum import CelebForumCrawler
@@ -40,11 +39,11 @@ def _post(
     message_attachments: str = "",
     id: int = 12345,  # noqa: A002
     crawler: type[xenforo.XenforoCrawler] | None = None,
-) -> _forum.ForumPost:
+) -> xenforo.ForumPost:
     crawler = crawler or TEST_CRAWLER
     html = _html(POST_TEMPLATE.format(id=id, message_body=message_body, message_attachments=message_attachments))
     article = css.select(css.soup(html), "article")
-    return _forum.ForumPost.new(article, crawler.SELECTORS.posts)
+    return xenforo.ForumPost.new(article, crawler.SELECTORS.posts)
 
 
 @pytest.fixture(name="manager")
@@ -169,7 +168,7 @@ def post_startup_manager(running_manager: Manager) -> Manager:
 )
 def test_parse_thread(url: str, thread_name_and_id: str, result: tuple[int, str, int, int], canonical_url: str) -> None:
     url_, canonical_url_ = AbsoluteHttpURL(url), AbsoluteHttpURL(canonical_url)
-    result_ = _forum.Thread(*result, canonical_url_)
+    result_ = xenforo.Thread(*result, canonical_url_)
     parsed = TEST_CRAWLER.parse_thread(url_, thread_name_and_id)
     assert result_ == parsed
 
@@ -208,7 +207,7 @@ def test_parse_thread(url: str, thread_name_and_id: str, result: tuple[int, str,
     ],
 )
 def test_clean_link_url(link: str, out: str) -> None:
-    assert _forum.clean_link_str(link) == out
+    assert xenforo.clean_link_str(link) == out
 
 
 @pytest.mark.parametrize(
@@ -275,7 +274,7 @@ def test_clean_link_url(link: str, out: str) -> None:
     ],
 )
 def test_extract_embed_url(input_string: str, expected_output: str) -> None:
-    assert _forum.extract_embed_url(input_string) == expected_output
+    assert xenforo.extract_embed_url(input_string) == expected_output
 
 
 @pytest.mark.xfail  # regex can not handle URLs with commands in it (kvs)
@@ -293,37 +292,37 @@ def test_extract_embed_url(input_string: str, expected_output: str) -> None:
     ],
 )
 def test_extract_embed_url_complex_path(input_string: str, expected_output: str) -> None:
-    assert _forum.extract_embed_url(input_string) == expected_output
+    assert xenforo.extract_embed_url(input_string) == expected_output
 
 
 def test_extract_embed_url_should_extract_only_one_url() -> None:
     input_str = r"first_url \/\/first.com/path second_url \/\/www.second.net/another"
     expected_output = "https://first.com/path"
-    assert _forum.extract_embed_url(input_str) == expected_output
+    assert xenforo.extract_embed_url(input_str) == expected_output
 
 
 def test_extract_embed_url_with_escaped_backslashes_and_double_slashes() -> None:
     input_str = r"some_path\\to\\file\/\/imagepond.net\/clip.mov"
     expected_output = "https://imagepond.net/clip.mov"
-    assert _forum.extract_embed_url(input_str) == expected_output
+    assert xenforo.extract_embed_url(input_str) == expected_output
 
 
 def test_extract_embed_url_absolute_url_no_scheme() -> None:
     input_str = r"\/\/jpg5.su"
     expected_output = r"https://jpg5.su"
-    assert _forum.extract_embed_url(input_str) == expected_output
+    assert xenforo.extract_embed_url(input_str) == expected_output
 
 
 def test_extract_embed_url_should_not_modify_absolute_urls() -> None:
     input_str = r"https://celebforum.to/maps"
     expected_output = "https://celebforum.to/maps"
-    assert _forum.extract_embed_url(input_str) == expected_output
+    assert xenforo.extract_embed_url(input_str) == expected_output
 
 
 def test_extract_embed_url_string_ends_with_url() -> None:
     input_str = r"some text https://www.reddit.com/"
     expected_output = "https://reddit.com/"
-    assert _forum.extract_embed_url(input_str) == expected_output
+    assert xenforo.extract_embed_url(input_str) == expected_output
 
 
 def test_lazy_load_embeds() -> None:
@@ -548,7 +547,7 @@ def test_get_post_title_thread_w_prefixes() -> None:
     </div>
     """)
     soup = css.soup(html)
-    title = _forum.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
+    title = xenforo.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
     assert title == "GunplaMeli"
 
 
@@ -559,7 +558,7 @@ def test_get_post_title_thread_w_no_prefixes() -> None:
     </div>
     """
     soup = css.soup(html)
-    title = _forum.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
+    title = xenforo.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
     assert title == "Staged/Fake Japanese Candid Videos from Gcolle/Pcolle or FC2"
 
 
@@ -567,7 +566,7 @@ def test_get_post_title_no_title_found() -> None:
     html = _html("")
     soup = css.soup(html)
     with pytest.raises(ScrapeError) as exc_info:
-        _forum.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
+        xenforo.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
 
     assert exc_info.value.status == 429
     assert exc_info.value.message == "Invalid response from forum. You may have been rate limited"
@@ -577,7 +576,7 @@ def test_get_post_title_empty_title_block() -> None:
     html = _html("""<h1 class="p-title-value"></h1>""")
     soup = css.soup(html)
     with pytest.raises(ScrapeError):
-        _forum.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
+        xenforo.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
 
 
 def test_get_post_title_non_english_chars() -> None:
@@ -589,7 +588,7 @@ def test_get_post_title_non_english_chars() -> None:
     </div>
     """)
     soup = css.soup(html)
-    title = _forum.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
+    title = xenforo.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
     assert title == "㊙️Hcupりおの極秘えち任務🙊💗 (りお❤️❤️❤️) / りお@Rio / rio_hcup_fantia"
 
 
@@ -604,7 +603,7 @@ def test_get_post_title_should_strip_new_lines() -> None:
     </div>
     """)
     soup = css.soup(html)
-    title = _forum.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
+    title = xenforo.get_post_title(soup, xenforo.XenforoCrawler.SELECTORS)
     assert title == "㊙️Hcupりおの極秘えち任務🙊💗 (りお❤️❤️❤️) / りお@Rio / rio_hcup_fantia"
 
 
