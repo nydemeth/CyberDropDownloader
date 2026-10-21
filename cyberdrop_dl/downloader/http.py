@@ -135,7 +135,7 @@ class Downloader:
 
     def __post_init__(self) -> None: ...
 
-    __repr__ = simple_repr("slots", "server_slots", "log_prefix", "capacity", "_semaphore")
+    __repr__ = simple_repr("slots", "server_slots", "log_prefix", "capacity", "_semaphore", "_server_sems")
 
     @property
     def tui(self) -> ScrapingUI:

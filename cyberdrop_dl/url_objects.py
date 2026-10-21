@@ -146,7 +146,7 @@ class MuxVideo:
 
 
 @final
-@dataclasses.dataclass(slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True, repr=False)
 class MediaItem:
     url: AbsoluteHttpURL
     domain: str
@@ -257,7 +257,7 @@ class RetryInfo:
 
 
 @final
-@dataclasses.dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True, slots=True, repr=False)
 class ScrapeItem:
     url: AbsoluteHttpURL
     part_of_album: bool = False

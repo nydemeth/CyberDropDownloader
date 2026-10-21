@@ -60,7 +60,7 @@ class DownloadClient:
                 upper_limit,
             )
 
-    __repr__ = simple_repr("config", "_supports_ranges", "speed_limiter", "chunk_size")
+    __repr__ = simple_repr("config", "speed_limiter", "chunk_size")
 
     @property
     def http_client(self) -> HTTPClient:
