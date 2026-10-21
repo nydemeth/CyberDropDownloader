@@ -6,7 +6,7 @@ import asyncio
 import dataclasses
 import itertools
 import re
-from typing import TYPE_CHECKING, Any, ClassVar, final
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, final
 
 import yarl
 
@@ -15,6 +15,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.utils import css, extr_text, json_ld, open_graph, parse_url
+from cyberdrop_dl.utils.dataclass import DictDataclass
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -240,6 +241,40 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
                 raise
 
             yield soup
+
+    async def _ajax_pager(
+        self, url: AbsoluteHttpURL, from_params: tuple[str, ...] | str = ("from",), init_page: int = 1
+    ) -> AsyncIterator[BeautifulSoup]:
+        if isinstance(from_params, str):
+            from_params = (from_params,)
+
+        for page in itertools.count(init_page):
+            try:
+                soup = await self.request_soup(url.update_query(dict.fromkeys(from_params, page)))
+            except DownloadError as e:
+                if e.status == 404:
+                    break
+                raise
+
+            yield soup
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class KVSAjaxPagination:
+    block_id: str
+    function: str = "get_block"
+    mode: str = "async"
+    sort_by: str = "post_date"
+    is_private: Literal[0, 1] = 0
+    q: str | None = None
+
+    __iter__ = DictDataclass.__iter__
+
+    def __json__(self) -> dict[str, str | int]:
+        return {k: v for k, v in self if v is not None}
+
+    def __call__(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        return url.update_query(self.__json__())
 
 
 def extract_kvs_video(cls: Crawler, soup: BeautifulSoup) -> KVSVideo:
