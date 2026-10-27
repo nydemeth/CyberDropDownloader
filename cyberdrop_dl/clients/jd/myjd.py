@@ -11,7 +11,7 @@ from cyberdrop_dl.clients.jd import Params, check_resp, prepare_api_json
 from cyberdrop_dl.clients.jd.crypto import compose_token, create_token, decrypt, encrypt, sign_hmac_sha256
 from cyberdrop_dl.clients.jd.types import AddLinksQuery, JDDevice, MyJDSession
 from cyberdrop_dl.constants import CDL_USER_AGENT
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 if TYPE_CHECKING:
@@ -24,13 +24,12 @@ logger = logging.getLogger(__name__)
 _AES_JSON = "application/aesjson; charset=utf-8"
 
 
+@dataclass_repr("connected")
 @dataclasses.dataclass(slots=True)
 class MyJDAPI:
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://api.jdownloader.org")
     client: HTTPClient = dataclasses.field(repr=False)
     _session: MyJDSession | None = dataclasses.field(init=False, default=None, repr=False)
-
-    __repr__ = simple_repr("connected")
 
     @property
     def session(self) -> MyJDSession:

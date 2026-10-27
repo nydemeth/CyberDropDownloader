@@ -140,15 +140,21 @@ class FileExt:
             ".wav",
         }
     )
-    TEXT = frozenset(
+    SUBTITLES = frozenset(
+        {
+            ".vtt",
+            ".sub",
+            ".srt",
+            ".ass",
+        }
+    )
+    TEXT = SUBTITLES | frozenset(
         {
             ".htm",
             ".html",
             ".md",
             ".nfo",
             ".txt",
-            ".vtt",
-            ".sub",
         }
     )
     SEVEN_Z = frozenset(

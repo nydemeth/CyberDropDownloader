@@ -3,6 +3,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import ClassVar, final, override
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.clients import etag
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
@@ -62,10 +63,12 @@ class ImgBoxCrawler(Crawler):
         name = css.select_text(soup, Selector.ALBUM_TITLE).rsplit(" - ", 1)[0]
         scrape_item.setup_as_album(self.create_title(name, album_id), album_id=album_id)
 
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for src in map(_thumb_to_src, self.iter_urls(soup, Selector.IMAGES, "src")):
                 tg.create_task(self.direct_file(scrape_item, src))
                 scrape_item.add_children()
+                await sleep()
 
     @error_handling_wrapper
     async def image(self, scrape_item: ScrapeItem) -> None:

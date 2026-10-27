@@ -15,7 +15,7 @@ from cyberdrop_dl.clients import etag
 from cyberdrop_dl.clients.http import JSON_CHECK, check_http_status
 from cyberdrop_dl.constants import USE_RETRY_PATH, FileExt
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 from cyberdrop_dl.url_objects import ByteRange
 from cyberdrop_dl.utils import dates, enter_context
 
@@ -40,6 +40,7 @@ _SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
 
 
 @final
+@dataclass_repr("config", "speed_limiter", "chunk_size")
 class DownloadClient:
     """Low level class that performs the actual HTTP download operations."""
 
@@ -59,8 +60,6 @@ class DownloadClient:
                 self.chunk_size,
                 upper_limit,
             )
-
-    __repr__ = simple_repr("config", "speed_limiter", "chunk_size")
 
     @property
     def http_client(self) -> HTTPClient:
@@ -515,7 +514,6 @@ def resolve_download_dir(download_folder: Path, config: Config) -> Path:
     if config.subfolders.create or USE_RETRY_PATH.get():
         return download_folder
 
-    while download_folder.parent != config.download_folder:
-        download_folder = download_folder.parent
-
-    return download_folder
+    # Only keep the fist subfolder (if any)
+    subfolders = download_folder.relative_to(config.download_folder).parts
+    return config.download_folder.joinpath(*subfolders[:1])

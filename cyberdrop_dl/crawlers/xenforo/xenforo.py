@@ -25,6 +25,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import b64_pad, css, extr_text, is_blob_or_svg
+from cyberdrop_dl.utils._url import URLDeduper
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -168,7 +169,7 @@ class XenforoCrawler(Crawler, is_abc=True):
             assert getattr(cls, field_name, None), f"Subclass {cls.__name__} must override: {field_name}"
 
     def __post_init__(self) -> None:
-        self.scraped_threads: set[AbsoluteHttpURL] = set()
+        self.scraped_threads: URLDeduper = URLDeduper()
 
     async def __async_post_init__(self) -> None:
         if self.login_required is None:
@@ -338,7 +339,6 @@ class XenforoCrawler(Crawler, is_abc=True):
             return
 
         scrape_item.parent_threads.add(thread.url)
-        self.scraped_threads.add(thread.url)
         await self._thread(scrape_item, thread)
 
     async def _thread(self, scrape_item: ScrapeItem, thread: Thread) -> None:
@@ -396,7 +396,8 @@ class XenforoCrawler(Crawler, is_abc=True):
         scrape_item.append_folders(post_title)
         stats: dict[str, int] = {}
 
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for scraper in (
                 self._attachments,
                 self._images,
@@ -410,9 +411,10 @@ class XenforoCrawler(Crawler, is_abc=True):
                     stats[scraper_name] = stats.get(scraper_name, 0) + 1
                     tg.create_task(self.process_child(scrape_item, url, embeds="embeds" in scraper_name))
                     scrape_item.add_children()
+                    await sleep()
 
         if stats:
-            self.log.info(f"post #{post.id} {stats = }")
+            self.log.info("post #%s stats = %s", post.id, stats)
 
     @classmethod
     def _external_links(cls, post: ForumPost) -> Iterable[str]:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig, auto_task_id
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -43,10 +43,12 @@ class NudoStarTVCrawler(Crawler):
         soup, pages = await aio.peek_first(self.web_pager(scrape_item.url))
         scrape_item.setup_as_album("")
 
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             async for soup in pages:
                 for new_item in self.iter_children(scrape_item, soup, Selector.CONTENT):
-                    tg.create_task(self.image(new_item))
+                    tg.create_task(self._image_task(new_item))
+                    await sleep()
 
     @error_handling_wrapper
     async def image(self, scrape_item: ScrapeItem) -> None:
@@ -57,3 +59,5 @@ class NudoStarTVCrawler(Crawler):
         scrape_item.setup_as_album(self.create_title(css.select_text(soup, ".headline").partition("/")[0]))
         src = self.parse_url(css.select(soup, Selector.IMAGE, "src"))
         await self.direct_file(scrape_item, src)
+
+    _image_task = auto_task_id(image)

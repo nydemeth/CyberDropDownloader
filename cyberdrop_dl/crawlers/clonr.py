@@ -57,9 +57,9 @@ class ClonrCrawler(Crawler):
             return
 
         sleep = aio.periodic_sleep(10)
-        async with self.new_task_group() as tg:
+        async with aio.non_cancelling_taskgroup() as tg:
             for file in files:
-                tg.create_eager_task(self._file(scrape_item, file))
+                tg.create_task(self._file(scrape_item, file))
                 scrape_item.add_children()
                 await sleep()
 

@@ -5,20 +5,19 @@ import base64
 import dataclasses
 import hashlib
 import time
-from typing import TYPE_CHECKING, ClassVar, override
+from typing import ClassVar, override
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
+from cyberdrop_dl.clients.http import HTTPConfig
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import b64_pad, css, extr_text
 from cyberdrop_dl.utils.crypto import aes_cbc_decrypt, aes_unpad
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
-if TYPE_CHECKING:
-    from cyberdrop_dl.constants import HttpMethod
 
-
+@HTTPConfig(probe_method="GET")
 class ArchveCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": (
@@ -33,7 +32,6 @@ class ArchveCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://archve.xyz")
     DOMAIN: ClassVar[str] = "archve"
     NEXT_PAGE_SELECTOR: ClassVar[str] = ".profile-pager a.btn:-soup-contains-own(Next)"
-    _THUMB_HTTP_METHOD: ClassVar[HttpMethod] = "GET"
 
     def __post_init__(self) -> None:
         self.api: ArchveAPI = ArchveAPI.from_crawler(self)
@@ -68,6 +66,8 @@ class ArchveCrawler(Crawler):
         video = await self.api.video(video_id)
         await self._video(scrape_item, video)
 
+    _video_task = auto_task_id(video)
+
     async def _video(self, scrape_item: ScrapeItem, video: Video) -> None:
         try:
             filename, ext = self.get_filename_and_ext(video.title, assume_ext=".mp4")
@@ -99,9 +99,9 @@ class ArchveCrawler(Crawler):
         scrape_item.setup_as_album(self.create_title(album.name, album_id), album_id=album_id)
 
         sleep = aio.periodic_sleep(10)
-        async with self.new_task_group() as tg:
+        async with aio.non_cancelling_taskgroup() as tg:
             for video in album.videos:
-                tg.create_task(self.video(scrape_item.create_child(video), video.name))
+                tg.create_task(self._video_task(scrape_item.create_child(video), video.name))
                 scrape_item.add_children()
                 await sleep()
 
@@ -111,11 +111,16 @@ class ArchveCrawler(Crawler):
         name = css.select_text(soup, "h1")
         scrape_item.setup_as_profile(self.create_title(f"{name} [user]", user_id))
 
-        async for soup in pages:
-            for child in self.iter_children(
-                scrape_item, soup, ".media-section[aria-labelledby='profile-videos-heading'] .media-grid .media-card"
-            ):
-                self.create_eager_task(self.video(child, child.url.name))
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
+            async for soup in pages:
+                for child in self.iter_children(
+                    scrape_item,
+                    soup,
+                    ".media-section[aria-labelledby='profile-videos-heading'] .media-grid .media-card",
+                ):
+                    tg.create_task(self._video_task(child, child.url.name))
+                    await sleep()
 
     @error_handling_wrapper
     async def user_albums(self, scrape_item: ScrapeItem, user_id: str) -> None:

@@ -227,7 +227,7 @@ class PornHubProfileCrawler:
     item: ScrapeItem
 
     async def fetch(self) -> None:
-        with self.crawler.catch_errors(self.item):
+        async with self.crawler.catch_errors(self.item):
             match self.item.url.parts[3:]:
                 case ["videos" | "clips", *_]:
                     await self.pages(Selector.Profile.VIDEOS)
@@ -238,7 +238,7 @@ class PornHubProfileCrawler:
                 case []:
                     await self.dispatch()
                 case _:
-                    raise ScrapeError.unsupported()
+                    raise ScrapeError.unknown_url()
 
     async def dispatch(self) -> None:
         await self._init()

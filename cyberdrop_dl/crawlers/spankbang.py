@@ -153,9 +153,8 @@ class SpankBangCrawler(Crawler):
             await self._iter_videos(scrape_item, soup)
 
     async def _iter_videos(self, scrape_item: ScrapeItem, soup: BeautifulSoup) -> None:
-        async with self.new_task_group() as tg:
-            for new_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
-                tg.create_task(self.run(new_item, check_referer=True))
+        for new_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
+            self.create_task(self.run(new_item, check_referer=True))
 
 
 @aio.to_thread

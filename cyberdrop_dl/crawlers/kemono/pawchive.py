@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, override
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.constants import CDL_USER_AGENT
 from cyberdrop_dl.crawlers.crawler import DownloadConfig
@@ -85,20 +86,22 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
             return
 
         self.log.info("Trying to get temp download URLs for deferred files in post %s", post_files.post.id)
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for file in post_files.temp_dls:
                 src = file.temp_download_url or file.temp_url
                 if not src:
                     continue
                 self.log.info("Found temp deferred file '%s' (%s)", file.deferred, src)
                 tg.create_task(self._temp_file(scrape_item, self.parse_url(src), file.name))
+                await sleep()
 
     async def _temp_file(
         self, scrape_item: ScrapeItem, src: AbsoluteHttpURL | None = None, name: str | None = None
     ) -> None:
         src = src or scrape_item.url
         name = name or src.name
-        with self.catch_errors(src):
+        async with self.catch_errors(src):
             if src.suffix == ".m3u8":
                 await self._m3u8(scrape_item, src, name)
                 return

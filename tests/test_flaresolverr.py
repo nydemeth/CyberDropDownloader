@@ -6,14 +6,17 @@ import pytest
 
 from cyberdrop_dl.clients import HttpMethod
 from cyberdrop_dl.clients.flaresolverr import (
+    MAX_TIMEOUT,
     Client,
     Command,
     Config,
     Request,
     RequestCommand,
+    Response,
     _cmd_from_http_method,
     _default_session_name,
 )
+from cyberdrop_dl.exceptions import CloudflareBlockedError, DDOSGuardError, FlaresolverrError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 ENV_NAME = "CDL_FLARESOLVERR"
@@ -142,7 +145,7 @@ def _config(*, proxy: bool, use_session: bool) -> Config:
                     "waitInSeconds": 20,
                     "session": "sessionA",
                 },
-                {"timeout": aiohttp.ClientTimeout(sock_read=80, sock_connect=60)},
+                aiohttp.ClientTimeout(sock_read=80, sock_connect=60),
             ),
         ),
         (
@@ -161,7 +164,7 @@ def _config(*, proxy: bool, use_session: bool) -> Config:
                         "url": "https://example.com/proxy",
                     },
                 },
-                {"timeout": aiohttp.ClientTimeout(sock_read=80, sock_connect=60)},
+                aiohttp.ClientTimeout(sock_read=80, sock_connect=60),
             ),
         ),
     ],
@@ -173,4 +176,60 @@ def test_request_build(
     req = Request.build(command, AbsoluteHttpURL("https://example.com"), config, wait=wait, session=session)
     assert req.command is expected.command
     assert req.payload == expected.payload
-    assert req.aiohttp_params == expected.aiohttp_params
+    assert req.timeout == expected.timeout
+
+
+def test_request_always_overrides_min_timeout() -> None:
+
+    for req in (
+        Request(Command.GET_REQUEST, {}),
+        Request(Command.GET_REQUEST, {}, aiohttp.ClientTimeout(sock_read=1, sock_connect=1)),
+    ):
+        assert req.timeout.sock_read
+        assert req.timeout.sock_read >= MAX_TIMEOUT
+        assert req.timeout.sock_connect
+        assert req.timeout.sock_connect >= MAX_TIMEOUT
+
+
+def test_wait_in_seconds_overrides_read() -> None:
+    wait = 120
+    req = Request(Command.GET_REQUEST, {"waitInSeconds": wait})
+    assert req.timeout.sock_read
+    assert req.timeout.sock_read >= MAX_TIMEOUT + wait
+    assert req.timeout.sock_connect
+    assert req.timeout.sock_connect >= MAX_TIMEOUT
+
+
+_CF_BLOCKED = (
+    "Error: Error solving the challenge. Cloudflare has blocked this request. "
+    "Probably your IP is banned for this site, check in your web browser."
+)
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_error", "disabled"),
+    [
+        (_CF_BLOCKED, CloudflareBlockedError, False),
+        ("Error: Error solving the challenge. Timeout after 60.0 seconds.", FlaresolverrError, True),
+    ],
+)
+async def test_request_error_response(
+    monkeypatch: pytest.MonkeyPatch, message: str, expected_error: type[Exception], *, disabled: bool
+) -> None:
+    async def fake_request(*_, **__) -> Response:
+        return Response.parse(1, {"status": "error", "message": message})
+
+    async with aiohttp.ClientSession() as session:
+        client = Client(session, _config(proxy=False, use_session=False))
+        monkeypatch.setattr(client, "_request", fake_request)
+        for _ in range(client.MAX_INVALID_RESPONSES + 1):
+            assert client.is_down is False
+            with pytest.raises(expected_error):
+                await client.request(AbsoluteHttpURL("https://example.com"))
+
+    assert client.is_down is disabled
+
+
+def test_cloudflare_blocked_is_ddos_guard_error() -> None:
+    assert issubclass(CloudflareBlockedError, DDOSGuardError)
+    assert CloudflareBlockedError().ui_failure == "Cloudflare Blocked"

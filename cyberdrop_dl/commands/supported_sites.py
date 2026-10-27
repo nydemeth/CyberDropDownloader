@@ -19,7 +19,7 @@ def _gen_crawlers_info() -> list[CrawlerInfo]:
 
 
 def as_json() -> dict[str, dict[str, Any]]:
-    return {info.site: info.__json__() for info in _gen_crawlers_info()}
+    return {info.wiki_site or info.site: info.__json__() for info in _gen_crawlers_info()}
 
 
 def as_rich_json() -> JSON:
@@ -42,7 +42,7 @@ def as_rich_table() -> Table:
 
     for crawler_info in _gen_crawlers_info():
         table.add_row(
-            crawler_info.site,
+            crawler_info.wiki_site or crawler_info.site,
             str(crawler_info.primary_url),
             "\n".join(crawler_info.supported_domains),
         )
@@ -69,7 +69,7 @@ def _generate_md_blocks(indent_level: int) -> Generator[str]:
     for info in _gen_crawlers_info():
         url = str(info.primary_url).rstrip("/")
         lines = [
-            f"{'#' * (indent_level + 1)} {info.site}",
+            f"{'#' * (indent_level + 1)} {info.wiki_site or info.site}",
             "",
             f"**Primary URL**: [{url}]({url})",
             "",

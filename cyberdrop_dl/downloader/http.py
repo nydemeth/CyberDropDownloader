@@ -24,7 +24,7 @@ from cyberdrop_dl.exceptions import (
 )
 from cyberdrop_dl.hasher import compute_in_place_hash
 from cyberdrop_dl.progress.scraping import show_msg
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 from cyberdrop_dl.url_objects import MuxVideo
 from cyberdrop_dl.utils import dates
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -109,6 +109,7 @@ class Capacity:
             self.condition.notify_all()
 
 
+@dataclass_repr("slots", "server_slots", "log_prefix", "capacity", "_semaphore", "_server_sems")
 class Downloader:
     """High level class that handles limiters, database checks, skip by config checks and retries"""
 
@@ -134,8 +135,6 @@ class Downloader:
         self.__post_init__()
 
     def __post_init__(self) -> None: ...
-
-    __repr__ = simple_repr("slots", "server_slots", "log_prefix", "capacity", "_semaphore", "_server_sems")
 
     @property
     def tui(self) -> ScrapingUI:

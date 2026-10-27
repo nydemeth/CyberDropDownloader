@@ -13,7 +13,7 @@ from m3u8.mixins import BasePathMixin, GroupedBasePathMixin
 
 from cyberdrop_dl.exceptions import DownloadError
 from cyberdrop_dl.mediaprops import Codecs, Resolution
-from cyberdrop_dl.signature import simple_repr, vars_repr
+from cyberdrop_dl.signature import dataclass_repr, vars_repr
 from cyberdrop_dl.utils import parse_url
 from cyberdrop_dl.utils.dataclass import DictDataclass
 
@@ -223,6 +223,7 @@ def _validate_keys(stream: M3U8) -> None:
             )
 
 
+@dataclass_repr("media_type", "base_uri", "is_variant", "source")
 class M3U8(_M3U8):
     def __init__(
         self,
@@ -241,8 +242,6 @@ class M3U8(_M3U8):
     @property
     def total_segments(self) -> int:
         return len(self.segment_map) + len(self.segments)
-
-    __repr__ = simple_repr("media_type", "base_uri", "is_variant", "source")
 
     @property
     def total_duration(self) -> dt.timedelta:

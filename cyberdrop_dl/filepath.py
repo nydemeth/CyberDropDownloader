@@ -7,11 +7,11 @@ import unicodedata
 from contextvars import ContextVar
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal, NamedTuple, Self
 
 from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.exceptions import FileNameError, InvalidExtensionError, NoExtensionError, PathTraversalError
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -41,12 +41,23 @@ class UnicodeCategory(StrEnum):
     SEPARATOR = "Z"
 
 
+class Filename(NamedTuple):
+    name: str
+    suffix: str
+
+    def as_path(self) -> Path:
+        return Path(self.name)
+
+    @property
+    def stem(self) -> str:
+        return self.name.removesuffix(self.suffix)
+
+
+@dataclass_repr("banned_chars", "post_process")
 class PathSanitizer:
     def __init__(self, banned_chars: str | None = None, *post_process: Callable[[str], str]) -> None:
         self.banned_chars: str | None = banned_chars
         self.post_process: tuple[Callable[[str], str], ...] = post_process
-
-    __repr__ = simple_repr("banned_chars", "post_process")
 
     def __call__(self, name: str, repl: str = "") -> str:
         if self.banned_chars:
@@ -87,7 +98,7 @@ def sanitize_filename(name: str, sub: str = "") -> str:
         _PATH_SANITIZER.set(clean)
 
     path = Path(clean(name, sub))
-    return path.stem.strip() + path.suffix
+    return path.stem.strip().lstrip(".") + path.suffix
 
 
 def sanitize_folder(title: str, max_len: int | None = None) -> str:
@@ -121,7 +132,7 @@ def get_filename_and_ext(
     *,
     xenforo: bool = False,
     max_len: int | None = None,
-) -> tuple[str, str]:
+) -> Filename:
     filename_as_path = Path(remove_os_sep(filename))
 
     if not filename_as_path.suffix:
@@ -143,7 +154,7 @@ def get_filename_and_ext(
         raise InvalidExtensionError(str(filename_as_path))
 
     filename_as_path = Path(compose_filename(filename_as_path.stem, filename_as_path.suffix, max_len=max_len))
-    return filename_as_path.name, filename_as_path.suffix
+    return Filename(filename_as_path.name, filename_as_path.suffix)
 
 
 def remove_os_sep(filename: str) -> str:

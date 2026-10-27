@@ -4,7 +4,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Self, override
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.models import type_adapter
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -102,13 +102,16 @@ class KickCrawler(Crawler):
     async def clips(self, scrape_item: ScrapeItem, channel_name: str) -> None:
         scrape_item.setup_as_profile("")
         channel = await self.api.channel(channel_name)
-        async for clips in self.api.channel.clips(channel.id, scrape_item.url.query):
-            async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
+            async for clips in self.api.channel.clips(channel.id, scrape_item.url.query):
                 for clip in clips:
                     new_item = scrape_item.create_child(scrape_item.url / clip.id)
                     tg.create_task(self.clip_task(new_item, clip))
                     scrape_item.add_children()
+                    await sleep()
 
+    @auto_task_id
     @error_handling_wrapper
     async def clip_task(self, scrape_item: ScrapeItem, clip: Clip) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
@@ -121,12 +124,15 @@ class KickCrawler(Crawler):
         scrape_item.setup_as_profile("")
         channel = await self.api.channel(channel_name)
         videos = await self.api.channel.videos(channel.id)
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for vod in videos:
                 new_item = scrape_item.create_child(scrape_item.url / vod.id)
                 tg.create_task(self.vod_task(new_item, vod))
                 scrape_item.add_children()
+                await sleep()
 
+    @auto_task_id
     @error_handling_wrapper
     async def vod_task(self, scrape_item: ScrapeItem, meta: VODMetadata) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
@@ -264,14 +270,15 @@ class ChannelEndpoint(API.Endpoint[KickAPI]):
 class Clip:
     id: str
     title: str
-    thumbnail_url: AbsoluteHttpURL
     created_at: str
     playback_url: AbsoluteHttpURL
     channel: User
+    thumbnail_url: AbsoluteHttpURL | None = None
 
     @classmethod
     def parse(cls, clip: dict[str, Any]) -> Self:
         clip["playback_url"] = clip.get("clip_url") or clip.get("video_url") or clip["playback_url"]
+        clip["thumbnail_url"] = clip.get("thumbnail_url") or None
         return type_adapter(cls).validate_python(clip)
 
 
@@ -281,12 +288,15 @@ class VODMetadata:
     title: str
     start_time: str
     status: str
-    thumbnail_url: AbsoluteHttpURL
     channel: User
+    thumbnail_url: AbsoluteHttpURL | None = None
 
     @classmethod
     def parse(cls, vod: dict[str, Any]) -> Self:
-        vod["thumbnail_url"] = css.best_from_srcset(vod["thumbnail"]["srcSet"])
+        thumb = None
+        if thumbs := vod.get("thumbnail"):
+            thumb = css.best_from_srcset(src_set) if (src_set := thumbs.get("srcSet")) else thumbs.get("src") or None
+        vod["thumbnail_url"] = thumb
         return type_adapter(cls).validate_python(vod)
 
 

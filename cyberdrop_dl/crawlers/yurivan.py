@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import dataclasses
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -80,10 +81,13 @@ class YuriVanCrawler(Crawler):
 
         chapter = story.chapters[chapter_idx]
         scrape_item.append_folders(self.create_title(chapter.title))
-        async with self.new_task_group() as tg:
+
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for page in chapter.pages:
                 tg.create_task(self.direct_file(scrape_item, page.url))
                 scrape_item.add_children()
+                await sleep()
 
 
 @dataclasses.dataclass(slots=True)

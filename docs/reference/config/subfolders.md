@@ -17,6 +17,22 @@ subfolders:
   create: true
 ```
 
+# `group_loose_files`
+
+| Type   | Default |
+| ------ | ------- |
+| `bool` | `true`  |
+
+Download individual files not part of any album/thread into a subfolder named `Loose Files (<DOMAIN>)`
+(or just `Loose Files` for Direct HTTP files from unsupported sites or when `--subfolders.include.domain` is disabled).
+
+This option is ignored unless `--subfolder.create` is enabled
+
+```yaml
+subfolders:
+  group_loose_files: true
+```
+
 # `include`
 
 ## `album_id`

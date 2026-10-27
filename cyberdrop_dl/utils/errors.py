@@ -5,7 +5,7 @@ import functools
 import inspect
 import logging
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Concatenate, Protocol, cast, overload
+from typing import TYPE_CHECKING, Concatenate, Protocol, cast, final, overload
 
 import aiohttp.client_exceptions
 import mega.errors
@@ -15,9 +15,8 @@ from pydantic import ValidationError
 from cyberdrop_dl.exceptions import CDLAppError, CDLBaseError, ScrapeError, create_error_msg, get_origin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
     from pathlib import Path
-    from types import TracebackType
 
     from cyberdrop_dl.downloader.http import Downloader
     from cyberdrop_dl.manager import Manager
@@ -40,38 +39,6 @@ def is_error_wrapped(method: object) -> bool:
 def _mark_as_safe[T](fn: T) -> T:
     setattr(fn, _ERROR_WRAPPER_ATTR, True)
     return fn
-
-
-def _strip_tb_frames(tb: TracebackType | None) -> TracebackType | None:
-    "Similar to pytest, hide anything with __tracebackhide__"
-    if tb is None:
-        return None
-
-    for ns in (tb.tb_frame.f_locals, tb.tb_frame.f_globals):
-        if ns.get("__tracebackhide__"):
-            return _strip_tb_frames(tb.tb_next)
-
-    tb.tb_next = _strip_tb_frames(tb.tb_next)
-    return tb
-
-
-def _clean_exception(exc: BaseException | None) -> None:
-    if exc is None:
-        return
-
-    exc.__traceback__ = _strip_tb_frames(exc.__traceback__)
-
-    _clean_exception(exc.__cause__)
-    _clean_exception(exc.__context__)
-
-
-@contextlib.contextmanager
-def _tb_ctx() -> Generator[None]:
-    try:
-        yield
-    except Exception as e:
-        _clean_exception(e)
-        raise
 
 
 def _clean_curl_error(e: object) -> str:
@@ -153,21 +120,18 @@ def _exc_group_context() -> Generator[None]:
         yield
     except ExceptionGroup as e:
         if e.message and "unhandled errors in a TaskGroup" not in e.message:
-            msg = e.message
+            ui_error = e.message
         else:
             first = e.exceptions[0]
-            msg = getattr(first, "ui_failure", None) or str(first)
-        raise CDLAppError(msg, str(e)) from e.with_traceback(None)
+            ui_error = getattr(first, "ui_failure", None) or str(first)
+        raise CDLAppError(ui_error, str(e)) from e.with_traceback(None)
 
 
 _MEGA_HTTP_CODES = Final = {
     -4: HTTPStatus.TOO_MANY_REQUESTS,
-    -8: HTTPStatus.GONE,
-    -9: HTTPStatus.GONE,
     -16: HTTPStatus.FORBIDDEN,
-    -17: 509,
-    -24: 509,
-    -401: 509,
+    **dict.fromkeys((-8, -9), HTTPStatus.GONE),
+    **dict.fromkeys((-17, -24, -401), 509),
 }
 
 
@@ -210,7 +174,21 @@ def _builtin_context() -> Generator[None]:
 
 
 @contextlib.contextmanager
-def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:
+def _combined_error_context() -> Generator[None]:
+    with (
+        _builtin_context(),
+        _pydantic_context(),
+        _aiohttp_context(),
+        _curl_context(),
+        _wreq_context(),
+        _mega_nz_context(),
+        _exc_group_context(),
+    ):
+        yield
+
+
+@contextlib.contextmanager
+def _error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:
     if getattr(item, "is_segment", False):
         with contextlib.suppress(Exception):
             yield
@@ -220,17 +198,7 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
     app_error = origin = exc = None
     real_url: yarl.URL | str = ""
     try:
-        with (
-            _tb_ctx(),
-            _builtin_context(),
-            _pydantic_context(),
-            _aiohttp_context(),
-            _curl_context(),
-            _wreq_context(),
-            _mega_nz_context(),
-            _exc_group_context(),
-        ):
-            yield
+        yield
 
     except CDLBaseError as e:
         app_error = CDLAppError(e.ui_failure, str(e))
@@ -248,11 +216,24 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
         return
 
     origin = origin or get_origin(item)
-    if bool(getattr(self, "log_prefix", False)):
+    if getattr(self, "log_prefix", False):
         self, item = cast("Downloader", self), cast("MediaItem", item)
         _log_dl_error(self, item, app_error, exc, origin)
     else:
         _log_scrape_error(self, real_url or url, app_error, exc, origin)
+
+
+@contextlib.contextmanager
+def _blocking_error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:
+    with _error_handling_context(self, item), _combined_error_context():
+        yield
+
+
+@contextlib.asynccontextmanager
+async def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> AsyncGenerator[None]:
+    # The same as _blocking_error_handling_context (for now)
+    with _error_handling_context(self, item), _combined_error_context():
+        yield
 
 
 def _log_scrape_error(
@@ -310,16 +291,46 @@ def error_handling_wrapper[HasManagerT: _HasManager, Origin: ScrapeItem | MediaI
 
         @functools.wraps(func)
         async def async_wrapper(self: HasManagerT, item: Origin, *args: P.args, **kwargs: P.kwargs) -> R:
-            with error_handling_context(self, item):
+            async with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return _mark_as_safe(async_wrapper)
 
     @functools.wraps(func)
     def wrapper(self: HasManagerT, item: Origin, *args: P.args, **kwargs: P.kwargs) -> R:
-        with error_handling_context(self, item):
+        with _blocking_error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
             assert not inspect.isawaitable(result)
             return result
 
     return _mark_as_safe(wrapper)
+
+
+@final
+class OnExceptionCallback:
+    def __init__(self, cb: Callable[[BaseException], None]) -> None:
+        self.cb = cb
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        if exc_val is not None:
+            self.cb(exc_val)
+
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        if exc_val is not None:
+            self.cb(exc_val)

@@ -18,14 +18,14 @@ cookies: null
 crawlers:
   bandcamp:
     formats:
-      - mp3-320
-      - mp3
-      - aac-hi
-      - wav
-      - flac
-      - vorbis
-      - aiff
-      - alas
+    - mp3-320
+    - mp3
+    - aac-hi
+    - wav
+    - flac
+    - vorbis
+    - aiff
+    - alas
   bluesky:
     content_urls: true
     external: true
@@ -51,7 +51,7 @@ crawlers:
       sheets: xslx
       slides: pptx
   octave_music:
-    filename_format: "{artist} - {title}{ext}"
+    filename_format: '{artist} - {title}{ext}'
     quality: mp3-320
   one_pace:
     prefer_dub: false
@@ -61,6 +61,8 @@ crawlers:
     embed: true
     expand_posts: false
     file: true
+  patreon:
+    content_urls: true
   pawchive:
     attachments: true
     content_urls: true
@@ -69,10 +71,10 @@ crawlers:
     file: true
   pornhub:
     profile_paths:
-      - photos/public
-      - gifs/public
-      - videos
-      - videos/upload
+    - photos/public
+    - gifs/public
+    - videos
+    - videos/upload
   reddit:
     api: arctic_shift
     content_urls: true
@@ -87,6 +89,8 @@ crawlers:
     image_size: orig
     retweets: false
     threads: true
+  vk:
+    wall_filter: all
 deep_scrape: false
 delete_empty_folders: true
 delete_partial_files: false
@@ -139,9 +143,9 @@ filters:
   skip_hosts: []
 hashing:
   algorithms:
-    - xxh128
-    - md5
-    - sha256
+  - xxh128
+  - md5
+  - sha256
   dedupe:
     enabled: true
     use_trash_bin: true
@@ -193,7 +197,7 @@ network:
   ssl_context: truststore+certifi
   tls:
     ca_certs: []
-    min_version: "1.2"
+    min_version: '1.2'
     verify: true
   user_agent: Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0
 notifications:
@@ -203,22 +207,23 @@ restrict_path: []
 sort:
   enabled: false
   formats:
-    audio: "{sort_dir}/{base_dir}/Audio/{filename}{ext}"
-    image: "{sort_dir}/{base_dir}/Images/{filename}{ext}"
-    incrementer: " ({i})"
-    non_media: "{sort_dir}/{base_dir}/Other/{filename}{ext}"
-    video: "{sort_dir}/{base_dir}/Videos/{filename}{ext}"
+    audio: '{sort_dir}/{base_dir}/Audio/{filename}{ext}'
+    image: '{sort_dir}/{base_dir}/Images/{filename}{ext}'
+    incrementer: ' ({i})'
+    non_media: '{sort_dir}/{base_dir}/Other/{filename}{ext}'
+    video: '{sort_dir}/{base_dir}/Videos/{filename}{ext}'
   input_folder: null
   output_folder: downloads/cyberdrop-dl sorted
 subfolders:
   create: true
+  group_loose_files: true
   include:
     album_id: false
     domain: true
     thread_id: false
   separate_posts:
     enabled: false
-    format: "{default}"
+    format: '{default}'
 ui:
   mode: fullscreen
   portrait: false

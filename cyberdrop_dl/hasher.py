@@ -16,7 +16,7 @@ from cyberdrop_dl import aio
 from cyberdrop_dl.constants import TempExt
 from cyberdrop_dl.progress.hashing import HashingStats, HashingUI
 from cyberdrop_dl.progress.scraping import show_msg
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -77,6 +77,7 @@ async def hash_directory(hasher: Hasher) -> HashingStats:
 
 
 @final
+@dataclass_repr("path", "hashes", "database")
 class Hasher:
     def __init__(self, hashes: Iterable[HashAlgo | HashAlgoLiteral], database: Database, path: Path) -> None:
         self.path = path
@@ -89,8 +90,6 @@ class Hasher:
         self._hashed_items: set[tuple[str, ...]] = set()
         self._pool = ThreadPoolExecutor(max_workers=_CONCURRENCY * len(self.hashes), thread_name_prefix="hashing")
         self._shutdown = threading.Event()
-
-    __repr__ = simple_repr("path", "hashes", "database")
 
     def __enter__(self) -> Self:
         return self

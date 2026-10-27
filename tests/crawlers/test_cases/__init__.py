@@ -2,22 +2,30 @@ import dataclasses
 import runpy
 from collections.abc import Generator, Sequence
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Required, TypedDict
 
 from pydantic import TypeAdapter
 
 
-class Result(TypedDict):
+class Result(TypedDict, total=False):
     # Simplified version of media_item
-    url: str
-    filename: NotRequired[str | type]
-    debrid_link: NotRequired[str | type | None]
-    original_filename: NotRequired[str | type]
-    referer: NotRequired[str | type]
-    album_id: NotRequired[str | type | None]
-    uploaded_at: NotRequired[int | type | None]
-    download_folder: NotRequired[str | type]
-    thumbnail: NotRequired[str | type | None]
+    url: Required[str]
+    filename: str | type
+    debrid_link: str | type | None
+    original_filename: str | type
+    referer: str | type
+    album_id: str | type | None
+    uploaded_at: int | type | None
+    download_folder: str | type
+    thumbnail: str | type | None
+    size: int | type | None
+    duration: float | type | None
+    parents: tuple[str, ...]
+    metadata: object
+    extra_info: dict[str, Any]
+    id: tuple[str, ...]
+    base64_id: str
+    headers: dict[str, str]
 
 
 @dataclasses.dataclass(slots=True)
@@ -25,6 +33,7 @@ class CrawlerTestCase:
     domain: str
     url: str
     results: list[Result]
+    sort_by: str = "url"
     args: tuple[str, ...] = ()
     description: str | None = None
     fail: bool | str | int = False

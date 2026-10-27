@@ -7,7 +7,8 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl import aio
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import unique
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -54,7 +55,10 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
     def __kemono_config__(self) -> KemonoConfig: ...
 
     async def __async_post_init__(self) -> None:
-        with self.catch_errors(self.PRIMARY_URL), self.disable_on_error("Unable to get list of creators from API"):
+        async with (
+            self.catch_errors(self.PRIMARY_URL),
+            self.disable_on_error("Unable to get list of creators from API"),
+        ):
             self.api.user_names = await self.api.creators()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -91,6 +95,8 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
     async def post(self, scrape_item: ScrapeItem, service: str, creator_id: str, post_id: str) -> None:
         post = await self.api.post(service, creator_id, post_id)
         await self._user_post(scrape_item, post)
+
+    _post_task = auto_task_id(post)
 
     @error_handling_wrapper
     async def favorites(self, scrape_item: ScrapeItem, type_: Literal["post", "artist"]) -> None:
@@ -148,10 +154,12 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
         self._extract_urls_from_post_content(scrape_item, post)
 
     async def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for url in unique(map(self._compose_file_url, post_files)):
                 tg.create_task(self._direct_file(scrape_item, url))
                 scrape_item.add_children()
+                await sleep()
 
             if embed := post_files.embed():
                 embed_url = self.parse_url(embed.url)
@@ -186,7 +194,8 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
         return url.update_query(f=file.name or url.name)
 
     async def __iter_user_posts(self, scrape_item: ScrapeItem, posts: Iterable[UserPostModel]) -> None:
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for post in posts:
                 self.__check_for_ads(post)
                 new_item = scrape_item.create_child(self.parse_url(post.web_path_qs))
@@ -196,8 +205,11 @@ class KemonoBaseCrawler[T: KemonoAPI[Any]](Crawler, is_abc=True):
                 if expand:
                     tg.create_task(self.post(new_item, post.service, post.user_id, post.id))
                 else:
-                    await self._user_post(new_item, post)
+                    tg.create_task(self._user_post_task(new_item, post))
                 scrape_item.add_children()
+                await sleep()
+
+    _user_post_task = auto_task_id(_user_post)
 
 
 def _thumbnail_to_src(og_url: AbsoluteHttpURL) -> AbsoluteHttpURL:

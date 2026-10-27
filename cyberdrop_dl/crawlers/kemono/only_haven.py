@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, override
 from pydantic import Field
 from pydantic.aliases import AliasChoices
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.kemono.api import KemonoAPI
 from cyberdrop_dl.crawlers.kemono.kemono import KemonoBaseCrawler
 from cyberdrop_dl.crawlers.kemono.models import User
@@ -171,10 +172,12 @@ class OnlyHavenCrawler(KemonoBaseCrawler[OnlyHavenAPI]):
 
     @override
     async def _extract_post_files(self, scrape_item: ScrapeItem, post_files: FileFilterer) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for url in unique(map(self._compose_file_url, post_files)):
                 tg.create_task(self._direct_file(scrape_item, url))
                 scrape_item.add_children()
+                await sleep()
 
     @override
     def _compose_file_url(self, file: File) -> AbsoluteHttpURL:  # pyright: ignore[reportIncompatibleMethodOverride]

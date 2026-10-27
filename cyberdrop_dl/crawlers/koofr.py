@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections import deque
 from typing import Any, ClassVar, Literal
 
 from pydantic import dataclasses
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import DownloadError, PasswordProtectedError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -61,19 +63,28 @@ class KooFrCrawler(Crawler):
         scrape_item.setup_as_album(title, album_id=content_id)
         await self._walk_folder(scrape_item, content_id, path)
 
-    @error_handling_wrapper
-    async def _walk_folder(self, scrape_item: ScrapeItem, content_id: str, path: str) -> None:
-        children = await self.api.get_children(content_id, path, scrape_item.password)
-        async with self.new_task_group() as tg:
-            for node in children:
-                if node.type == "file":
-                    tg.create_task(self._file(scrape_item, node))
-                    continue
+    async def _walk_folder(self, scrape_item: ScrapeItem, content_id: str, node_path: str) -> None:
+        subfolders: deque[tuple[tuple[str, ...], str]] = deque()
+        parents = ()
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
+            while True:
+                children = await self.api.get_children(content_id, node_path, scrape_item.password)
+                for node in children:
+                    if node.type != "file":
+                        subfolders.append(((*parents, node.name), node.path))
+                        continue
 
-                url = scrape_item.url.update_query(path=node.path)
-                new_scrape_item = scrape_item.create_child(url)
-                new_scrape_item.append_folders(node.name)
-                tg.create_task(self._walk_folder(new_scrape_item, content_id, node.path))
+                    url = scrape_item.url.update_query(path=node.path)
+                    new_item = scrape_item.create_child(url)
+                    new_item.append_folders(*parents)
+                    tg.create_task(self._file(new_item, node))
+                    await sleep()
+
+                if not subfolders:
+                    break
+
+                parents, node_path = subfolders.popleft()
 
     @error_handling_wrapper
     async def _file(self, scrape_item: ScrapeItem, file: Node) -> None:

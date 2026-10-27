@@ -12,6 +12,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, json_ld, parse_url
+from cyberdrop_dl.utils._url import URLDeduper
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -66,7 +67,7 @@ class NoodleMagazineCrawler(Crawler):
     async def search(self, scrape_item: ScrapeItem, query: str) -> None:
         scrape_item.setup_as_album(self.create_title(f"{query} [search]"))
         init_page = int(scrape_item.url.query.get("p") or 1)
-        seen_urls: set[AbsoluteHttpURL] = set()
+        seen_urls: URLDeduper = URLDeduper()
 
         for page in itertools.count(1, init_page):
             n_videos = 0
@@ -74,10 +75,11 @@ class NoodleMagazineCrawler(Crawler):
             soup = await self.request_soup(page_url)
 
             for new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
-                if new_scrape_item.url not in seen_urls:
-                    seen_urls.add(new_scrape_item.url)
-                    n_videos += 1
-                    self.create_task(self.run(new_scrape_item, check_referer=True))
+                if new_scrape_item.url in seen_urls:
+                    continue
+
+                n_videos += 1
+                self.create_task(self.run(new_scrape_item, check_referer=True))
 
             if n_videos < _VIDEO_PER_PAGE:
                 break

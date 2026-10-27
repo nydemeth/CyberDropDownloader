@@ -73,6 +73,7 @@ class SchemaTable(Table, name="schema_version"):
 
         if error:
             error.add_note("Run 'cyberdrop-dl database transfer' to upgrade the database to a new version")
+            error.add_note(f"Full command: 'cyberdrop-dl database transfer '{self.db.path}'")
             raise error
 
     async def update(self, version: Version = CURRENT_VERSION) -> None:

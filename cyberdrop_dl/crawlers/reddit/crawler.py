@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 @Crawler.db_path_builder("url")
-class RedditImagesCrawler(Crawler):
+class RedditImagesCrawler(Crawler, wiki_site="RedditImages"):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "preview.redd.it", "external-preview.redd.it", "i.redd.it"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Image": "i.redd.it/<id>.>ext>"}
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://i.redd.it")
@@ -56,7 +56,7 @@ class RedditImagesCrawler(Crawler):
 
 
 @Crawler.db_path_builder("url")
-class RedditVideoCrawler(Crawler):
+class RedditVideoCrawler(Crawler, wiki_site="RedditVideos"):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Video": "v.redd.it/<video_id>"}
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://v.redd.it")
     DOMAIN: ClassVar[str] = "v.redd.it"

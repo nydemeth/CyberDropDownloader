@@ -5,7 +5,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 
 from .common import connect, pre_allocate_250mb, raw_connect
 from .hash import HashTable
@@ -70,6 +70,7 @@ class DBReadConnPool:
             self._queue.put_nowait(conn)
 
 
+@dataclass_repr("path", "ignore_history")
 class Database:
     def __init__(self, path: Path, ignore_history: bool = False) -> None:  # noqa: FBT001, FBT002
         self.path: Path = path
@@ -84,8 +85,6 @@ class Database:
 
         self.conn: aiosqlite.Connection
         self.is_new: bool
-
-    __repr__ = simple_repr("path", "ignore_history")
 
     async def _connect(self) -> None:
         self.is_new = not await aio.get_size(self.path)

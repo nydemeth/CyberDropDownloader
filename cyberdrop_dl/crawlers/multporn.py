@@ -44,10 +44,13 @@ class MultPornCrawler(Crawler):
         name, date = await _extract_info(soup)
         scrape_item.uploaded_at = self.parse_iso_date(date)
         scrape_item.setup_as_album(self.create_title(name))
-        async with self.new_task_group() as tg:
+
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for img in _extract_images(soup):
                 tg.create_task(self.direct_file(scrape_item, img))
                 scrape_item.add_children()
+                await sleep()
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem) -> None:

@@ -9,7 +9,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Protocol, Self, TypedDict, cast, overload
 
-from cyberdrop_dl import __version__
+from cyberdrop_dl import __version__, aio
 from cyberdrop_dl.constants import MISSING
 
 if TYPE_CHECKING:
@@ -29,6 +29,13 @@ class CachedAsyncFunc[T](Protocol):
     def clear(self) -> None: ...
 
     def get(self) -> T | None: ...
+
+
+class LRUCachedAsyncFunc[T, R](Protocol):
+    def __call__(self, val: T, /) -> CoroutineType[Any, Any, R]: ...
+
+    @property
+    def cache(self) -> dict[T, R]: ...
 
 
 class _CachedValue[T](TypedDict):
@@ -214,6 +221,22 @@ class _CachedMethod[T, R]:
 
             self._cached_fn = cached_fn(call_method, self._get_cache(inst), key=self.key, ttl=self.ttl)
         return self._cached_fn
+
+
+def async_lru_cache[T, R](fn: Callable[[T], Awaitable[R]]) -> LRUCachedAsyncFunc[T, R]:
+    """Cache the first result.
+
+    Only works with callables that take 1 single argument"""
+
+    cache: dict[T, R] = {}
+    get = aio.async_defaultdict(fn, cache).get
+
+    @functools.wraps(fn)
+    def wrapper(val: T):
+        return get(val)
+
+    wrapper.cache = cache  # pyright: ignore[reportAttributeAccessIssue]
+    return cast("LRUCachedAsyncFunc[T, R]", wrapper)  # pyright: ignore[reportInvalidCast]
 
 
 class _InMemoryCachedMethod[R](_CachedMethod[object, R]):

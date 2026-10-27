@@ -119,7 +119,7 @@ class File:
 
 
 @FileditchCrawler.__http_config__
-class FileditchAlbumsCrawler(Crawler):
+class FileditchAlbumsCrawler(Crawler, wiki_site="FileditchAlbums"):
     # Keep this as a separate class. Site changes domains frequently
     # Let the scrape mapper dispatch to the best matching domain
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {

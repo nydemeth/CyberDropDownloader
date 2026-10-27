@@ -7,7 +7,7 @@ import itertools
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, URLConfig, auto_task_id
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -87,14 +87,14 @@ class PornPicsCrawler(Crawler):
             (self.PRIMARY_URL / "search/srch.php").with_query(q=query.replace("-", " ")) if query else scrape_item.url
         )
 
-        async for galleries in self._collection_pager(search_url):
-            async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
+            async for galleries in self._collection_pager(search_url):
                 for gallery_id, gallery_url in galleries:
-                    if self.was_scrapped_before(gallery_url):
-                        continue
                     new_item = scrape_item.create_child(gallery_url)
-                    tg.create_task(self.gallery(new_item, gallery_id))
+                    tg.create_task(self._gallery_task(new_item, gallery_id))
                     scrape_item.add_children()
+                    await sleep()
 
     @error_handling_wrapper
     async def gallery(self, scrape_item: ScrapeItem, gallery_id: str) -> None:
@@ -103,12 +103,16 @@ class PornPicsCrawler(Crawler):
         title = self.create_title(name, gallery_id)
         scrape_item.setup_as_album(title, album_id=gallery_id)
 
-        async with self.new_task_group() as tg:
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
             for url in self.iter_urls(soup, "div#main a.rel-link"):
                 if url in completed:
                     continue
 
                 tg.create_task(self.direct_file(scrape_item, url))
+                await sleep()
+
+    _gallery_task = auto_task_id(gallery)
 
     @error_handling_wrapper
     async def video_preview(self, scrape_item: ScrapeItem, video_id: str) -> None:

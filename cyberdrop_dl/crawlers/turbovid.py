@@ -4,8 +4,9 @@ import asyncio
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar, final, override
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.crawlers import Registry
-from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import TextExtractor, css, extr_text
 from cyberdrop_dl.utils.errors import error_handling_wrapper
@@ -78,10 +79,10 @@ class TurboVidCrawler(Crawler):
         title = self.create_title(album.name, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
 
-        async with self.new_task_group() as tg:
+        async with aio.non_cancelling_taskgroup() as tg:
             for file_id in album.files:
                 new_item = scrape_item.create_child(self.PRIMARY_URL / "d" / file_id)
-                tg.create_task(self.video(new_item, file_id))
+                tg.create_task(self._video_task(new_item, file_id))
                 scrape_item.add_children()
 
     @error_handling_wrapper
@@ -98,6 +99,8 @@ class TurboVidCrawler(Crawler):
         name, dl_link = await self.api.sign(file_id)
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(dl_link, scrape_item, name, ext, custom_filename=filename)
+
+    _video_task = auto_task_id(video)
 
 
 class TurboAPI(API):

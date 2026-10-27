@@ -250,6 +250,17 @@ class ISO639Subtitle(NamedTuple):
     url: AbsoluteHttpURL | str
     lang_code: str
     name: str | None = None
+    ext: str | None = None
+    fallback_ext: str | None = None
 
 
 Subtitle = ISO639Subtitle
+
+
+@final
+@dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
+class ResolvedISO639Subtitle:
+    url: AbsoluteHttpURL
+    lang_code: str
+    ext: str | None
+    name: str | None = None

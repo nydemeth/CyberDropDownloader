@@ -35,6 +35,26 @@ TEST_CASES = [
         "count": 1,
     },
     {
+        "url": "https://kick.com/blastdota/videos/01a129fc-5870-7a68-91e6-f2fdf9620ac4",
+        "description": "video with empty string as srcSet thumbs",
+        "results": [
+            {
+                "url": "https://kick.com/blastdota/videos/01a129fc-5870-7a68-91e6-f2fdf9620ac4",
+                "filename": "BLAST SLAM [01a129fc-5870-7a68-91e6-f2fdf9620ac4][avc1][mp4a][1080p].mp4",
+                "debrid_url": None,
+                "original_filename": "BLAST SLAM",
+                "referer": "https://kick.com/blastdota/videos/01a129fc-5870-7a68-91e6-f2fdf9620ac4",
+                "album_id": None,
+                "uploaded_at": 1791705766,
+                "download_folder": "re:BLASTDota (Kick)",
+                "thumbnail": "re:https://web.kick.com/api/v1/videos/01a129fc-5870-7a68-91e6-f2fdf9620ac4/thumbnails/21946000.jpeg",
+                "id": ["kick", "/blastdota/videos/01a129fc-5870-7a68-91e6-f2fdf9620ac4"],
+                "base64_id": "a2ljay9ibGFzdGRvdGEvdmlkZW9zLzAxYTEyOWZjLTU4NzAtN2E2OC05MWU2LWYyZmRmOTYyMGFjNA",
+            }
+        ],
+        "count": 1,
+    },
+    {
         "url": "https://kick.com/xqc/videos/01a0a6c0-f290-79b0-b466-a44911b23d6d",
         "results": [
             {

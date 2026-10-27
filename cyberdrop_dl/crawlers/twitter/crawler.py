@@ -10,7 +10,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPa
 from cyberdrop_dl.crawlers.twitter.api import FXTwitterAPI, TwitterAPI, TwitterGQLSearchFilter
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
-from cyberdrop_dl.signature import simple_repr
+from cyberdrop_dl.signature import dataclass_repr
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
@@ -207,7 +207,7 @@ class TwitterCrawler(Crawler):
             ),
         )
 
-        with self.catch_errors((self.PRIMARY_URL / "search").with_query(api_url.query)):
+        async with self.catch_errors((self.PRIMARY_URL / "search").with_query(api_url.query)):
             self.log.info(
                 "Starting manual search for posts of %s (feed: '%s', raw_query: '%s')",
                 user,
@@ -290,6 +290,7 @@ class TwitterCrawler(Crawler):
 
 
 @final
+@dataclass_repr("since", "until", "oldest_tweet")
 class TweetsFilterer:
     def __init__(self, *, since: int | None = None, until: int | None = None) -> None:
         self.since = since
@@ -298,23 +299,21 @@ class TweetsFilterer:
         self.seen: set[str] = set()
         self.log = TwitterCrawler.get_logger()
 
-    __repr__ = simple_repr("since", "until", "oldest_tweet")
-
-    def should_skip(self, tweet: Tweet) -> tuple[bool, str]:
+    def should_skip(self, tweet: Tweet) -> str | bool:
         if tweet.id in self.seen:
-            return True, "duplicate"
+            return "duplicate"
 
         self.seen.add(tweet.id)
         if self.oldest_tweet is None or self.oldest_tweet.created_timestamp > tweet.created_timestamp:
             self.oldest_tweet = tweet
 
         if self.until and tweet.created_timestamp > self.until:
-            return True, "too new"
+            return "too new"
 
         if self.since and tweet.created_timestamp < self.since:
-            return True, "too old"
+            return "too old"
 
-        return True, ""
+        return False
 
     async def __call__(self, tweet_pages: AsyncGenerator[Iterable[Tweet]]) -> AsyncGenerator[Tweet]:
         max_old_tweets = 10
@@ -322,10 +321,9 @@ class TweetsFilterer:
             async for tweets in pages:
                 old_tweets = 0
                 for tweet in tweets:
-                    skip, reason = self.should_skip(tweet)
-                    if skip:
-                        self.log.warning("Skipping tweet %s (%s)", tweet.id, reason)
-                        if reason == "too old":
+                    if skip_reason := self.should_skip(tweet):
+                        self.log.warning("Skipping tweet %s (%s)", tweet.id, skip_reason)
+                        if skip_reason == "too old":
                             old_tweets += 1
                         continue
                     yield tweet
