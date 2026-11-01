@@ -19,7 +19,7 @@ from cyberdrop_dl.clients import get_logger, wreq
 from cyberdrop_dl.clients.flaresolverr import Solution as FlaresolverrSolution
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, parse_url, truncated_preview
+from cyberdrop_dl.utils import css, parse_url, strict_variadic, truncated_preview
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -71,6 +71,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     Class to represent common methods and attributes between:
         - `aiohttp.ClientResponse`
         - `curl_cffi.Response`
+        - `wreq.Response`
         - `FlareSolverrSolution`
     """
 
@@ -166,16 +167,31 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     @final
     @property
     def content_disposition(self) -> ContentDisposition:
+        if cd := self.parse_content_disposition():
+            return cd
+
+        msg = f"No content disposition header found in response from {self.url}"
+        raise ScrapeError(422, msg) from None
+
+    @final
+    def parse_content_disposition(self) -> ContentDisposition | None:
         try:
             header = self.headers[hdrs.CONTENT_DISPOSITION]
         except KeyError:
-            msg = f"No content disposition header found in response from {self.url}"
-            raise ScrapeError(422, msg) from None
+            return None
 
         disposition_type, params = aiohttp.multipart.parse_content_disposition(header)
         params = MappingProxyType(params)
         filename = aiohttp.multipart.content_disposition_filename(params)
         return ContentDisposition(disposition_type, params, filename)
+
+    @final
+    @property
+    def filename(self) -> str:
+        cd = self.parse_content_disposition()
+        if cd and cd.raw_filename:
+            return cd.raw_filename
+        return self.url.name or self.url.parent.name
 
     @final
     @property
@@ -208,12 +224,9 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
             return self._text
 
     @final
-    async def soup(self, encoding: str | None = None) -> BeautifulSoup:
+    async def soup(self, encoding: str | None = None, *, parse_only: tuple[str] | str | None = None) -> BeautifulSoup:
         self.__check_content_type("text", "html", expecting="HTML")
-        if content := await self.text(encoding):
-            return await css.asoup(content)
-
-        raise ScrapeError(204, "Received empty HTML response")
+        return await css.asoup(await self.text(encoding), parse_only=parse_only)
 
     async def json(
         self,
@@ -232,10 +245,8 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
         if not content_type:
             return
-        if isinstance(content_type, str):
-            content_type = (content_type,)
 
-        self.__check_content_type(*content_type, expecting="JSON")
+        self.__check_content_type(*strict_variadic(content_type), expecting="JSON")
 
     @final
     def create_report(self, exc: Exception | None = None, **extras: Any) -> str:

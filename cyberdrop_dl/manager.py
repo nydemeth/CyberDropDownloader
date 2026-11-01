@@ -22,6 +22,7 @@ from cyberdrop_dl.models.validators import bytesize_to_str
 from cyberdrop_dl.progress import REFRESH_RATE, TUI_DISABLED
 from cyberdrop_dl.signature import dataclass_repr
 from cyberdrop_dl.sorter import Sorter
+from cyberdrop_dl.url_objects import FinishedDownload
 from cyberdrop_dl.utils import enter_context, get_system_information
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ class Manager:
         self.cli_args: CLIarguments = cli_args or CLIarguments()
         self._config: Config | None = config
 
-        self._completed_downloads: list[MediaItem] = []
+        self._completed: list[FinishedDownload] = []
         self._hasher: Hasher | None = None
 
         self.http_client = HTTPClient(self.config)
@@ -104,14 +105,18 @@ class Manager:
                 del self.deduper
                 del self.sorter
 
-    def add_completed(self, media_item: MediaItem) -> None:
-        if media_item.is_segment:
+    async def post_download(self, item: MediaItem) -> None:
+        if item.is_segment or not item.downloaded:
             return
-        self._completed_downloads.append(media_item)
+
+        if self.config.hashing.mode is constants.HashMode.IN_PLACE:
+            await self.hasher.hash_item(item)
+
+        self._completed.append(FinishedDownload.from_item(item))
 
     @property
-    def completed_downloads(self) -> list[MediaItem]:
-        return self._completed_downloads
+    def completed_downloads(self) -> list[FinishedDownload]:
+        return self._completed
 
     def log_config_settings(self) -> None:
         logger.info(f"Running cyberdrop-dl v{__version__}")

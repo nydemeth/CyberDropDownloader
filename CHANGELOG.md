@@ -22,6 +22,32 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.15.0] - 2026-11-01
+
+### Added
+
+- New `--logs.rotate-date-position` option
+- Arte.tv support
+- Support Patreon creators with custom domains. User must define the domains with the new `--crawlers.generic.patreon` option
+- Support direct media URLs (Patreon)
+- Support collections URLs (Patreon)
+- Support sub-albums (Lensdump)
+- Support folders (Doodstream)
+- Support hotlinked files (Fileditch)
+- Support custom search operators as filters (Pawchive)
+
+### Changed
+
+- Assume `download` subcommand if an URL is provided as the first CLI argument, ex: `cyberdrop-dl <URL>` is equivalent to `cyberdrop-dl download <URL>`
+
+### Fixed
+
+- Download of VODs only available at 1440p/4K without logged in cookies (Twitch)
+- `403 - Forbidden` for some downloads (Twitter, Erome)
+- Do not try to download HLS videos if they are from an active livestream (generic unsupported sites)
+- `422 - Unprocessable Content` downloading any video (Beeg)
+- Rework crawler for new site design (Leakedzone)
+
 ## [10.14.0] - 2026-10-27
 
 ### Added

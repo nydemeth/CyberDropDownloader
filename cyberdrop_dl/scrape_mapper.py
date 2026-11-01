@@ -286,7 +286,7 @@ class ScrapeMapper:
             logger.exception("Failed to connect to jDownloader")
 
         await self._real_debrid.__async_init__()
-        await self._direct_http.__async_post_init__()
+        await self._direct_http.__async_init__()
         self._ready = True
 
     async def _wait_until_scrape_is_done(self, stats: ScrapeStats) -> None:
@@ -351,7 +351,7 @@ class ScrapeMapper:
             self.task_mngr.scrape.create_task(crawler.run(scrape_item), name=str(scrape_item.url))
             return
 
-        if not self._real_debrid.disabled and self._real_debrid.api.is_supported(scrape_item.url):
+        if not self._real_debrid.disabled and self._real_debrid.api.is_supported_domain(scrape_item.url):
             logger.info(f"Using RealDebrid for unsupported URL: {scrape_item.url}")
             self.task_mngr.scrape.create_task(self._real_debrid.run(scrape_item), name=str(scrape_item.url))
             return
@@ -433,7 +433,7 @@ def register_crawler(
                     raise ValueError(msg)
                 logger.error(msg)
                 continue
-            logger.info("Successfully mapped %s to crawler %s", crawler.PRIMARY_URL, crawler.NAME)
+            logger.info("Successfully mapped %s to crawler %s", crawler.PRIMARY_URL, crawler._generic_base_)
 
         elif other:
             if domain in crawlers_map:
@@ -472,6 +472,11 @@ def _create_generic_crawlers(generics_config: GenericCrawlers) -> Generator[type
         from cyberdrop_dl.crawlers._video import GenericVideoCrawler
 
         yield from create_crawlers(generics_config.video, GenericVideoCrawler)
+
+    if generics_config.patreon:
+        from cyberdrop_dl.crawlers.patreon import PatreonGenericCrawler
+
+        yield from create_crawlers(generics_config.patreon, PatreonGenericCrawler)
 
 
 def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], *crawlers_to_disable: str) -> None:

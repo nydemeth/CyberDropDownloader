@@ -3,25 +3,27 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
-from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict, TypeGuard, cast, final
+from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict, TypeGuard, cast, final, override
 
 from typing_extensions import ReadOnly
 
 from cyberdrop_dl import aio
+from cyberdrop_dl.cache import async_lru_cache
 from cyberdrop_dl.clients.http import HTTPConfig
-from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths, URLConfig, auto_task_id
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, next_js, traversal
 from cyberdrop_dl.utils._url import URLDeduper
-from cyberdrop_dl.utils.dataclass import DictDataclass
+from cyberdrop_dl.utils.dataclass import DictDataclass, deserialize, struct
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Mapping
 
     from bs4 import BeautifulSoup
 
+    from cyberdrop_dl.filepath import Filename
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
@@ -67,7 +69,9 @@ class Post(Included):
     url: str
 
 
-class PatreonCrawler(Crawler):
+@URLConfig(allow_empty_path=True)
+class PatreonGenericCrawler(Crawler, is_generic=True):
+    # generic cause Patreon allows creators to use a custom domain
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Post": (
             "/posts/<slug>-<post-id>",
@@ -77,11 +81,21 @@ class PatreonCrawler(Crawler):
             "/<creator>",
             "/cw/<creator>",
         ),
+        "Collection": "/collection/<collection_id>",
+        "Direct Media": (
+            "/media-u/v3/<media_id>",
+            ".patreonusercontent.com/...",
+            "stream.mux.com/...",
+        ),
     }
 
     DOMAIN: ClassVar[str] = "patreon"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com")
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date:%Y-%m-%d} - {title}"
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        cls.DOMAIN = PatreonGenericCrawler.DOMAIN  # pyright: ignore[reportConstantRedefinition]
 
     def __post_init__(self) -> None:
         self.api: PatreonV1API = PatreonV1API.from_crawler(self)
@@ -90,13 +104,22 @@ class PatreonCrawler(Crawler):
     def separate_posts(self) -> bool:
         return True
 
+    def is_custom_domain(self) -> bool:
+        return self.PRIMARY_URL.host != PatreonCrawler.PRIMARY_URL.host
+
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["posts", slug] | [_, "posts", slug]:
                 post_id = slug.rpartition("-")[-1]
                 await self.post(scrape_item, post_id)
-            case [creator] | ["cw", creator]:
-                await self.creator(scrape_item, creator)
+            case ["collection", col_id]:
+                await self.collection(scrape_item, col_id)
+            case [_creator] | ["cw", _creator]:
+                await self.creator(scrape_item)
+            case [] | [""] | ["cw"] if self.is_custom_domain():
+                await self.creator(scrape_item)
+            case ["media-u", "v3", media_id]:
+                await self.media(scrape_item, media_id)
             case _:
                 raise ValueError
 
@@ -115,8 +138,7 @@ class PatreonCrawler(Crawler):
             raise ScrapeError(402, "You do not have access to this post")
 
         campaign_name: str = included[post["campaign_id"]]["attributes"]["name"]
-        title = self.create_title(campaign_name)
-        scrape_item.setup_as_album(title)
+        scrape_item.setup_as_album(self.create_title(campaign_name))
 
         scrape_item.uploaded_at = date = self.parse_iso_date(post["published_at"])
         post_title = self.create_separate_post_title(post["title"], post["id"], date)
@@ -138,11 +160,11 @@ class PatreonCrawler(Crawler):
         sleep = aio.periodic_sleep(10)
 
         async def dispatch_url(link: str, *, embed: bool = False) -> None:
-            url = self.parse_url(link)
+            url = self.parse_url(link, self.origin)
             if url in seen_urls:
                 return
 
-            if url.host == self.PRIMARY_URL.host:
+            if url.host in (self.PRIMARY_URL.host, PatreonGenericCrawler.PRIMARY_URL.host):
                 msg = f"Skipping nested thread URL: {url}, parent: {scrape_item.url}"
                 await self.raise_exc(url, MaxChildrenError(msg))
                 return
@@ -201,27 +223,32 @@ class PatreonCrawler(Crawler):
         if media.url.suffix == ".m3u8":
             return await self._m3u8_media(scrape_item, media)
 
-        name = media.name
-        if not name:
-            async with self.request(media.url) as resp:
-                try:
-                    name = resp.content_disposition.filename
-                except ScrapeError:
-                    name = media.url.name or media.url.parent.name
-
-        try:
-            filename, ext = self.get_filename_and_ext(name)
-        except NoExtensionError:
-            name = media.url.name
-            filename, ext = self.get_filename_and_ext(name)
+        original_name, filename = await self._get_media_filename(media)
 
         await self.handle_file(
             media.url,
             scrape_item,
-            name,
-            ext,
-            custom_filename=self.create_custom_filename(filename, ext, file_id=media.id),
+            original_name,
+            filename.suffix,
+            custom_filename=self.create_custom_filename(filename.name, filename.suffix, file_id=media.id),
         )
+
+    async def _get_media_filename(self, media: Media) -> tuple[str, Filename]:
+        errors: list[Exception] = []
+        if media.name and not media.name.startswith(("http:", "https:")):
+            try:
+                return media.name, self.get_filename_and_ext(media.name)
+            except NoExtensionError as e:
+                errors.append(e)
+
+        async with self.request(media.url) as resp:
+            if name := resp.filename or media.name:
+                try:
+                    return name, self.get_filename_and_ext(name, mime_type=resp.content_type)
+                except NoExtensionError as e:
+                    errors.append(e)
+
+        raise ExceptionGroup("No File Extension", tuple(errors))
 
     async def _m3u8_media(self, scrape_item: ScrapeItem, media: Media) -> None:
         m3u8, info = await self.request_m3u8_playlist(media.url)
@@ -236,25 +263,68 @@ class PatreonCrawler(Crawler):
         await self.handle_file(media.url, scrape_item, filename, ext, m3u8=m3u8)
 
     @error_handling_wrapper
-    async def creator(self, scrape_item: ScrapeItem, creator: str) -> None:
-        campaign_id = await self.api.campaign_id(creator)
-        await self.campaign(scrape_item, campaign_id)
+    async def collection(self, scrape_item: ScrapeItem, collection_id: str) -> None:
+        collection = await self.api.collection(collection_id)
+        scrape_item.setup_as_album(self.create_title(collection.title, collection.id))
+        self.create_eager_task(self.write_metadata(scrape_item, f"collection_{collection.id}", collection))
+        posts = self.api.posts(
+            collection.campaign_id,
+            {
+                "filter[contains_exclusive_posts]": "true",
+                "filter[collection_id]": collection_id,
+                "filter[include_drops]": "true",
+            },
+        )
+
+        await self._iter_posts(scrape_item, posts)
 
     @error_handling_wrapper
-    async def campaign(self, scrape_item: ScrapeItem, campaign_id: str) -> None:
+    async def creator(self, scrape_item: ScrapeItem) -> None:
+        campaign_id = await self.api.campaign_id(scrape_item.url)
         scrape_item.setup_as_profile("")
+        await self._iter_posts(scrape_item, self.api.posts(campaign_id))
+
+    async def _iter_posts(self, scrape_item: ScrapeItem, raw_posts: AsyncGenerator[dict[str, Any]]) -> None:
         sleep = aio.periodic_sleep(10)
         async with aio.non_cancelling_taskgroup() as tg:
-            async for resp in self.api.posts(campaign_id):
+            async for resp in raw_posts:
                 included = _flatten_included(resp["included"])
                 for post in resp["data"]:
                     post = _flatten_post(post)
-                    new_item = scrape_item.create_child(self.parse_url(post["url"]))
+                    new_item = scrape_item.create_child(self.parse_url(post["url"], self.origin))
                     tg.create_task(self._post_task(new_item, post, included))
                     scrape_item.add_children()
                     await sleep()
 
     _post_task = auto_task_id(_post)
+
+
+@struct(extras="ignore")
+class Collection:
+    id: str
+    campaign_id: str
+    title: str
+    thumb: str
+    post_ids: list[int]
+    description: str | None = None
+
+
+@URLConfig(allow_empty_path=False)
+class PatreonCrawler(PatreonGenericCrawler):
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "patreon", "stream.mux.com", "patreonusercontent.com"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com")
+
+    @override
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
+        if scrape_item.url.host.endswith((".patreonusercontent.com", "stream.mux.com")):
+            await self.loose_media(scrape_item)
+        else:
+            await super().fetch(scrape_item)
+
+    @error_handling_wrapper
+    async def loose_media(self, scrape_item: ScrapeItem) -> None:
+        media = Media(id="", name=None, url=scrape_item.url, attributes={})
+        await self._media(scrape_item, media)
 
 
 class LazyLogMedia:
@@ -268,15 +338,41 @@ class LazyLogMedia:
         return "\n".join(map(str, self.__json__()))
 
 
-@HTTPConfig(impersonate=True)
+def _check_json(resp: object, _: Any) -> None:
+    if type(resp) is not dict:
+        return
+
+    errors = resp.get("errors")
+    if not (errors and type(errors) is list):
+        return
+
+    error = errors[0]
+    try:
+        status = int(error.get("status", 422))
+    except ValueError:
+        return
+
+    raise ScrapeError(status, error.get("detail"))
+
+
+@HTTPConfig(impersonate=True, json_check=_check_json)
 class PatreonV1API(API):
     # Public API v1 is retiring on October 7, 2026.
     # https://docs.patreon.com/#apiv2-resource-endpoints
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com/api")
 
+    def __post_init__(self) -> None:
+        self.campaign_id = async_lru_cache(self._campaign_id)
+
     async def post(self, post_id: str) -> dict[str, Any]:
         url = (self.ENTRYPOINT / "posts" / post_id).with_query(_API_PARAMS)
         return await self.request_json(url)
+
+    async def collection(self, collection_id: str) -> Collection:
+        url = (self.ENTRYPOINT / "collection" / collection_id).with_query(_API_PARAMS)
+        resp = await self.request_json(url)
+        data = _flatten_post(resp["data"])
+        return deserialize(Collection, data, thumb=data.get("thumbnail", {}).get("original"))
 
     async def media(self, media_id: str) -> Media:
         url = (self.ENTRYPOINT / "media" / media_id).with_query(_API_PARAMS)
@@ -285,10 +381,10 @@ class PatreonV1API(API):
         if not (url := attrs.get("download_url")):
             raise ScrapeError(403, f"No download URL found for {media_id}")
 
-        return Media(media_id, attrs.get("file_name"), self.parse_url(url), attrs)
+        return Media(media_id, attrs.get("file_name"), self.parse_url(url, self.origin), attrs)
 
-    async def campaign_id(self, creator: str) -> str:
-        async with self.request(self.PRIMARY_URL / creator, impersonate=True) as resp:
+    async def _campaign_id(self, url: AbsoluteHttpURL) -> str:
+        async with self.request(url, impersonate=True) as resp:
             soup = await resp.soup()
             with contextlib.suppress(css.SelectorError):
                 bootstrap = _extract_bootstrap(soup)
@@ -301,7 +397,7 @@ class PatreonV1API(API):
             # TODO: fix next_js chunk parsing
             return _extract_campaign_id(await resp.text())
 
-    def posts(self, campaign_id: str) -> AsyncGenerator[dict[str, Any]]:
+    def posts(self, campaign_id: str, filter_query: Mapping[str, Any] | None = None) -> AsyncGenerator[dict[str, Any]]:
         url = (
             (self.ENTRYPOINT / "posts")
             .with_query(_API_PARAMS)
@@ -311,6 +407,8 @@ class PatreonV1API(API):
                 }
             )
         )
+        if filter_query:
+            url = url.update_query(filter_query)
         return self.pager(url)
 
     async def pager(self, api_url: AbsoluteHttpURL) -> AsyncGenerator[dict[str, Any]]:

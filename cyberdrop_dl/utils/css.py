@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from bs4.filter import SoupStrainer
 
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.utils import strict_variadic
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -143,9 +144,7 @@ def iselect(tag: Tag, selector: str, attribute: str | None = None) -> Generator[
 
 
 def iselect_text(soup: Tag, /, selector: str, contains: tuple[str, ...] | str = ()) -> Generator[str]:
-    if isinstance(contains, str):
-        contains = (contains,)
-
+    contains = strict_variadic(contains)
     for tag in iselect(soup, selector):
         content = text(tag)
         for key in contains:
@@ -210,7 +209,14 @@ def parse_form(form: Tag, /) -> HTMLForm:
     return HTMLForm(cast("HttpMethod", method), action, inputs)
 
 
+def where(selector1: str, selector2: str, *selectors: str) -> str:
+    selectors = selector1, selector2, *selectors
+    return ":where(" + ", ".join(selectors) + ")"
+
+
 def soup(content: str, parse_only: tuple[str, ...] | str | None = None) -> BeautifulSoup:
+    if not content:
+        raise ScrapeError(204, "Received empty HTML response")
     return BeautifulSoup(content, HTML_PARSER, parse_only=SoupStrainer(parse_only) if parse_only is not None else None)
 
 

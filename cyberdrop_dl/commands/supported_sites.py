@@ -3,6 +3,8 @@ from __future__ import annotations
 from textwrap import dedent
 from typing import TYPE_CHECKING, Any
 
+from cyberdrop_dl.utils import strict_variadic
+
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
@@ -15,7 +17,10 @@ if TYPE_CHECKING:
 def _gen_crawlers_info() -> list[CrawlerInfo]:
     from cyberdrop_dl.crawlers import Registry
 
-    return sorted((crawler.INFO for crawler in Registry.get_crawlers(generic=True)), key=lambda x: x.site.casefold())
+    return sorted(
+        (crawler.INFO for crawler in Registry.get_crawlers(generic=True)),
+        key=lambda x: (x.wiki_site or x.site).casefold(),
+    )
 
 
 def as_json() -> dict[str, dict[str, Any]]:
@@ -96,8 +101,7 @@ def _get_supported_paths_and_notes(crawler_info: CrawlerInfo) -> tuple[dict[str,
     notes: list[str] = []
 
     for name, paths in crawler_info.supported_paths.items():
-        if isinstance(paths, str):
-            paths = (paths,)
+        paths = strict_variadic(paths)
 
         if "direct link" in name.casefold() and paths == ("",):
             supported_paths["Direct Links"] = ()

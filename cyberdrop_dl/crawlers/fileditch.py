@@ -26,7 +26,7 @@ _HOMEPAGE_CATCH_ALL = "/s21/FHVZKQyAZlIsrneDAsp.jpeg"
 @Registry.database.fix_referer
 @HTTPConfig(rate_limit=(3, 1))
 class FileditchCrawler(Crawler):
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "theditch.st", "fileditch"
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "theditch.st", "fileditch", "fileditchhot.st"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File / Embed": (
             "/file.php?f=<file_id>",
@@ -35,16 +35,21 @@ class FileditchCrawler(Crawler):
             "/alpha7/<file_id>/<name>",
         ),
         "Short URL": "https://theditch.st/<short_id>",
+        "Hotlink": "https://fileditchhot.st/<path>...",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://fileditchfiles.me")
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("embedditch.st",)
     DOMAIN: ClassVar[str] = "fileditch"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        match scrape_item.url.parts[1:]:
+        url = scrape_item.url
+        match url.parts[1:]:
             case [_, _, *_]:
-                await self.file(scrape_item)
-            case [_] if scrape_item.url.host == "theditch.st":
+                if url.host == "fileditchhot.st":
+                    await self.hotlink_file(scrape_item)
+                else:
+                    await self.file(scrape_item)
+            case [_] if url.host == "theditch.st":
                 await self.short_url(scrape_item)
             case _:
                 raise ValueError
@@ -67,14 +72,35 @@ class FileditchCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
-        if await self.check_complete_from_referer(scrape_item.url):
+        if await self.check_complete(scrape_item.url):
             return
 
         file = await self.request_download(scrape_item.url)
+        await self._file(scrape_item, file)
+
+    @error_handling_wrapper
+    async def hotlink_file(self, scrape_item: ScrapeItem) -> None:
+        if await self.check_complete(scrape_item.url):
+            return
+
+        url = scrape_item.url
+        file = File(
+            name=url.name,
+            path=url.path,
+            url=url.with_host(self.PRIMARY_URL.host),
+            src=url,
+            uploaded=None,
+            thumb=None,
+        )
+        await self._file(scrape_item, file)
+
+    @error_handling_wrapper
+    async def _file(self, scrape_item: ScrapeItem, file: File) -> None:
         if file.path == _HOMEPAGE_CATCH_ALL:
             raise ScrapeError(422)
 
-        scrape_item.uploaded_at = self.parse_iso_date(file.uploaded)
+        if file.uploaded:
+            scrape_item.uploaded_at = self.parse_iso_date(file.uploaded)
         filename, ext = self.get_filename_and_ext(file.name)
         await self.handle_file(
             file.url,
@@ -114,7 +140,7 @@ class File:
     path: str
     url: AbsoluteHttpURL
     src: AbsoluteHttpURL
-    uploaded: str
+    uploaded: str | None
     thumb: str | None
 
 
@@ -150,10 +176,12 @@ class FileditchAlbumsCrawler(Crawler, wiki_site="FileditchAlbums"):
         soup, pages = await aio.peek_first(self.web_pager(scrape_item.url))
         name = self.create_title(css.select_text(soup, "h1.title"))
         scrape_item.setup_as_album(name, album_id=album_id)
+        sleep = aio.periodic_sleep(10)
         async for soup in pages:
             for new_item in self.iter_children(scrape_item, soup, ".grid article.card > a.thumb[href]"):
                 self.handle_embed(new_item)
                 scrape_item.add_children()
+                await sleep()
 
 
 def _extr_thumb(soup: bs4.Tag) -> str | None:

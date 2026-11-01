@@ -17,6 +17,7 @@ from cyberdrop_dl.constants import TempExt
 from cyberdrop_dl.progress.hashing import HashingStats, HashingUI
 from cyberdrop_dl.progress.scraping import show_msg
 from cyberdrop_dl.signature import dataclass_repr
+from cyberdrop_dl.url_objects import FinishedDownload
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -120,16 +121,6 @@ class Hasher:
             self._shutdown,
         )
 
-    async def hash_item(self, media_item: MediaItem) -> None:
-        if media_item.is_segment:
-            return
-        hash_value = await self.update_db_and_retrive_hash(
-            media_item.path,
-            media_item.original_filename,
-            referer=media_item.referer,
-        )
-        await self.save_hash_data(media_item, hash_value)
-
     async def update_db_and_retrive_hash(
         self,
         file: Path | str,
@@ -203,47 +194,44 @@ class Hasher:
         else:
             return hash_value
 
-    async def save_hash_data(self, media_item: MediaItem, hash_value: str | None) -> None:
-        if not hash_value:
-            return
-
+    async def _save_hash_result(self, media_item: MediaItem | FinishedDownload, hash_value: str) -> None:
         absolute_path = await aio.resolve(media_item.path)
         size = await aio.get_size(media_item.path)
         assert size
-        if hash_value:
+        if hash_value and type(media_item) is not FinishedDownload:
             media_item.xxhash = hash_value
+
         self._hashes_map[hash_value][size].add(absolute_path)
         self._hashed_items.add(media_item.id)
 
-    async def run(self, downloads: Iterable[MediaItem]) -> FileHashes:
+    async def run(self, downloads: Iterable[MediaItem | FinishedDownload]) -> FileHashes:
+        async def compute_hash(item: MediaItem | FinishedDownload) -> None:
+            if not await aio.is_file(item.path):
+                return
+
+            await self.hash_item(item)
+
         with self.tui():
-            return await self._get_file_hashes_dict(downloads)
+            async with aio.non_cancelling_taskgroup() as tg:
+                for item in downloads:
+                    if item.id not in self._hashed_items:
+                        tg.create_task(compute_hash(item))
 
-    async def _get_file_hashes_dict(self, downloads: Iterable[MediaItem]) -> FileHashes:
+            return self._hashes_map
 
-        results = await aio.gather(*(_exists(item) for item in downloads if item.id not in self._hashed_items))
-        for media_item in results:
-            if media_item is None:
-                continue
-            try:
-                await self.hash_item(media_item)
-            except Exception:
-                logger.exception(msg=f"Unable to hash '{media_item.path}'")
-        return self._hashes_map
+    async def hash_item(self, item: MediaItem | FinishedDownload) -> None:
+        try:
+            if item.is_segment:
+                return
 
-
-async def _exists(item: MediaItem) -> MediaItem | None:
-    if await aio.is_file(item.path):
-        return item
-
-
-async def compute_in_place_hash(hasher: Hasher, media_item: MediaItem) -> None:
-    try:
-        with show_msg(f"Hashing {media_item.path.name}"):
-            assert media_item.original_filename
-            hash_value = await hasher.update_db_and_retrive_hash(
-                media_item.path, media_item.original_filename, media_item.referer
-            )
-            await hasher.save_hash_data(media_item, hash_value)
-    except Exception:
-        logger.exception("After hash processing failed: '%s'", media_item.path)
+            assert item.original_filename
+            with show_msg(f"Hashing {item.path.name}"):
+                hash_value = await self.update_db_and_retrive_hash(
+                    item.path,
+                    item.original_filename,
+                    referer=item.referer,
+                )
+                if hash_value:
+                    await self._save_hash_result(item, hash_value)
+        except Exception:
+            logger.exception("Unable to compute hashes for '%s' [%s]", item.path, item.id)

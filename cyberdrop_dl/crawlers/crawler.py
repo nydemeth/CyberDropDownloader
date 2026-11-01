@@ -34,16 +34,18 @@ from cyberdrop_dl.filepath import (
 from cyberdrop_dl.mediaprops import Codecs, ISO639Subtitle, Resolution, ResolvedISO639Subtitle
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, MuxVideo, ScrapeItem, is_absolute_http_url
-from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, parse_url, unique
+from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, strict_variadic, unique
 from cyberdrop_dl.utils._url import (
     URLDeduper,
+    is_within_domain,
     matches_any_host,
     path_frag,
     path_qs,
     path_qs_frag,
     remove_trailing_slash,
 )
-from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, frozen
+from cyberdrop_dl.utils._url import parse_http_url as parse_url
+from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, struct
 from cyberdrop_dl.utils.errors import OnExceptionCallback, error_handling_context
 
 if TYPE_CHECKING:
@@ -74,9 +76,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-type OneOrTuple[T] = T | tuple[T, ...]
-type SupportedPaths = dict[str, OneOrTuple[str]]
-type SupportedDomains = OneOrTuple[str]
+type SupportedPaths = dict[str, str | tuple[str, ...]]
+type SupportedDomains = tuple[str, ...]
 type DebridURL = Callable[[], Awaitable[AbsoluteHttpURL]] | AbsoluteHttpURL | None
 
 ORIGIN: ContextVar[AbsoluteHttpURL] = ContextVar("ORIGIN")
@@ -84,7 +85,7 @@ _CHECK_DL_CAPACITY: ContextVar[bool] = ContextVar("_CHECK_DL_CAPACITY")
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
-@frozen
+@struct
 class _PlaceHolderConfigInclude:
     file_id: bool = True
     video_codec: bool = True
@@ -112,7 +113,7 @@ _DB_PATH_BUILDERS: MappingProxyType[str, URLHasher] = MappingProxyType(
 )
 
 
-@frozen(order=False, kw_only=False)
+@struct(kw_only=False)
 class ContainerChecker[T: Container, R]:
     values: T
     check: Callable[[R], bool]
@@ -121,7 +122,7 @@ class ContainerChecker[T: Container, R]:
         return self.check(obj)
 
 
-@frozen(order=True, kw_only=False)
+@struct(order=True, kw_only=False)
 class CrawlerInfo:
     site: str
     primary_url: AbsoluteHttpURL
@@ -150,7 +151,7 @@ class CrawlerInfo:
         return me
 
 
-@frozen(kw_only=False)
+@struct(kw_only=False)
 class SiteCookies:
     raw: http.cookies.BaseCookie[str]
 
@@ -184,16 +185,17 @@ def _get_logger(crawler_name: str) -> _CrawlerLogger:
 
 
 @final
-@frozen
+@struct
 class URLConfig(ConfigDataclass):
     __attr_name__: ClassVar[str] = "__url_config__"
     trim: bool | None = None
     allow_empty_path: bool | None = None
     ignore_fragment: bool | None = None
+    strict_host_match: bool | None = None
 
 
 @final
-@frozen
+@struct
 class DownloadConfig(ConfigDataclass):
     __attr_name__: ClassVar[str] = "__dl_config__"
     slots: int | None = None
@@ -201,6 +203,10 @@ class DownloadConfig(ConfigDataclass):
     ignore_content_type: bool | None = None
     impersonate: str | bool | None = None
     delay: float = 0.0
+
+
+class _SupportedDomains(tuple[str, ...]):
+    __slots__ = ()
 
 
 @URLConfig(trim=True, allow_empty_path=False, ignore_fragment=True)
@@ -213,7 +219,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     DOMAIN: ClassVar[str]
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = _SupportedDomains()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
     NEXT_PAGE_SELECTOR: ClassVar[str] = ""
@@ -223,6 +229,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     _FORUM: ClassVar[bool] = False
 
     disabled: bool = False
+    _generic_base_: str = ""
 
     def __repr__(self) -> str:
         fields = (
@@ -249,7 +256,10 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @classmethod
     def check_host_match(cls, host: str) -> bool:
-        return bool(host)
+        if not cls.__url_config__.strict_host_match:
+            return True
+
+        return any(is_within_domain(domain, host) for domain in cls.SUPPORTED_DOMAINS)
 
     def _build_downloader[T: Downloader](self, cls: type[T] = Downloader) -> T:
         assert self.__dl_config__.server_lock is not None
@@ -263,7 +273,8 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
     @final
     def __init__(self, manager: Manager, task_mng: aio.TaskManager, tui: ScrapingUI) -> None:
         self.manager: Manager = manager
-
+        if self.DOMAIN != "no_crawler":
+            assert self.SUPPORTED_DOMAINS
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
         self._logged_in: bool = False
@@ -344,6 +355,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
         if cls.IS_GENERIC:
             cls.INFO: CrawlerInfo = CrawlerInfo.abstract("GENERIC", cls.NAME, paths)
+            cls._generic_base_ = cls.NAME
             if add_to_registry:
                 Registry.generic.add(cls)
             return
@@ -609,7 +621,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             await asyncio.to_thread(check_path_traversal, self.config.download_folder, media_item.download_folder)
         check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
-        await self._handle_thumb(media_item, scrape_item)
+        await self.handle_thumb(media_item.thumbnail, media_item.filename, scrape_item)
 
     @final
     @classmethod
@@ -622,16 +634,20 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
         return url
 
-    async def _handle_thumb(self, media_item: MediaItem, scrape_item: ScrapeItem) -> None:
-        if not (media_item.thumbnail and self.config.filters.files.thumbnails):
+    @final
+    async def handle_thumb(
+        self, url: AbsoluteHttpURL | None, filename: str, scrape_item: ScrapeItem, suffix: str = "_thumb"
+    ) -> None:
+        if not (url and self.config.filters.files.thumbnails):
             return
 
-        async with self.catch_errors(media_item.thumbnail):
-            ext = await self.sniff_ext(media_item.thumbnail)
-            thumb_name = f"{Path(media_item.filename).stem}_thumb{ext}"
+        suffix = suffix if suffix.startswith("_") else f"_{suffix}"
+        async with self.catch_errors(url):
+            ext = await self.sniff_ext(url)
+            thumb_name = f"{Path(filename).stem}{suffix}{ext}"
             filename, _ = self.get_filename_and_ext(thumb_name)
             await self.handle_file(
-                media_item.thumbnail,
+                url,
                 scrape_item,
                 thumb_name,
                 ext,
@@ -646,7 +662,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             return self.get_filename_and_ext(url.name).suffix
         except NoExtensionError:
             async with self.request(url, method or self.__http_ctx__.probe_method, **kwargs) as resp:
-                name = url.name or url.parent.name or "file"
+                name = resp.filename or "file"
                 return self.get_filename_and_ext(name, mime_type=resp.content_type).suffix
 
     def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
@@ -671,6 +687,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             await self.downloader.run(media_item, streams)
 
         finally:
+            await self.manager.post_download(media_item)
             await self.__write_to_jsonl(media_item)
 
     async def __write_to_jsonl(self, media_item: MediaItem) -> None:
@@ -1220,20 +1237,20 @@ class API(HTTPMixin, ABC):
 
 
 def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:
-    hosts = cls.SUPPORTED_DOMAINS or cls.DOMAIN
-    if isinstance(hosts, str):
-        hosts = (hosts,)
-    return tuple(sorted({host.removeprefix("www.") for host in hosts}))
+    return tuple(sorted({host.removeprefix("www.") for host in cls.SUPPORTED_DOMAINS}))
 
 
 def _prepare_supported_domains(cls: type[Crawler]) -> None:
-    if not cls.OLD_DOMAINS:
-        return
-    supported_domains = cls.SUPPORTED_DOMAINS or ()
-    if isinstance(supported_domains, str):
-        supported_domains = (supported_domains,)
+    # remove supported domains from super classes
+    if type(cls.SUPPORTED_DOMAINS) is _SupportedDomains:
+        cls.SUPPORTED_DOMAINS = ()
 
-    cls.SUPPORTED_DOMAINS = tuple(sorted({*cls.OLD_DOMAINS, *supported_domains, cls.PRIMARY_URL.host}))
+    if not cls.OLD_DOMAINS:
+        domains = cls.SUPPORTED_DOMAINS or (cls.DOMAIN,)
+    else:
+        domains = tuple(sorted({*cls.OLD_DOMAINS, *cls.SUPPORTED_DOMAINS, cls.PRIMARY_URL.host}))
+
+    cls.SUPPORTED_DOMAINS = _SupportedDomains(domains)
 
 
 def _check_init_overrides(cls: type[Crawler]) -> None:
@@ -1250,17 +1267,14 @@ def _check_init_overrides(cls: type[Crawler]) -> None:
 def _validate_supported_paths(cls: type[Crawler]) -> None:
     for path_name, paths in cls.SUPPORTED_PATHS.items():
         assert path_name, f"{cls.__name__}, Invalid path: {path_name}"
-        assert isinstance(paths, str | tuple), f"{cls.__name__}, Invalid path {path_name}: {type(paths)}"
+        assert isinstance(paths, (str, tuple)), f"{cls.__name__}, Invalid path {path_name}: {type(paths)}"
         if path_name != "Direct links":
             assert paths, f"{cls.__name__} has not paths for {path_name}"
 
         if path_name.startswith("*"):  # note
             continue
 
-        if isinstance(paths, str):
-            paths = (paths,)
-
-        for path in paths:
+        for path in strict_variadic(paths):
             assert "`" not in path, f"{cls.__name__}, Invalid path {path_name}: {path}"
 
 
@@ -1273,13 +1287,8 @@ def _make_wiki_supported_domains(scrape_mapper_keys: tuple[str, ...]) -> tuple[s
     return tuple(sorted(generalize(domain) for domain in scrape_mapper_keys))
 
 
-def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, tuple[str, ...]]:
-    def try_sort(value: OneOrTuple[str]) -> tuple[str, ...]:
-        if isinstance(value, tuple):
-            return tuple(sorted(value))
-        return (value,)
-
-    path_pairs = ((key, try_sort(value)) for key, value in supported_paths.items())
+def _sort_supported_paths(paths: SupportedPaths) -> dict[str, tuple[str, ...]]:
+    path_pairs = ((key, tuple(sorted(strict_variadic(value)))) for key, value in paths.items())
     return dict(sorted(path_pairs, key=lambda x: x[0].casefold()))
 
 
@@ -1364,7 +1373,7 @@ def compose_title(  # noqa: PLR0913
         title = f"{title} ({domain})"
 
     # Remove double spaces
-    return " ".join(title.split(" "))
+    return " ".join(title.split())
 
 
 def compose_ep_name(season: int | None, ep: int | None, name: str | None) -> str:
