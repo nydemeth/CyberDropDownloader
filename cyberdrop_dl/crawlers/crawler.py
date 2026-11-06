@@ -35,18 +35,18 @@ from cyberdrop_dl.mediaprops import Codecs, ISO639Subtitle, Resolution, Resolved
 from cyberdrop_dl.models.validators import strings
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, MuxVideo, ScrapeItem, is_absolute_http_url
 from cyberdrop_dl.utils import css, dates, enter_context, fast_cache, is_blob_or_svg, m3u8, strict_variadic, unique
-from cyberdrop_dl.utils._url import (
+from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, struct
+from cyberdrop_dl.utils.errors import OnExceptionCallback, error_handling_context
+from cyberdrop_dl.utils.urls import (
     URLDeduper,
     is_within_domain,
     matches_any_host,
+    parse_http_url,
     path_frag,
     path_qs,
     path_qs_frag,
     remove_trailing_slash,
 )
-from cyberdrop_dl.utils._url import parse_http_url as parse_url
-from cyberdrop_dl.utils.dataclass import ConfigDataclass, DictDataclass, struct
-from cyberdrop_dl.utils.errors import OnExceptionCallback, error_handling_context
 
 if TYPE_CHECKING:
     import datetime as dt
@@ -894,7 +894,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             trim = cls.__url_config__.trim
         if trim is None:
             trim = True
-        return parse_url(url, base, trim=trim)
+        return parse_http_url(url, base, trim=trim)
 
     @final
     @property
@@ -987,13 +987,13 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
     @final
     @classmethod
-    def parse_date(cls, date_or_datetime: str, /, format: str) -> float:  # noqa: A002
-        return dates.parse_format(date_or_datetime, format).timestamp()
+    def parse_date(cls, date_or_datetime: str, /, format: str) -> int:  # noqa: A002
+        return int(dates.parse_format(date_or_datetime, format).timestamp())
 
     @final
     @classmethod
-    def parse_iso_date(cls, date_or_datetime: str, /) -> float:
-        return dates.parse_iso(date_or_datetime).timestamp()
+    def parse_iso_date(cls, date_or_datetime: str, /) -> int:
+        return dates.timestamp_from_iso(date_or_datetime)
 
     @final
     async def follow_redirect(self, scrape_item: ScrapeItem) -> None:
@@ -1203,7 +1203,7 @@ class API(HTTPMixin, ABC):
         assert is_absolute_http_url(base)
         if trim is None:
             trim = True
-        return parse_url(url, base, trim=trim)
+        return parse_http_url(url, base, trim=trim)
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> Self:

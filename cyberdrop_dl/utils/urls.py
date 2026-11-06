@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import yarl
-from typing_extensions import TypeIs, TypeVar
+from typing_extensions import TypeIs
+
+from cyberdrop_dl.utils import Deduper
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -76,8 +78,6 @@ def remove_trailing_slash(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
 
 
 def matches_any_host(url: yarl.URL, hosts: Iterable[str]) -> bool:
-    import yarl
-
     if not url.host:
         return False
 
@@ -126,7 +126,7 @@ def sort_query[T: yarl.URL](item: Mapping[str, str] | T) -> list[tuple[str, str]
     if is_url(item):
         return item.with_query(sort_query(item.query))
 
-    return [(k, v) for k, v in item.items()]
+    return sorted(item.items())
 
 
 def path_qs(url: yarl.URL) -> str:
@@ -141,10 +141,6 @@ def path_frag(url: yarl.URL) -> str:
     return f"{url.path}#{url.fragment}" if url.fragment else url.path
 
 
-def url_hash(url: yarl.URL) -> str:
-    return str(sort_query(url))
-
-
 def reverse_dns_name(host: str) -> tuple[str, ...]:
     return tuple(reversed(host.split(".")))
 
@@ -152,38 +148,13 @@ def reverse_dns_name(host: str) -> tuple[str, ...]:
 def is_within_domain(root_domain: str, host: str) -> bool:
     host = host.lower().removeprefix("www.")
     root_domain = root_domain.lower().removeprefix("www.")
-    return (host == root_domain) or host.endswith("." + root_domain)
+    return (host == root_domain) or host.endswith("." + root_domain.removeprefix("."))
 
 
-DedupeT = TypeVar("DedupeT", default=str)
-
-
-# TODO: move to to base utils
-class Deduper(Generic[DedupeT]):
-    def __init__(self, get_key: Callable[[DedupeT], str] = str) -> None:
-        self.seen: set[str] = set()
-        self.get_key: Callable[[DedupeT], str] = get_key
-
-    def __contains__(self, item: DedupeT) -> bool:
-        lookup = self.get_key(item)
-        if lookup in self.seen:
-            return True
-        self.seen.add(lookup)
-        return False
-
-    def __len__(self) -> int:
-        return len(self.seen)
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.seen)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(seen={self.seen!r})"
-
-    def clear(self) -> None:
-        return self.seen.clear()
-
-
-class URLDeduper(Deduper[yarl.URL]):
+class URLDeduper(Deduper[str]):
     def __init__(self, url_id: Callable[[yarl.URL], str] = str) -> None:
-        super().__init__(get_key=lambda url: url_id(sort_query(url)))
+
+        def get_key(url: yarl.URL) -> str:
+            return url_id(sort_query(url))
+
+        super().__init__(get_key)
