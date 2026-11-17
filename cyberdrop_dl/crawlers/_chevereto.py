@@ -108,7 +108,10 @@ class CheveretoCrawler(Crawler, is_generic=True):
             return url
 
         # We need the full URL (aka "/<name>.<id>") to fetch sub albums
-        while "." not in (url.name or url.parent.name):
+        for _ in range(3):
+            if "." in (url.name or url.parent.name):
+                break
+
             url = await self.request_redirect(url)
 
         return url
@@ -183,10 +186,16 @@ class CheveretoCrawler(Crawler, is_generic=True):
 
     @error_handling_wrapper
     async def direct_file(
-        self, scrape_item: ScrapeItem, /, url: AbsoluteHttpURL | None = None, assume_ext: str | None = None
+        self,
+        scrape_item: ScrapeItem,
+        /,
+        url: AbsoluteHttpURL | None = None,
+        assume_ext: str | None = None,
+        *,
+        filename: str | None = None,
     ) -> None:
         link = self.thumb_to_src(url or scrape_item.url)
-        await super().direct_file(scrape_item, link, assume_ext)
+        await super().direct_file(scrape_item, link, assume_ext, filename=filename)
 
     @error_handling_wrapper
     async def media(self, scrape_item: ScrapeItem) -> None:
